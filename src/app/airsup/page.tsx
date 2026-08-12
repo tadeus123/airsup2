@@ -289,6 +289,11 @@ export default function AinetPage() {
             <p style={{ marginTop: "1.5rem" }}>
               now add your new plugin here the exact setting to fill into every field..
             </p>
+            <img
+              className="ainet-shot"
+              src="/airsup/plugin-2.5.png"
+              alt="new plugin dialog — fill in your details below"
+            />
 
             <ul className="ainet-fields">
               <li>
