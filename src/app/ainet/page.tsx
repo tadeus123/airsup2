@@ -176,11 +176,19 @@ export default function AinetPage() {
       <aside className="ainet-count" aria-label="member count">
         <div className="ainet-count-n">{count === null ? "…" : count}</div>
         <div className="ainet-count-hint">
-          {result
-            ? `you are number ${result.memberNumber}.`
-            : nextNumber == null
-              ? "loading…"
-              : `you would get the number ${nextNumber}.`}
+          {result ? (
+            <>
+              <span>you are</span>
+              <span>number {result.memberNumber}.</span>
+            </>
+          ) : nextNumber == null ? (
+            <span>loading…</span>
+          ) : (
+            <>
+              <span>you would get</span>
+              <span>the number {nextNumber}.</span>
+            </>
+          )}
         </div>
       </aside>
 
