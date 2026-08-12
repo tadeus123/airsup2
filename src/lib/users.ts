@@ -42,7 +42,16 @@ function supabaseConfig() {
   const url = (process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
   const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
   const token = process.env.AIRSUP_DB_TOKEN ?? "";
-  if (!url || !anonKey || !token) return null;
+  if (!url || !anonKey || !token) {
+    const mustHaveDb =
+      Boolean(process.env.VERCEL) || process.env.NODE_ENV === "production";
+    if (mustHaveDb) {
+      throw new Error(
+        "Database not configured (missing SUPABASE_URL, SUPABASE_ANON_KEY, or AIRSUP_DB_TOKEN)"
+      );
+    }
+    return null;
+  }
   return { url, anonKey, token };
 }
 
@@ -81,7 +90,7 @@ export function normalizeUsername(raw: string): string {
     .toLowerCase()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, 40);
 }
 

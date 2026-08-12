@@ -15,13 +15,15 @@ function cleanUsername(raw: string) {
     .toLowerCase()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, 40);
 }
 
 function fullNameToUsername(name: string) {
-  const first = name.trim().split(/\s+/)[0] || name.trim();
-  return cleanUsername(first);
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const isTitle = (p: string) => /^(mr|mrs|ms|miss|dr|prof)\.?$/i.test(p);
+  const pick = parts.find((p) => !isTitle(p)) || parts[0] || name.trim();
+  return cleanUsername(pick);
 }
 
 function ThemeToggle() {
