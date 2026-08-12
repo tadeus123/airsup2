@@ -345,7 +345,7 @@ export default function AinetPage() {
               </button>
             </p>
             <p style={{ marginTop: "2rem" }}>
-              you now installed everything go in a chat and start using airsup, enjoy the love..
+              you now installed everything go in a chat and start using airsup to access the ai-net, enjoy the love..
             </p>
             <p>
               you can start with the question: <em>supi, to whom can i talk?</em>
