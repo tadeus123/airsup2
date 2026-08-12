@@ -280,10 +280,11 @@ export function gatewaySetupSteps(input: {
     mcpUrl,
     steps: [
       "Developer mode on",
-      "Plugins → New → paste URL below",
-      "Auth: None → Create",
+      `Plugins → New → Name: ainet ${input.username}`,
+      "Paste Server URL, Auth: None → Create",
       "Enable talk_to_user, await_reply, list_users",
       "New chat → turn plugin on",
+      'Say: "supi, to whom can i talk?"',
     ],
   };
 }
