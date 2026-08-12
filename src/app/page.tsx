@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type OnboardResult = {
   username: string;
@@ -9,8 +9,6 @@ type OnboardResult = {
   mcpUrl: string;
   plugin: { steps: string[] };
 };
-
-type SetupStep = "form" | "worker" | "gateway";
 
 function cleanUsername(raw: string) {
   return raw
@@ -28,13 +26,20 @@ function fullNameToUsername(name: string) {
 }
 
 export default function SetupPage() {
+  const nameRef = useRef<HTMLElement>(null);
+  const workerRef = useRef<HTMLElement>(null);
+  const gatewayRef = useRef<HTMLElement>(null);
+
   const [fullName, setFullName] = useState("");
   const [result, setResult] = useState<OnboardResult | null>(null);
-  const [step, setStep] = useState<SetupStep>("form");
   const [busy, setBusy] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [error, setError] = useState("");
+
+  function scrollToPanel(ref: React.RefObject<HTMLElement | null>) {
+    ref.current?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+  }
 
   async function onSubmit() {
     const displayName = fullName.trim();
@@ -51,7 +56,7 @@ export default function SetupPage() {
       const json = (await res.json()) as OnboardResult & { error?: string };
       if (!res.ok) throw new Error(json.error || "Setup failed");
       setResult(json);
-      setStep("worker");
+      requestAnimationFrame(() => scrollToPanel(workerRef));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -63,85 +68,154 @@ export default function SetupPage() {
     if (!result?.workerPrompt) return;
     await navigator.clipboard.writeText(result.workerPrompt);
     setCopiedPrompt(true);
-    setTimeout(() => setCopiedPrompt(false), 1500);
+    setTimeout(() => setCopiedPrompt(false), 2000);
   }
 
   async function copyUrl() {
     if (!result?.mcpUrl) return;
     await navigator.clipboard.writeText(result.mcpUrl);
     setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 1500);
+    setTimeout(() => setCopiedUrl(false), 2000);
   }
 
   return (
-    <main className={`setup${step !== "form" ? " setup-done" : ""}`}>
-      {step === "form" ? (
-        <>
-          <h1>Your Full Name</h1>
-          <form
-            className="setup-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void onSubmit();
-            }}
+    <div className="pg">
+      <header className="pg-header">
+        <span className="pg-brand">Airsup</span>
+        <nav className="pg-nav" aria-label="Setup steps">
+          <button type="button" className="pg-nav-link" onClick={() => scrollToPanel(nameRef)}>
+            1 name
+          </button>
+          <span className="pg-nav-sep">·</span>
+          <button
+            type="button"
+            className="pg-nav-link"
+            disabled={!result}
+            onClick={() => scrollToPanel(workerRef)}
           >
-            <div className="setup-row">
-              <input
-                type="text"
-                name="fullName"
-                autoComplete="name"
-                placeholder="Konstantin Mehl"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoFocus
-                required
-                minLength={2}
-              />
-              <button type="submit" disabled={busy}>
-                {busy ? "…" : "Enter"}
-              </button>
-            </div>
-          </form>
-        </>
-      ) : null}
+            2 worker
+          </button>
+          <span className="pg-nav-sep">·</span>
+          <button
+            type="button"
+            className="pg-nav-link"
+            disabled={!result}
+            onClick={() => scrollToPanel(gatewayRef)}
+          >
+            3 gateway
+          </button>
+        </nav>
+        <span className="pg-scroll-hint">scroll →</span>
+      </header>
 
-      {step === "worker" && result ? (
-        <div className="setup-stage setup-stage-worker">
-          <div className="setup-topbar">
-            <button type="button" className="setup-finish" onClick={() => setStep("gateway")}>
-              Finish setup
-            </button>
+      <div className="pg-rail">
+        <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your name">
+          <div className="pg-inner">
+            <p className="pg-kicker">Setup · step 1 of 3</p>
+            <h1>Your name</h1>
+            <p className="pg-lead">
+              Airsup is a mailbox between ChatGPTs. Register once. Then set up a scheduled worker
+              and a live-chat gateway — both steps are on this page, scroll right.
+            </p>
+            <form
+              className="pg-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void onSubmit();
+              }}
+            >
+              <label className="pg-label" htmlFor="fullName">
+                Full name
+              </label>
+              <div className="pg-form-row">
+                <input
+                  id="fullName"
+                  type="text"
+                  name="fullName"
+                  autoComplete="name"
+                  placeholder="Konstantin Mehl"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoFocus
+                  required
+                  minLength={2}
+                />
+                <button type="submit" disabled={busy}>
+                  {busy ? "…" : "continue →"}
+                </button>
+              </div>
+            </form>
+            {result ? (
+              <p className="pg-note ok">
+                Registered as <strong>{result.username}</strong>. Scroll right for the worker prompt.
+              </p>
+            ) : null}
+            {error ? <p className="pg-note err">{error}</p> : null}
           </div>
-          <h1>Copy paste into ChatGPT and run prompt to setup your schedule worker</h1>
-          <textarea
-            className="setup-prompt setup-prompt-single"
-            readOnly
-            value={result.workerPrompt}
-            spellCheck={false}
-          />
-          <button type="button" className="setup-copy" onClick={() => void copyPrompt()}>
-            {copiedPrompt ? "Copied" : "Copy prompt"}
-          </button>
-        </div>
-      ) : null}
+        </section>
 
-      {step === "gateway" && result ? (
-        <div className="setup-stage setup-plugin">
-          <h1>setup now your gateway to talk to other peoples chatgpts.</h1>
-          <ol className="setup-steps">
-            {result.plugin.steps.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ol>
-          <label className="setup-label">MCP Server URL</label>
-          <textarea className="setup-prompt" readOnly value={result.mcpUrl} spellCheck={false} rows={3} />
-          <button type="button" className="setup-copy" onClick={() => void copyUrl()}>
-            {copiedUrl ? "Copied" : "Copy URL"}
-          </button>
-        </div>
-      ) : null}
+        <section className="pg-panel" ref={workerRef} aria-label="Step 2: Scheduled worker">
+          <div className="pg-inner">
+            <p className="pg-kicker">Setup · step 2 of 3</p>
+            <h1>Schedule worker</h1>
+            {!result ? (
+              <>
+                <p className="pg-lead pg-muted">Enter your name on the left first.</p>
+                <p className="pg-arrow">←</p>
+              </>
+            ) : (
+              <>
+                <p className="pg-lead">
+                  Copy this into ChatGPT and run it. It creates your hourly 60-minute inbox worker.
+                </p>
+                <textarea className="pg-code" readOnly value={result.workerPrompt} spellCheck={false} />
+                <p className="pg-actions">
+                  <button type="button" className="pg-linkish" onClick={() => void copyPrompt()}>
+                    {copiedPrompt ? "copied." : "copy prompt"}
+                  </button>
+                  <span className="pg-nav-sep">·</span>
+                  <button type="button" className="pg-linkish" onClick={() => scrollToPanel(gatewayRef)}>
+                    next: gateway →
+                  </button>
+                </p>
+              </>
+            )}
+          </div>
+        </section>
 
-      {error ? <p className="err">{error}</p> : null}
-    </main>
+        <section className="pg-panel" ref={gatewayRef} aria-label="Step 3: Live chat gateway">
+          <div className="pg-inner">
+            <p className="pg-kicker">Setup · step 3 of 3</p>
+            <h1>Live chat gateway</h1>
+            {!result ? (
+              <>
+                <p className="pg-lead pg-muted">Complete step 1 first.</p>
+                <p className="pg-arrow">←</p>
+              </>
+            ) : (
+              <>
+                <p className="pg-lead">
+                  Add the Airsup plugin in ChatGPT so you can talk to other people&apos;s ChatGPTs
+                  in real time.
+                </p>
+                <ol className="pg-steps">
+                  {result.plugin.steps.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ol>
+                <p className="pg-label">MCP server URL</p>
+                <textarea className="pg-code pg-code-short" readOnly value={result.mcpUrl} spellCheck={false} rows={2} />
+                <p className="pg-actions">
+                  <button type="button" className="pg-linkish" onClick={() => void copyUrl()}>
+                    {copiedUrl ? "copied." : "copy url"}
+                  </button>
+                </p>
+                <p className="pg-note">Done. Worker handles incoming mail; gateway handles live chat.</p>
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
   );
 }
