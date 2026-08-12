@@ -167,9 +167,6 @@ export default function AinetPage() {
     setTimeout(() => setCopiedUrl(false), 2000);
   }
 
-  const previewHandle = cleanUsername(handle) || fullNameToHandle(fullName) || "…";
-  const previewNumber = result?.memberNumber ?? nextNumber ?? "…";
-  const previewUsername = result?.username ?? `${previewHandle}${previewNumber}`;
   const pluginName = result ? `ainet ${result.username}` : "ainet [your handle]";
   const pluginDescription = "talk to other peoples chatgpts.";
   const mcpUrl = result?.mcpUrl || "enter your name above first";
@@ -244,10 +241,6 @@ export default function AinetPage() {
             <span className="ainet-handle-num">{nextNumber ?? "…"}</span>
           </>
         )}
-      </p>
-      <p className="ainet-note">
-        your permanent ainet name is handle + number — e.g. <em>{previewUsername}</em>. nobody can
-        take your number.
       </p>
 
       {error ? <p className="ainet-note err">{error}</p> : null}

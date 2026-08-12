@@ -182,7 +182,7 @@ button {
 }
 
 .ainet-handle-row {
-  margin: -1.5rem 0 0.35rem;
+  margin: -1.5rem 0 2.25rem;
   color: var(--muted);
   display: flex;
   flex-wrap: wrap;
