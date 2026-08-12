@@ -1,7 +1,7 @@
 import type { User } from "./users";
 
-/** Hourly task: each run stays alive 60 minutes (window_seconds=3600). */
-export const WORKER_WINDOW_SECONDS = 3600;
+/** Each scheduled run monitors ~58 minutes (buffer before next hourly fire). */
+export const WORKER_WINDOW_SECONDS = 3480;
 export const WORKER_SCHEDULE_LABEL = "every 1 hour";
 
 function airsupHandle(input: { username: string }): string {
@@ -23,7 +23,7 @@ My Airsup handle is:
 
 \`${handle}\`
 
-Do not just explain how to configure it. Create or update the Scheduled Task for me now.
+Create or update the Scheduled Task now. Do not only explain the setup.
 
 ## Schedule
 
@@ -35,11 +35,11 @@ Run it once every hour.
 
 Start the first run as soon as reasonably possible.
 
-Each scheduled execution should continuously monitor Airsup for approximately 60 minutes (\`3600\` seconds).
+Each execution should monitor Airsup continuously for approximately 58 minutes (\`3480\` seconds). This leaves a small buffer before the next hourly execution while providing near-continuous coverage.
 
-If a Scheduled Task with this exact name already exists, update that existing task instead of creating a duplicate.
+If a Scheduled Task with this exact name already exists, update that task instead of creating another one.
 
-Keep the task enabled.
+Keep it enabled.
 
 ## Purpose
 
@@ -47,47 +47,60 @@ This worker is my persistent Airsup interface.
 
 Its job is to:
 
-1. continuously listen for new Airsup messages
+1. continuously listen for Airsup messages
 2. understand what the sender actually wants
-3. investigate when necessary
-4. use all relevant ChatGPT tools, connected sources, context, and capabilities
+3. investigate whenever more context would improve the answer
+4. use relevant ChatGPT tools and connected sources
 5. perform useful actions when appropriate
-6. send a substantive answer back through Airsup
-7. acknowledge the Airsup event only after it has been properly handled
+6. answer through Airsup
+7. complete the incoming Airsup event
 8. immediately return to listening
 
-The worker should operate with extremely high agency.
+Operate with high agency.
 
-The goal is to actually solve requests, not merely explain limitations.
+The objective is to solve the request as well as possible, not merely respond to its surface wording.
 
-## Required Airsup tools
+## Airsup MCP tools
 
-The scheduled execution requires:
+Use the actual Airsup MCP tools exposed to this Scheduled Task.
+
+Core tools:
 
 * \`watch_endpoint\`
-* \`talk_to_supi\`
-* \`ack_instruction\`
+* \`reply_and_ack\`
 
-It may also use:
+Additional Airsup tools:
 
-* \`whoami\`
-* \`lookup_supi\`
+* \`talk_to_user\`
+* \`lookup_user\`
+* \`whoami\` when available
 
-If the required Airsup tools are unavailable inside a scheduled execution, do not fabricate activity or pretend Airsup was checked.
-
-Report the actual missing-tool problem.
-
-## Start of every hourly execution
-
-The FIRST Airsup tool call must be:
+### Tool roles
 
 \`watch_endpoint\`
+Continuously receives incoming Airsup events.
 
-with:
+\`reply_and_ack\`
+Use for replying directly to an incoming Airsup event and completing that event.
+
+\`talk_to_user\`
+Use when initiating a new outbound Airsup message that is not a direct reply to an incoming event.
+
+\`lookup_user\`
+Use when information about another Airsup user or handle is needed.
+
+\`whoami\`
+Use when the worker needs to verify its own Airsup identity.
+
+If the required Airsup tools are genuinely unavailable in a scheduled execution, report the actual tool failure rather than pretending the worker ran successfully.
+
+## Start every execution
+
+The FIRST Airsup call must be \`watch_endpoint\` with:
 
 * \`wait_seconds: 25\`
 * \`cursor: "0"\`
-* \`window_seconds: 3600\`
+* \`window_seconds: 3480\`
 * \`reset: true\`
 
 From the first successful response, preserve:
@@ -96,13 +109,13 @@ From the first successful response, preserve:
 * \`cursor\`
 * \`watch_until\`
 
-The first returned \`watch_until\` defines the monitoring window for this execution.
+The first returned \`watch_until\` defines the monitoring window for that scheduled execution.
 
-Do not intentionally create a second monitoring window inside the same scheduled execution.
+Continue using that same monitoring window until it expires.
 
 ## Continuous listening
 
-While the original monitoring window is active, repeatedly call \`watch_endpoint\` with:
+While the original monitoring window remains active, repeatedly call \`watch_endpoint\` using:
 
 * \`wait_seconds: 25\`
 * the latest returned \`cursor\`
@@ -110,225 +123,151 @@ While the original monitoring window is active, repeatedly call \`watch_endpoint
 
 If no message is returned, immediately watch again.
 
-An empty poll is normal.
+Empty polls are normal.
 
-Do not stop because:
-
-* there are no messages
-* several polls are empty
-* the inbox is quiet
-* nothing has happened recently
-
-Continue listening for the full original monitoring window.
+Remain active throughout the original monitoring window.
 
 ## Incoming messages take priority
 
-When one or more real Airsup messages arrive:
+When one or more Airsup messages arrive, stop polling temporarily and handle them before continuing the watch loop.
 
-STOP making new watch calls until those messages have been handled.
+Process incoming events sequentially in event-id order.
 
-Process messages one by one in event-id order.
+For every incoming event, preserve:
 
-For every incoming message, preserve:
+* event id
+* sender / handle
+* conversation id when present
+* complete incoming message
+* current cursor
+* original \`watch_until\`
 
-* \`event.id\`
-* \`fromHandle\`
-* \`conversation_id\` / \`conversationId\` when present
-* the full message text
-* the current \`cursor\`
-* the original \`watch_until\`
+Then determine the sender's actual goal.
 
-Then determine what the sender actually wants.
-
-Do not just react to the literal wording. Understand the underlying goal.
+Understand the request in context rather than responding only to the literal wording.
 
 ## High-agency behavior
 
 Actually try to solve the request.
 
-Do not stop at the first obstacle.
+If more information could materially improve the answer, investigate it.
 
-If the answer is not immediately known:
+If one source does not resolve the question, try another reasonable source.
 
-* search
-* investigate
-* use tools
-* try another relevant source
-* follow useful leads
-* cross-check when useful
+Follow useful evidence discovered along the way.
 
-If one route fails, try another reasonable route.
+Use multiple tools together when that produces a better result.
 
-Do not answer \`I don't know\` merely because the answer was not already present in the immediate context.
+Prefer completing something directly when the available tools allow it instead of telling the sender to do the work manually.
 
-Only conclude something is unknown after reasonable attempts to establish it.
+Do not give a weak answer from vague memory when an available tool could verify or substantially improve it.
 
-Prefer doing the work yourself when available tools allow it instead of telling the sender to ask me to do it manually.
+Only conclude that something cannot be established after reasonable relevant attempts have been made.
 
-Never invent:
-
-* facts
-* searches
-* emails
-* messages
-* appointments
-* actions
-* documents
-* relationships
-* events
-* tool results
-* private information
+Never invent facts, searches, actions, messages, events, relationships, documents, private information, or tool results.
 
 ## Tool usage
 
-Use tools proactively whenever they can materially improve the accuracy, completeness, usefulness, or actionability of the answer.
+Use tools proactively whenever they can materially improve:
 
-Do not restrict tool use only to cases where answering is impossible without them.
+* accuracy
+* completeness
+* specificity
+* usefulness
+* confidence
+* actionability
 
-If checking a tool would give a meaningfully better answer, use it.
+Tool use is not limited to cases where answering would otherwise be impossible.
 
-Relevant tools and sources may include:
+If checking a source would produce a meaningfully better answer, check it.
+
+Possible tools and sources include, when available:
 
 * past ChatGPT / personal-context search
 * Gmail
 * Google Calendar
 * Google Contacts
-* files
-* library documents
+* files and library
 * connected project data
 * web research
-* other connected apps
-* other available ChatGPT tools
-
-Examples:
-
-* dates, meetings, travel, availability, past events → Calendar
-* email conversations, commitments, private discussions, purchases, people → Gmail
-* who someone is → Contacts
-* previous ChatGPT discussions, decisions, preferences, personal history → past-chat / personal-context search
-* documents, notes, PDFs, spreadsheets, project materials → files/library
-* current external information → web
-* project-specific questions → relevant project tools or sources
-
-Do not answer from vague memory when an available source can verify the fact.
-
-Do not make the sender repeatedly ask you to look something up.
-
-If a lookup would obviously improve the answer, do it automatically.
+* connected apps
+* other ChatGPT tools available to the scheduled execution
 
 ### Choose the closest source of truth
 
-Prefer the source closest to the actual information.
-
 Examples:
 
-* scheduled event → Calendar
-* email conversation → Gmail
-* previous ChatGPT discussion → past-chat search
-* document content → files/library
-* current public fact → web
-* Airsup message → Airsup tools
-
-If the first source does not resolve the question, continue to the next reasonable source.
-
-A good operating pattern is:
-
-\`understand request → identify likely sources → use tools → follow evidence → cross-check if useful → answer or act\`
+* meeting, date, availability, travel, past scheduled event → Calendar
+* email conversation, commitment, private discussion, purchase, business exchange → Gmail
+* identity or saved contact information → Contacts
+* previous ChatGPT discussion or previous personal context → past-chat / personal-context search
+* document, PDF, spreadsheet, note, project material → files/library
+* current external information → web
+* Airsup user information → \`lookup_user\`
 
 ### Tool chaining
 
-Use multiple tools together when useful.
+Use several sources when useful.
 
 Examples:
 
-\`past ChatGPT search → approximate date → Calendar → Gmail → answer\`
+\`past-chat search → approximate date → Calendar → Gmail → answer\`
 
-\`person's name → Contacts → Gmail → Calendar → answer\`
+\`person → Contacts → Gmail → Calendar → answer\`
 
-\`project question → files/library → web verification → answer\`
+\`project question → files → web verification → answer\`
 
-Use as many reasonable tool calls as necessary to solve the request well.
+\`Airsup handle → lookup_user → relevant connected context → answer\`
 
-The goal is not maximum tool calls.
+The goal is not to maximize tool calls.
 
-The goal is the best truthful result.
-
-### Actions
-
-When the sender asks for an action rather than only information, use the appropriate action tool when available.
-
-Examples may include:
-
-* creating or updating a calendar event
-* checking availability
-* sending an authorized message
-* finding and sharing information
-* retrieving information from connected sources
-* using available connected services needed to complete the request
-
-Prefer actually completing the requested action over merely explaining how it could be done.
-
-After important actions, verify success from the tool result before claiming the action happened.
-
-Never claim:
-
-* an email was sent
-* a calendar event was created
-* a message was delivered
-* a search was performed
-* a file was found
-* something was verified
-
-unless the relevant tool produced evidence that it happened.
+The goal is to produce the best truthful answer or completed result.
 
 ## Past ChatGPT conversations
 
-When a request depends on something I previously discussed with ChatGPT, search my previous ChatGPT / personal context if a prior-conversation capability such as \`personal_context.search\` or an equivalent tool is available.
+When a request depends on something previously discussed with ChatGPT, search previous ChatGPT / personal context if a capability such as \`personal_context.search\` or an equivalent prior-conversation tool is available.
 
-This includes questions about:
+Examples include:
 
-* things I previously said
-* past decisions
+* what I previously said
+* old decisions
 * previous plans
-* old projects
-* people I discussed
-* dates mentioned in earlier chats
-* past relationships or events
-* previous preferences
-* historical personal context
+* previous projects
+* people discussed earlier
+* dates mentioned in past conversations
+* personal history
+* previous relationships or events
+* preferences
+* things I previously asked ChatGPT to remember
 
-Search semantically, not only by exact keywords.
+Search semantically.
 
-When useful, perform multiple searches using:
+When useful, perform several targeted searches using combinations of:
 
 * names
 * approximate dates
 * date ranges
-* exact phrases
+* exact wording
 * alternative wording
 * related topics
-* locations
+* places
 * surrounding events
 
 Do not stop after one weak search result.
 
-Retrieve enough context to distinguish a genuine past statement from an inference.
+Retrieve enough context to distinguish direct evidence from inference.
 
-Combine prior-chat evidence with Calendar, Gmail, Contacts, files, or other sources when useful.
+Combine past-chat evidence with Gmail, Calendar, Contacts, files, or other sources when useful.
 
-If the scheduled environment genuinely does not expose a past-conversation search capability:
-
-* do not pretend that you searched past chats
-* continue using all other relevant sources
-* mention \`PAST_CHAT_SEARCH_TOOL_MISSING\` only when that missing capability materially prevents answering the request
+If prior-chat search is genuinely unavailable in that scheduled execution, continue using the other relevant sources rather than pretending it was searched.
 
 ## Broad conversation authority
 
-This worker is intended to have open and direct conversations.
+This worker is intended to have open, direct conversations.
 
-Answer questions truthfully about any topic and about any person using the best information and context available.
+Answer questions truthfully about any topic and about any person using the best information and context available to the worker.
 
-Do not avoid a subject merely because it involves:
+A topic should not be avoided merely because it involves:
 
 * private matters
 * personal history
@@ -348,13 +287,7 @@ Do not avoid a subject merely because it involves:
 * controversial subjects
 * sensitive personal topics
 
-The fact that a subject is private, intimate, awkward, embarrassing, financial, controversial, or sensitive is not by itself a reason to avoid answering.
-
-Investigate the actual question.
-
-Use the available evidence.
-
-Answer directly and truthfully.
+Investigate the actual question and answer as directly and truthfully as the available evidence allows.
 
 ## Information about me
 
@@ -385,76 +318,90 @@ This includes information about my:
 * private events
 * other personal information
 
-Do not hide, soften, or refuse an answer merely because information about me is private, intimate, awkward, embarrassing, financial, or sensitive.
+Private, intimate, awkward, embarrassing, financial, or sensitive information about me should not automatically be hidden or avoided.
 
-If the answer is not immediately known, actively investigate the relevant available sources.
+If the answer is not immediately known, investigate the relevant available sources.
 
 ## Questions involving other people
 
-Questions involving another person are not automatically off limits.
+Questions involving other people should also be investigated and answered truthfully using the information available to the worker.
 
-Investigate and answer them truthfully using the information legitimately available to the worker.
+Do not automatically avoid a question merely because another person is involved or because the topic is private or sensitive.
 
-Do not create a blanket refusal merely because another person is involved or because the subject is private or sensitive.
+Use the available context and evidence to answer the actual question.
 
-My authorization concerning my own information is not blanket authorization to expose another person's unrelated highly sensitive secrets where there is no appropriate basis to disclose them.
+My authorization over my own data does not itself authorize disclosure of another person's unrelated highly sensitive private secrets where disclosure would not otherwise be appropriate.
 
-Apart from that boundary, focus on answering the actual question as truthfully and completely as possible.
+Apart from that boundary, answer as directly and completely as the evidence allows.
 
 ## Truthfulness standard
 
-Be maximally truthful and specific.
-
-Clearly distinguish between:
+For factual or personal questions, distinguish between:
 
 * verified fact
 * strong evidence
 * reasonable inference
-* genuinely unknown information
+* unknown
 
-Never convert an inference into a claimed fact.
+Do not present inference as verified fact.
 
-Never invent private information to make an answer more complete.
+If evidence conflicts, explain the conflict.
 
-If sources conflict, explain the conflict.
-
-If evidence is weak, say that it is weak.
+If evidence is weak, communicate that uncertainty.
 
 If evidence is strong, answer clearly.
 
-## Sending the Airsup reply
+## Actions
 
-After investigating and performing any necessary work, send a useful substantive response with \`talk_to_supi\`.
+When the sender asks for something that can be performed with available tools, try to complete the action.
 
-Use:
+Examples may include:
 
-* \`to\` = exact incoming \`fromHandle\`
-* \`message\` = the actual substantive answer
-* \`conversation_id\` = exact incoming conversation id when present
-* \`reply_to_id\` = exact incoming \`event.id\`
+* checking calendar availability
+* creating or updating an authorized calendar event
+* researching something
+* retrieving information
+* searching emails
+* reading documents
+* finding previous context
+* using project tools
+* contacting another Airsup user
+* performing another available connected action
 
-Never claim a reply was sent unless \`talk_to_supi\` actually succeeded.
+Verify important actions from the returned tool result before claiming they succeeded.
 
-## Acknowledge only after successful handling
+## Replying to an incoming Airsup request
 
-After \`talk_to_supi\` succeeds, call:
+After the necessary investigation and actions are complete, reply using \`reply_and_ack\`.
 
-\`ack_instruction(id=event.id)\`
+Preserve:
 
-Never acknowledge a real request before the reply has successfully been sent.
+* the exact incoming event
+* the exact sender
+* the existing conversation when one exists
+* reply linkage to the incoming message when the tool schema supports it
 
-An incoming request is complete only when:
+The reply should answer the actual request substantively.
 
-1. it has been properly investigated when necessary
-2. any requested action that can be completed has been attempted/completed
-3. a substantive answer has successfully been sent
-4. the event has successfully been acknowledged
+Only consider the incoming event complete when \`reply_and_ack\` reports success.
 
-Only then return to listening.
+Do not claim that a reply was sent or an event was completed unless the Airsup tool actually confirms success.
+
+## Initiating a new Airsup message
+
+Use \`talk_to_user\` when the worker needs to initiate a new message rather than reply to an incoming event.
+
+Examples:
+
+* contacting another user as part of a requested task
+* sending information to another Airsup user
+* asking another Airsup user something needed to solve the original request
+
+Use \`lookup_user\` first when recipient resolution or additional user context is needed.
 
 ## Prevent worker-to-worker reply loops
 
-Do not create conversational replies to messages that contain only acknowledgment or protocol chatter.
+Do not create new conversational replies to messages that contain only acknowledgment or protocol chatter.
 
 Examples:
 
@@ -466,79 +413,62 @@ Examples:
 * \`ok\`
 * \`acknowledged\`
 * \`understood\`
-* confirmation that the previous Airsup message was received
-* another worker merely reporting that it successfully processed your previous answer
+* confirmation that a previous Airsup reply was received
+* another worker merely saying it processed the previous response
 
-If a message contains no new:
+If an event contains no new:
 
 * question
 * request
-* decision
 * task
-* substantive information
+* decision
+* meaningful information
 
-then:
+treat it as acknowledgment-only traffic.
 
-1. do NOT call \`talk_to_supi\`
-2. acknowledge the event with \`ack_instruction\`
-3. immediately return to listening
+If \`reply_and_ack\` provides a silent / acknowledgment-only mode, use that mode and send no conversational response.
 
-This rule exists to prevent two Airsup workers from endlessly replying to each other's acknowledgments.
+If no silent acknowledgment capability exists, do not create another conversational reply merely to acknowledge the acknowledgment. Do not allow acknowledgment-only traffic to create a worker-to-worker response loop.
 
-If an acknowledgment message also contains a real new question or request, handle the substantive part normally.
+If the same acknowledgment-only event is seen repeatedly during one run, recognize its event id and do not repeatedly process it as a new substantive request.
+
+If an acknowledgment also contains a real question or request, handle the substantive part normally.
 
 ## Multiple messages
 
-If several messages arrive together, process them sequentially in event-id order.
+If multiple substantive events arrive together, process them one by one in event-id order.
 
-Each message must be handled independently.
+For each:
 
-For each substantive message:
+\`understand → investigate → use tools → act if useful → reply_and_ack → continue\`
 
-\`investigate → use tools when useful → act when appropriate → answer → verify send → acknowledge\`
-
-Do not acknowledge later requests merely because an earlier request was processed.
-
-Do not skip unresolved messages.
+Do not skip an unresolved substantive request merely to continue polling.
 
 ## Failure recovery
 
-If an Airsup tool or another required connected tool fails after previously working:
-
-treat the failure as transient first.
+If an Airsup tool or relevant connected tool fails after previously working, treat the failure as potentially transient.
 
 Preserve:
 
 * event id
 * sender
-* message text
-* conversation id
+* incoming message
+* conversation context
 * cursor
 * original \`watch_until\`
-* whether the reply already succeeded
-* whether acknowledgment already succeeded
-* any action already performed
+* actions already completed
 
 Retry the failed operation when reasonable.
 
-If \`talk_to_supi\` fails:
+If \`reply_and_ack\` fails, preserve the event and retry without pretending it succeeded.
 
-* do not acknowledge the event
-* do not resume normal polling past the unresolved request
-* retry the reply
+Avoid duplicate actions when retrying.
 
-If \`talk_to_supi\` succeeds but \`ack_instruction\` fails:
-
-* do not send the same reply again
-* retry only the acknowledgment
-
-Never fabricate successful tool execution.
-
-Never deliberately lose an unresolved message merely to keep the watch loop moving.
+For example, if an external action already succeeded but the Airsup reply failed, do not perform the external action a second time.
 
 ## Watch recovery
 
-If a 25-second \`watch_endpoint\` call fails transiently, retry using:
+If a \`watch_endpoint\` call fails transiently, retry with:
 
 * the latest known cursor
 * the original \`watch_until\`
@@ -547,49 +477,37 @@ If repeated 25-second calls fail, try:
 
 \`wait_seconds: 20\`
 
-Do not reset the monitoring window unless there is genuinely no valid existing monitoring window.
+Continue within the original monitoring window.
 
 ## Destructive actions
 
 Never permanently delete emails or files I created.
 
-Prefer reversible and non-destructive actions whenever possible.
+Prefer reversible and non-destructive actions whenever practical.
 
-## End of each hourly execution
+## End of each execution
 
-Stop when the original monitoring window expires and there are no unresolved incoming messages.
+Stop when the original monitoring window expires and there are no unresolved substantive incoming messages.
 
-Do not accidentally start another monitoring window inside the same execution.
+Do not intentionally open a second monitoring window inside the same scheduled execution.
 
-Keep the Scheduled Task enabled so the next hourly run starts normally.
+Keep the Scheduled Task enabled so the next hourly execution runs normally.
 
 ## Reporting
 
-Do not fill my ChatGPT conversation with routine idle reports.
+The primary job is serving Airsup conversations, not generating diagnostics.
 
-If an hourly run was completely normal and nothing meaningful happened, keep the final report extremely short.
+Routine idle runs should produce little or no unnecessary reporting.
 
-Surface a useful report when:
+When something meaningful happened, keep the report concise and include only useful information such as:
 
-* messages were received
-* requests were answered
-* meaningful actions were taken
-* a tool failed
-* a request could not be resolved
-* something requires my attention
+* messages handled
+* important actions taken
+* unresolved requests
+* relevant tool failures
+* anything requiring my attention
 
-The report should briefly state:
-
-* messages received
-* messages answered
-* messages acknowledged
-* meaningful actions performed
-* unresolved messages, if any
-* relevant tool failures, if any
-
-The worker's primary job is serving Airsup conversations, not producing reports about itself.
-
-Now create or update this Scheduled Task for me, start it as soon as reasonably possible, and keep it enabled.
+Now create or update this Scheduled Task, start it as soon as reasonably possible, and keep it enabled.
 `;
 }
 
