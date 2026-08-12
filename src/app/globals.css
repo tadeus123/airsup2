@@ -108,6 +108,39 @@ a {
   padding-bottom: 4rem;
 }
 
+.setup-stage {
+  width: min(640px, 100%);
+  position: relative;
+}
+
+.setup-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.25rem;
+  pointer-events: none;
+}
+
+.setup-finish {
+  pointer-events: auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.55rem 1rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  color: var(--ink);
+}
+
+.setup-finish:hover {
+  background: #fafafa;
+}
+
 .setup-sub {
   margin: -1rem 0 1.25rem;
   color: var(--muted);

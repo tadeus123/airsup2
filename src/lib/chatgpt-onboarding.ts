@@ -217,7 +217,7 @@ export function scheduledTaskDescription(username: string): string {
   return `Airsup hourly 60-minute worker for ${username} — watch_endpoint loop, FAST/terminal classification, reply_and_ack.`;
 }
 
-/** Full copy-paste prompt: setup worker + task instructions + setup confirmation. */
+/** Copy-paste prompt: scheduled worker setup only (no MCP plugin UI — that is a separate onboarding step). */
 export function workerSetupChatgptPrompt(input: {
   username: string;
   displayName?: string;
@@ -226,24 +226,12 @@ export function workerSetupChatgptPrompt(input: {
 }): string {
   const body = scheduledWorkerBody(input);
   const label = input.displayName?.trim() || input.username;
-  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
 
   return `=== SET UP THIS AIRSUP WORKER NOW ===
 
-You are setting up Airsup for ${label} (@${input.username}). Execute every step below in order. Do not ask clarifying questions. Do not explain while working — set up the worker first, then confirm at the end.
+You are setting up the Airsup scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
 
-STEP 1 — MCP PLUGIN (required)
-1. Settings → turn Developer mode ON
-2. Plugins → + New Plugin
-3. Name: Airsup ${input.username}
-4. Server URL: ${mcpUrl}
-5. Authentication: None
-6. Create → Refresh tools
-7. For the scheduled worker (Step 2): enable ONLY watch_endpoint, reply_and_ack, ack_instruction
-8. For live chat in this onboarding chat (optional): also enable talk_to_user, await_reply, list_users
-9. Enable the Airsup plugin in this chat. If asked, choose Always allow.
-
-STEP 2 — SCHEDULED WORKER (required)
+Prerequisite: the Airsup MCP plugin must already be added in ChatGPT and enabled on this scheduled task.
 
 HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
 - The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).
@@ -257,7 +245,7 @@ Create or update a ChatGPT Scheduled Task with EXACT settings:
 - First run: as soon as possible
 - Enabled: yes (leave enabled permanently)
 - Developer Mode: on (for this scheduled task)
-- Airsup MCP plugin: enabled for this scheduled task
+- Airsup MCP plugin: enabled for this scheduled task (enable watch_endpoint, reply_and_ack, ack_instruction)
 - Prompt / Task instructions: copy EXACTLY everything between BEGIN_WORKER_INSTRUCTIONS and END_WORKER_INSTRUCTIONS below (no edits, no summarizing)
 
 BEGIN_WORKER_INSTRUCTIONS
@@ -268,10 +256,8 @@ END_WORKER_INSTRUCTIONS
 
 After the scheduled task is created/updated, reply in this chat with ONLY the confirmation block below. Fill in actual values. Do not skip any line.
 
-AIRSUP SETUP CONFIRMATION
+AIRSUP WORKER SETUP CONFIRMATION
 user: ${input.username} (${label})
-plugin_url: ${mcpUrl}
-plugin_connected: yes / no
 task_name: Airsup Continuous 60-Minute Worker - ${input.username}
 schedule_ui: Frequency Hourly, every 1 hour, End repeat Never — yes / no
 active_window_per_run: 60 minutes (in worker instructions; not configured on Airsup server)
@@ -281,6 +267,28 @@ worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
 tools_available: watch_endpoint, reply_and_ack, ack_instruction — yes / no
 setup_status: COMPLETE / INCOMPLETE
 if_incomplete: <what is missing>`;
+}
+
+/** Short gateway/plugin setup shown on the website after the worker step. */
+export function gatewaySetupSteps(input: {
+  username: string;
+  origin: string;
+  token: string;
+}): { mcpUrl: string; steps: string[] } {
+  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
+  return {
+    mcpUrl,
+    steps: [
+      "ChatGPT → Settings → turn Developer mode ON.",
+      "Plugins → + New Plugin.",
+      `Name: Airsup ${input.username}`,
+      `Server URL: ${mcpUrl}`,
+      "Authentication: None → Create → Refresh tools.",
+      "Enable talk_to_user, await_reply, list_users (for live chat with other people).",
+      "Open a new chat, turn on the Airsup plugin, choose Always allow.",
+      "Say: talk to [username] — or use list_users to find people on Airsup.",
+    ],
+  };
 }
 
 export function chatgptPrefillUrl(prompt: string): string {
@@ -293,21 +301,15 @@ export function pluginSetupInstructions(input: {
   token: string;
   user: User;
 }): { mcpUrl: string; token: string; username: string; steps: string[] } {
-  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
+  const { mcpUrl, steps } = gatewaySetupSteps({
+    origin: input.origin,
+    username: input.username,
+    token: input.token,
+  });
   return {
     mcpUrl,
     token: input.token,
     username: input.username,
-    steps: [
-      "ChatGPT → Settings → turn on Developer mode.",
-      "ChatGPT → Plugins → + New Plugin.",
-      `Name: Airsup ${input.username}`,
-      `Server URL: ${mcpUrl}`,
-      "Authentication: None.",
-      "Create → Refresh tools → for worker: enable watch_endpoint, reply_and_ack, ack_instruction only.",
-      "For live chat (optional): also enable talk_to_user, await_reply, list_users.",
-      "New chat → Developer mode + Airsup → Always allow if asked.",
-      `Say: talk to ${input.username}`,
-    ],
+    steps,
   };
 }
