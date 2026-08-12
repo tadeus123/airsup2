@@ -231,21 +231,31 @@ export function workerSetupChatgptPrompt(input: {
 
 You are setting up the ainet scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
 
-PLUGIN FIRST
-The ainet MCP plugin must be connected in ChatGPT before this scheduled task can run (Developer mode → Plugins → New Plugin → Server URL with your token → Authentication: None).
-If the plugin is missing: stop, tell the user to finish the gateway / plugin section on the website, then re-run this prompt.
-If the plugin is already connected: enable watch_endpoint, reply_and_ack, and ack_instruction on this scheduled task and continue.
+WAIT FOR THE AINET PLUGIN (do this before creating the task)
+The ainet MCP plugin must be connected in ChatGPT (Developer mode → Plugins → New Plugin → Server URL with token → Authentication: None).
+1. Check whether tools watch_endpoint, reply_and_ack, and ack_instruction are available in this chat / for scheduled tasks.
+2. If they are missing: do NOT abort and do NOT ask the user to re-run this prompt. Wait and keep checking.
+   - Tell the user once, briefly: "waiting for your ainet plugin — finish the gateway section on the website, then come back here."
+   - Re-check availability every ~20–30 seconds.
+   - Keep waiting up to 15 minutes until the three tools appear.
+   - Only if still missing after 15 minutes: mark setup INCOMPLETE and say what is missing.
+3. When the tools are available: enable watch_endpoint, reply_and_ack, and ack_instruction on the scheduled task and continue.
 
 HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
 - The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).
 - ChatGPT must fire this task every hour: Frequency: Hourly, End repeat: Never — set this in the Scheduled Task UI, NOT on the ainet server.
 - Each hourly trigger starts one 60-minute watch loop; back-to-back hourly runs create near-continuous coverage.
 
+FIRST RUN TIMING (important)
+- Set the first run to ~5 minutes from the moment you create this task (from "now", when this setup prompt is being executed).
+- Do NOT set first run to tomorrow or a vague "later".
+- After the first run, continue on the Hourly schedule forever (End repeat: Never).
+
 Create or update a ChatGPT Scheduled Task with EXACT settings:
 - Name: ainet Continuous 60-Minute Worker - ${input.username}
 - Description: ${scheduledTaskDescription(input.username)}
 - Schedule: Hourly, every 1 hour, End repeat: Never
-- First run: as soon as possible
+- First run: about 5 minutes from now (the time this setup prompt is run)
 - Enabled: yes (leave enabled permanently)
 - Developer Mode: on (for this scheduled task)
 - ainet MCP plugin: enabled for this scheduled task (enable watch_endpoint, reply_and_ack, ack_instruction)
@@ -263,9 +273,11 @@ AINET WORKER SETUP CONFIRMATION
 user: ${input.username} (${label})
 task_name: ainet Continuous 60-Minute Worker - ${input.username}
 schedule_ui: Frequency Hourly, every 1 hour, End repeat Never — yes / no
+first_run: <actual clock time you set>
+first_run_about_5_min_from_setup: yes / no
+plugin_waited_until_tools_ready: yes / no / already_present
 active_window_per_run: 60 minutes (in worker instructions; not configured on ainet server)
 enabled: yes / no
-first_run: <actual time>
 worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
 tools_available: watch_endpoint, reply_and_ack, ack_instruction — yes / no
 setup_status: COMPLETE / INCOMPLETE
