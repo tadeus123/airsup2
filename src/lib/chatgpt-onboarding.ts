@@ -295,8 +295,8 @@ export function gatewaySetupSteps(input: {
     mcpUrl,
     steps: [
       "Developer mode on",
-      `Plugins → New → Name: airsup`,
-      "Paste Server URL, Auth: None → Create",
+      `Plugins → New → Name: airsup ${input.username}`,
+      "Paste Server URL, Auth: No Auth → Create",
       "Enable talk_to_user, await_reply, list_users",
       "New chat → turn plugin on",
       'Say: "supi, to whom can i talk?"',

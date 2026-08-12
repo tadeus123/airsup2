@@ -167,7 +167,7 @@ export default function AinetPage() {
     setTimeout(() => setCopiedUrl(false), 2000);
   }
 
-  const pluginName = "airsup";
+  const pluginName = result ? `airsup ${result.username}` : "airsup";
   const pluginDescription = "talk to other peoples chatgpts.";
   const mcpUrl = result?.mcpUrl || "enter your name above first";
 
@@ -314,14 +314,13 @@ export default function AinetPage() {
                 </span>
               </li>
               <li>
-                <strong>authentication:</strong> select <code>None</code>.
+                <strong>authentication:</strong> select <code>No Auth</code>.
               </li>
-              <li>dont change anything in the advanced settings..</li>
               <li>checkmark the safety warning..</li>
               <li>click create.</li>
             </ul>
 
-            <img className="ainet-shot" src="/airsup/plugin-3.png" alt="new plugin fields and create button" />
+            <img className="ainet-shot" src="/airsup/plugin-3.png" alt="new plugin with name airsup username, No Auth, and create" />
           </>
         )}
       </section>

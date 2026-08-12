@@ -35,7 +35,7 @@ function jsonRpcUnauthorized(): Response {
       error: {
         code: -32001,
         message:
-          "Unauthorized. Set Authentication to None and use Server URL with ?token=asp_...",
+          "Unauthorized. Set Authentication to No Auth and use Server URL with ?token=asp_...",
       },
       id: null,
     }),
