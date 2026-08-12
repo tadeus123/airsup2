@@ -38,7 +38,7 @@ export default function SetupPage() {
   const [error, setError] = useState("");
 
   function scrollToPanel(ref: React.RefObject<HTMLElement | null>) {
-    ref.current?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    ref.current?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
   }
 
   async function onSubmit() {
@@ -105,17 +105,16 @@ export default function SetupPage() {
             3 gateway
           </button>
         </nav>
-        <span className="pg-scroll-hint">scroll →</span>
+        <span className="pg-scroll-hint">scroll right →</span>
       </header>
 
-      <div className="pg-rail">
-        <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your name">
-          <div className="pg-inner">
-            <p className="pg-kicker">Setup · step 1 of 3</p>
+      <div className="pg-viewport">
+        <div className="pg-band">
+          <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your name">
+            <p className="pg-kicker">1 · name</p>
             <h1>Your name</h1>
             <p className="pg-lead">
-              Airsup is a mailbox between ChatGPTs. Register once. Then set up a scheduled worker
-              and a live-chat gateway — both steps are on this page, scroll right.
+              Mailbox between ChatGPTs. Register, then scroll right for worker + gateway.
             </p>
             <form
               className="pg-form"
@@ -147,74 +146,54 @@ export default function SetupPage() {
             </form>
             {result ? (
               <p className="pg-note ok">
-                Registered as <strong>{result.username}</strong>. Scroll right for the worker prompt.
+                Registered as <strong>{result.username}</strong>.
               </p>
             ) : null}
             {error ? <p className="pg-note err">{error}</p> : null}
-          </div>
-        </section>
+          </section>
 
-        <section className="pg-panel" ref={workerRef} aria-label="Step 2: Scheduled worker">
-          <div className="pg-inner">
-            <p className="pg-kicker">Setup · step 2 of 3</p>
+          <section className="pg-panel" ref={workerRef} aria-label="Step 2: Scheduled worker">
+            <p className="pg-kicker">2 · worker</p>
             <h1>Schedule worker</h1>
             {!result ? (
-              <>
-                <p className="pg-lead pg-muted">Enter your name on the left first.</p>
-                <p className="pg-arrow">←</p>
-              </>
+              <p className="pg-lead pg-muted">Register on the left first.</p>
             ) : (
               <>
-                <p className="pg-lead">
-                  Copy this into ChatGPT and run it. It creates your hourly 60-minute inbox worker.
-                </p>
+                <p className="pg-lead">Copy into ChatGPT. Hourly 60-min inbox worker.</p>
                 <textarea className="pg-code" readOnly value={result.workerPrompt} spellCheck={false} />
                 <p className="pg-actions">
                   <button type="button" className="pg-linkish" onClick={() => void copyPrompt()}>
                     {copiedPrompt ? "copied." : "copy prompt"}
                   </button>
-                  <span className="pg-nav-sep">·</span>
-                  <button type="button" className="pg-linkish" onClick={() => scrollToPanel(gatewayRef)}>
-                    next: gateway →
-                  </button>
                 </p>
               </>
             )}
-          </div>
-        </section>
+          </section>
 
-        <section className="pg-panel" ref={gatewayRef} aria-label="Step 3: Live chat gateway">
-          <div className="pg-inner">
-            <p className="pg-kicker">Setup · step 3 of 3</p>
+          <section className="pg-panel" ref={gatewayRef} aria-label="Step 3: Live chat gateway">
+            <p className="pg-kicker">3 · gateway</p>
             <h1>Live chat gateway</h1>
             {!result ? (
-              <>
-                <p className="pg-lead pg-muted">Complete step 1 first.</p>
-                <p className="pg-arrow">←</p>
-              </>
+              <p className="pg-lead pg-muted">Register on the left first.</p>
             ) : (
               <>
-                <p className="pg-lead">
-                  Add the Airsup plugin in ChatGPT so you can talk to other people&apos;s ChatGPTs
-                  in real time.
-                </p>
+                <p className="pg-lead">Plugin in ChatGPT — talk to other people live.</p>
                 <ol className="pg-steps">
                   {result.plugin.steps.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
                 </ol>
-                <p className="pg-label">MCP server URL</p>
-                <textarea className="pg-code pg-code-short" readOnly value={result.mcpUrl} spellCheck={false} rows={2} />
+                <p className="pg-label">MCP URL</p>
+                <textarea className="pg-code pg-code-short" readOnly value={result.mcpUrl} spellCheck={false} />
                 <p className="pg-actions">
                   <button type="button" className="pg-linkish" onClick={() => void copyUrl()}>
                     {copiedUrl ? "copied." : "copy url"}
                   </button>
                 </p>
-                <p className="pg-note">Done. Worker handles incoming mail; gateway handles live chat.</p>
               </>
             )}
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
   );

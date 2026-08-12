@@ -6,6 +6,7 @@
   --pg-line: #ccc;
   --pg-bad: #900;
   --pg-ok: #060;
+  --pg-col: 17rem;
 }
 
 * {
@@ -15,8 +16,7 @@
 html,
 body {
   margin: 0;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   color: var(--pg-ink);
   background: var(--pg-bg);
 }
@@ -29,36 +29,33 @@ button {
   font: inherit;
 }
 
-/* ——— Paul Graham-ish horizontal setup ——— */
-
 .pg {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   font-family: Verdana, Geneva, sans-serif;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .pg-header {
   flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: 1.25rem;
-  padding: 0.85rem 1.25rem;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
   border-bottom: 1px solid var(--pg-line);
   background: var(--pg-bg);
 }
 
 .pg-brand {
   font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 .pg-nav {
   display: flex;
   align-items: baseline;
-  gap: 0.35rem;
+  gap: 0.3rem;
   flex: 1;
 }
 
@@ -83,55 +80,57 @@ button {
 
 .pg-scroll-hint {
   color: var(--pg-muted);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
-.pg-rail {
+.pg-viewport {
   flex: 1;
-  display: flex;
   overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+.pg-band {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  min-height: calc(100vh - 2.5rem);
+  padding: 0 0.75rem 2rem;
+}
+
 .pg-panel {
-  flex: 0 0 100vw;
-  height: 100%;
-  overflow-y: auto;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  border-right: 1px solid var(--pg-line);
+  flex: 0 0 var(--pg-col);
+  width: var(--pg-col);
+  padding: 1.25rem 1rem 1.5rem;
+  border-right: 1px dotted var(--pg-line);
 }
 
 .pg-panel:last-child {
   border-right: 0;
+  padding-right: 1.5rem;
 }
 
-.pg-inner {
-  max-width: 34rem;
-  padding: 2.5rem 1.75rem 4rem;
+.pg-panel:first-child {
+  padding-left: 0.5rem;
 }
 
 .pg-kicker {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   color: var(--pg-muted);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: lowercase;
 }
 
 .pg h1 {
-  margin: 0 0 1rem;
-  font-size: 15px;
+  margin: 0 0 0.65rem;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
 }
 
 .pg-lead {
-  margin: 0 0 1.25rem;
-  max-width: 32rem;
+  margin: 0 0 0.85rem;
 }
 
 .pg-muted {
@@ -140,27 +139,25 @@ button {
 
 .pg-label {
   display: block;
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
   color: var(--pg-muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .pg-form {
-  margin: 0 0 1rem;
+  margin: 0 0 0.65rem;
 }
 
 .pg-form-row {
   display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-  max-width: 28rem;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .pg-form input {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   border: 1px solid var(--pg-line);
-  padding: 0.35rem 0.45rem;
+  padding: 0.3rem 0.4rem;
   font: inherit;
   background: #fff;
   color: var(--pg-ink);
@@ -171,8 +168,9 @@ button {
 }
 
 .pg-form button {
+  align-self: flex-start;
   border: 1px solid var(--pg-line);
-  padding: 0.35rem 0.65rem;
+  padding: 0.28rem 0.5rem;
   background: #fff;
   cursor: pointer;
 }
@@ -189,35 +187,33 @@ button {
 .pg-code {
   display: block;
   width: 100%;
-  max-width: 32rem;
-  min-height: 16rem;
-  margin: 0 0 0.75rem;
+  height: 11rem;
+  margin: 0 0 0.5rem;
   border: 1px solid var(--pg-line);
-  padding: 0.5rem 0.55rem;
+  padding: 0.4rem 0.45rem;
   font-family: "Courier New", Courier, monospace;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 9px;
+  line-height: 1.4;
   background: #fff;
   color: var(--pg-ink);
-  resize: vertical;
+  resize: none;
 }
 
 .pg-code-short {
-  min-height: 0;
+  height: 3.25rem;
 }
 
 .pg-steps {
-  margin: 0 0 1.25rem;
-  padding-left: 1.25rem;
-  max-width: 32rem;
+  margin: 0 0 0.75rem;
+  padding-left: 1rem;
 }
 
 .pg-steps li {
-  margin: 0.35rem 0;
+  margin: 0.25rem 0;
 }
 
 .pg-actions {
-  margin: 0 0 1rem;
+  margin: 0 0 0.5rem;
 }
 
 .pg-linkish {
@@ -234,9 +230,9 @@ button {
 }
 
 .pg-note {
-  margin: 0.75rem 0 0;
+  margin: 0.5rem 0 0;
   color: var(--pg-muted);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .pg-note.err {
@@ -247,27 +243,25 @@ button {
   color: var(--pg-ok);
 }
 
-.pg-arrow {
-  margin: 2rem 0 0;
-  color: var(--pg-muted);
-  font-size: 18px;
+@media (min-width: 900px) {
+  :root {
+    --pg-col: 18rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --pg-col: 19rem;
+  }
 }
 
 @media (max-width: 640px) {
   .pg-header {
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .pg-scroll-hint {
     width: 100%;
-  }
-
-  .pg-inner {
-    padding: 1.75rem 1.1rem 3rem;
-  }
-
-  .pg-form-row {
-    flex-direction: column;
   }
 }
