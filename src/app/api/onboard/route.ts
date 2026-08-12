@@ -31,13 +31,13 @@ export async function POST(request: Request) {
       bio: body.bio,
     });
     const origin = new URL(request.url).origin;
-    const workerInstructions = scheduledWorkerBody({
+    const workerPrompt = workerSetupChatgptPrompt({
       origin,
       username: user.username,
       token,
       displayName: user.displayName,
     });
-    const workerPrompt = workerSetupChatgptPrompt({
+    const workerTaskInstructions = scheduledWorkerBody({
       origin,
       username: user.username,
       token,
@@ -65,7 +65,8 @@ export async function POST(request: Request) {
       displayName: user.displayName,
       bio: user.bio,
       token,
-      workerPrompt: workerInstructions,
+      workerPrompt,
+      workerTaskInstructions,
       workerSetupPrompt: workerPrompt,
       workerChatgptUrl: chatgptPrefillUrl(workerPrompt),
       scheduleDescription: scheduledTaskDescription(user.username),

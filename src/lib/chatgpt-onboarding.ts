@@ -70,17 +70,13 @@ Use available tools to take reasonable actions needed to fulfill a peer request.
 REQUIRED AIRSUP TOOLS
 - watch_endpoint
 - ack_instruction
-- talk_to_user
-Preferred when available:
 - reply_and_ack
+Optional (live chat only — do NOT use for worker inbox replies):
+- talk_to_user, await_reply, cancel_wait
 - watch_batch
-Optional:
-- whoami
-- lookup_user
-- list_users
-- cancel_wait
+- whoami, lookup_user, list_users
 
-If watch_endpoint, ack_instruction, or talk_to_user is unavailable at the beginning, post a visible FAIL report naming the missing tool.
+If watch_endpoint, ack_instruction, or reply_and_ack is unavailable at the beginning, post a visible FAIL report naming the missing tool.
 
 START
 The first Airsup call must be watch_endpoint with:
@@ -145,10 +141,8 @@ For SUBSTANTIVE messages:
 1. Classify FAST, CONTEXT, or DEEP.
 2. Do only the necessary reasoning/retrieval/action for that path.
 3. Keep the reply concise unless the user explicitly asks for detail.
-4. Prefer \`reply_and_ack\` when available because it performs the reply and acknowledgment atomically in one tool call.
-5. If reply_and_ack is unavailable:
-   - call talk_to_user with exact fromUsername (fromHandle), conversation_id when present, and reply_to_id=event.id
-   - only after successful send call ack_instruction(id=event.id)
+4. Prefer \`reply_and_ack\` — it performs the reply and acknowledgment atomically in one tool call.
+5. If reply_and_ack fails: retry up to 3 times. Do NOT use talk_to_user for inbox replies.
 6. Never acknowledge a substantive message before its required reply/action succeeds.
 7. Immediately resume watch_endpoint after completion.
 
@@ -209,7 +203,7 @@ export function scheduledTaskDescription(username: string): string {
   return `Airsup hourly 60-minute worker for ${username} — watch_endpoint loop, FAST/terminal classification, reply_and_ack.`;
 }
 
-/** Prompt pasted into ChatGPT to create the scheduled task with worker instructions. */
+/** Full copy-paste prompt: setup worker + task instructions + setup confirmation. */
 export function workerSetupChatgptPrompt(input: {
   username: string;
   displayName?: string;
@@ -218,34 +212,52 @@ export function workerSetupChatgptPrompt(input: {
 }): string {
   const body = scheduledWorkerBody(input);
   const label = input.displayName?.trim() || input.username;
+  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
 
-  return `Create the Airsup hourly scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain — create the task, then reply with the checklist.
+  return `=== SET UP THIS AIRSUP WORKER NOW ===
 
-REQUIREMENTS BEFORE YOU START:
-- Developer mode must be ON in ChatGPT
-- Add the Airsup MCP plugin: Server URL ${input.origin}/mcp?token=${input.token}, Authentication None
-- Enable the Airsup MCP plugin on this scheduled task
+You are setting up Airsup for ${label} (@${input.username}). Execute every step below in order. Do not ask clarifying questions. Do not explain while working — set up the worker first, then confirm at the end.
 
-CREATE OR UPDATE A SCHEDULED TASK WITH EXACT SETTINGS:
+STEP 1 — MCP PLUGIN (required)
+1. Settings → turn Developer mode ON
+2. Plugins → + New Plugin
+3. Name: Airsup ${input.username}
+4. Server URL: ${mcpUrl}
+5. Authentication: None
+6. Create → Refresh tools → enable: watch_endpoint, reply_and_ack, ack_instruction (and talk_to_user, await_reply, list_users for live chat)
+7. Enable the Airsup plugin in this chat. If asked, choose Always allow.
+
+STEP 2 — SCHEDULED WORKER (required)
+Create or update a ChatGPT Scheduled Task with EXACT settings:
 - Name: Airsup Continuous 60-Minute Worker - ${input.username}
 - Description: ${scheduledTaskDescription(input.username)}
-- Schedule: ${WORKER_SCHEDULE_LABEL} (repeat: never end)
+- Schedule: Hourly, every 1 hour, End repeat: Never
 - First run: as soon as possible
-- Enabled: yes (always — never disable after setup)
-- Developer Mode: on (for the scheduled task)
+- Enabled: yes (leave enabled permanently)
+- Developer Mode: on (for this scheduled task)
 - Airsup MCP plugin: enabled for this scheduled task
-- Task instructions: copy EXACTLY the block between BEGIN_INSTRUCTIONS and END_INSTRUCTIONS (no edits, no summarizing)
+- Prompt / Task instructions: copy EXACTLY everything between BEGIN_WORKER_INSTRUCTIONS and END_WORKER_INSTRUCTIONS below (no edits, no summarizing)
 
-BEGIN_INSTRUCTIONS
+BEGIN_WORKER_INSTRUCTIONS
 ${body}
-END_INSTRUCTIONS
+END_WORKER_INSTRUCTIONS
 
-WHEN DONE — reply with ONLY this checklist (one line each):
-✓ Task name
-✓ Schedule (every 1 hour, recurring)
-✓ Enabled: yes
-✓ First run time
-✓ Task instructions pasted verbatim`;
+=== SETUP COMPLETE — CONFIRM THIS NOW ===
+
+After the scheduled task is created/updated, reply in this chat with ONLY the confirmation block below. Fill in actual values. Do not skip any line.
+
+AIRSUP SETUP CONFIRMATION
+user: ${input.username} (${label})
+plugin_url: ${mcpUrl}
+plugin_connected: yes / no
+task_name: Airsup Continuous 60-Minute Worker - ${input.username}
+schedule: every 1 hour, recurring, never end
+enabled: yes / no
+first_run: <actual time>
+worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
+tools_available: watch_endpoint, reply_and_ack, ack_instruction — yes / no
+setup_status: COMPLETE / INCOMPLETE
+if_incomplete: <what is missing>`;
 }
 
 export function chatgptPrefillUrl(prompt: string): string {
