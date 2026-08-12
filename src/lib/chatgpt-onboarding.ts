@@ -54,61 +54,43 @@ export function scheduledTaskDescription(username: string): string {
   return `Airsup scanner for ${username} every 15m — watch_batch (~100s internal polls), reply_and_ack, unacked replay.`;
 }
 
-/** Strict ChatGPT prompt: plugin + scheduled worker in one paste. */
-export function fullSetupChatgptPrompt(input: {
-  origin: string;
+/** Strict prompt: create scheduled worker only (plugin comes next on website). */
+export function workerSetupChatgptPrompt(input: {
   username: string;
-  token: string;
   displayName?: string;
+  origin: string;
+  token: string;
 }): string {
-  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
   const body = scheduledWorkerBody(input);
   const label = input.displayName?.trim() || input.username;
 
-  return `Set up Airsup for ${label} (@${input.username}). Execute ALL steps below in order. Do not ask clarifying questions. Do not explain — perform each step, then confirm with the checklist at the end.
+  return `Create the Airsup scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain — create the task, then reply with the checklist.
 
-=== STEP 1: MCP PLUGIN (required — worker cannot run without this) ===
-1. Settings → turn Developer mode ON
-2. Plugins → + New Plugin
-3. Name: Airsup ${input.username}
-4. Server URL: ${mcpUrl}
-5. Authentication: None
-6. Create the plugin → Refresh tools
-7. Enable these tools: watch_batch, reply_and_ack, ack_instruction, talk_to_user, await_reply, cancel_wait, list_users
-8. In this chat: enable the Airsup plugin. If asked to confirm tools, choose Always allow.
+REQUIREMENTS BEFORE YOU START:
+- Developer mode must be ON in ChatGPT
+- The Airsup MCP plugin is connected in the NEXT step on the website — still create this scheduled task now
+- When creating the task, turn Developer mode ON for the task and enable the Airsup MCP plugin on the task once it appears in your plugin list
 
-=== STEP 2: SCHEDULED WORKER (required — this polls your inbox every 15 min) ===
-Create or update a ChatGPT Scheduled Task RIGHT NOW with EXACT settings:
+CREATE OR UPDATE A SCHEDULED TASK WITH EXACT SETTINGS:
 - Name: Airsup Continuous Worker - ${input.username}
 - Description: ${scheduledTaskDescription(input.username)}
 - Schedule: every 15 minutes
 - First run: as soon as possible
 - Enabled: yes
-- Developer Mode: on
-- Airsup MCP plugin: enabled for this scheduled task
+- Developer Mode: on (for the scheduled task)
+- Airsup MCP plugin: enable on this task if already listed (if not listed yet, create the task anyway — plugin is added right after)
 - Task instructions: copy EXACTLY the block between BEGIN_INSTRUCTIONS and END_INSTRUCTIONS (no edits, no summarizing)
 
 BEGIN_INSTRUCTIONS
 ${body}
 END_INSTRUCTIONS
 
-=== WHEN DONE ===
-Reply with ONLY this checklist (one line each, no extra text):
-✓ Plugin URL connected
+WHEN DONE — reply with ONLY this checklist (one line each):
 ✓ Task name
 ✓ Schedule (every 15 min)
 ✓ Enabled: yes
 ✓ First run time
-✓ Tools confirmed: watch_batch, reply_and_ack, ack_instruction`;
-}
-
-/** @deprecated use fullSetupChatgptPrompt */
-export function scheduledWorkerPrompt(input: {
-  origin: string;
-  username: string;
-  token: string;
-}): string {
-  return fullSetupChatgptPrompt(input);
+✓ Task instructions pasted verbatim`;
 }
 
 export function chatgptPrefillUrl(prompt: string): string {
@@ -134,7 +116,6 @@ export function pluginSetupInstructions(input: {
       "Authentication: None.",
       "Create → Refresh tools → enable watch_batch, reply_and_ack, talk_to_user, await_reply, list_users.",
       "New chat → Developer mode + Airsup → Always allow if asked.",
-      "Create every-15-minutes Scheduled Task with worker instructions.",
       `Say: talk to ${input.username}`,
     ],
   };

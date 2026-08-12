@@ -276,3 +276,19 @@ a.setup-copy {
     min-height: 14rem;
   }
 }
+
+.setup-worker-next {
+  margin-top: 2rem;
+  min-width: min(420px, 100%);
+}
+
+.setup-plugin {
+  width: min(640px, 100%);
+  text-align: center;
+}
+
+.setup-plugin .setup-steps,
+.setup-plugin .setup-label,
+.setup-plugin .setup-prompt {
+  width: 100%;
+}

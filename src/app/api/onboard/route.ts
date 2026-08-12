@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   chatgptPrefillUrl,
-  fullSetupChatgptPrompt,
   pluginSetupInstructions,
   scheduledTaskDescription,
+  workerSetupChatgptPrompt,
 } from "@/lib/chatgpt-onboarding";
 import { logActivitySafe, newRequestId } from "@/lib/activity";
 import { normalizeUsername, registerUser } from "@/lib/users";
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       bio: body.bio,
     });
     const origin = new URL(request.url).origin;
-    const setupPrompt = fullSetupChatgptPrompt({
+    const workerPrompt = workerSetupChatgptPrompt({
       origin,
       username: user.username,
       token,
@@ -58,9 +58,8 @@ export async function POST(request: Request) {
       displayName: user.displayName,
       bio: user.bio,
       token,
-      chatgptUrl: chatgptPrefillUrl(setupPrompt),
-      setupPrompt,
-      schedulePrompt: setupPrompt,
+      workerPrompt,
+      workerChatgptUrl: chatgptPrefillUrl(workerPrompt),
       scheduleDescription: scheduledTaskDescription(user.username),
       scheduleName: `Airsup Continuous Worker - ${user.username}`,
       mcpUrl: plugin.mcpUrl,
