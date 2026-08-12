@@ -3,6 +3,7 @@ import {
   chatgptPrefillUrl,
   pluginSetupInstructions,
   scheduledTaskDescription,
+  scheduledWorkerBody,
   workerSetupChatgptPrompt,
 } from "@/lib/chatgpt-onboarding";
 import { logActivitySafe, newRequestId } from "@/lib/activity";
@@ -30,6 +31,12 @@ export async function POST(request: Request) {
       bio: body.bio,
     });
     const origin = new URL(request.url).origin;
+    const workerInstructions = scheduledWorkerBody({
+      origin,
+      username: user.username,
+      token,
+      displayName: user.displayName,
+    });
     const workerPrompt = workerSetupChatgptPrompt({
       origin,
       username: user.username,
@@ -58,10 +65,11 @@ export async function POST(request: Request) {
       displayName: user.displayName,
       bio: user.bio,
       token,
-      workerPrompt,
+      workerPrompt: workerInstructions,
+      workerSetupPrompt: workerPrompt,
       workerChatgptUrl: chatgptPrefillUrl(workerPrompt),
       scheduleDescription: scheduledTaskDescription(user.username),
-      scheduleName: `Airsup Continuous Worker - ${user.username}`,
+      scheduleName: `Airsup Continuous 60-Minute Worker - ${user.username}`,
       mcpUrl: plugin.mcpUrl,
       plugin,
     });
