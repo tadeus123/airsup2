@@ -199,7 +199,10 @@ async function dropAbandonedForScanner(
 
   for (const m of messages) {
     const wait = waits.get(waitMapKey(m.fromUsername, m.conversationId)) || null;
-    if (isWaitAbandoned(wait)) {
+    // Only explicit cancel_wait skips peer delivery.
+    // Expired live awaits mean the sender stopped waiting inline — the peer
+    // scheduled worker must still receive and answer the message.
+    if (wait?.status === "cancelled") {
       abandonedIds.push(m.id);
       continue;
     }
@@ -223,10 +226,10 @@ async function dropAbandonedForScanner(
       username: me.username,
       httpStatus: 200,
       durationMs: Date.now() - ackStarted,
-      summary: `${me.username} auto-acked ${abandonedIds.length} abandoned inbox item(s)`,
+      summary: `${me.username} auto-acked ${abandonedIds.length} cancelled inbox item(s)`,
       detail: {
         abandonedIds,
-        reason: "sender_cancelled_or_live_await_expired",
+        reason: "sender_cancelled_wait",
         timing: timer.snapshot(),
       },
     });

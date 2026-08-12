@@ -342,7 +342,7 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
         conversation_id,
         wait,
         instructions:
-          "Wait cancelled. Peer scanner will auto-ack related inbox items and skip answering them.",
+          "Wait cancelled. Peer scanner will skip answering related unacked inbox items (explicit cancel only; expired waits still deliver).",
       });
     }
   );
