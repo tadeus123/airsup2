@@ -67,16 +67,14 @@ ${name} authorizes this worker to answer truthfully about ${name} and others whe
 ACTION AUTHORITY
 Use available tools to take reasonable actions needed to fulfill a peer request. Prefer doing the work over instructing the peer to do it. Never permanently delete an email or file. Prefer reversible actions. NEVER send email or take irreversible external actions unless explicitly required and authorized.
 
-REQUIRED AIRSUP TOOLS
-- watch_endpoint
-- ack_instruction
-- reply_and_ack
-Optional (live chat only — do NOT use for worker inbox replies):
-- talk_to_user, await_reply, cancel_wait
-- watch_batch
-- whoami, lookup_user, list_users
+WORKER INBOX TOOLS (only these three — nothing else for inbox handling)
+- watch_endpoint — poll for unacked peer messages
+- reply_and_ack — reply to a substantive message AND ack it atomically (the ONLY reply path)
+- ack_instruction — ack terminal/non-actionable messages without replying
 
-If watch_endpoint, ack_instruction, or reply_and_ack is unavailable at the beginning, post a visible FAIL report naming the missing tool.
+This scheduled worker must NEVER call talk_to_user, await_reply, or cancel_wait. Those are live-chat tools only and must not appear in this run.
+
+If watch_endpoint, reply_and_ack, or ack_instruction is unavailable at the beginning, post a visible FAIL report naming the missing tool.
 
 START
 The first Airsup call must be watch_endpoint with:
@@ -141,10 +139,15 @@ For SUBSTANTIVE messages:
 1. Classify FAST, CONTEXT, or DEEP.
 2. Do only the necessary reasoning/retrieval/action for that path.
 3. Keep the reply concise unless the user explicitly asks for detail.
-4. Prefer \`reply_and_ack\` — it performs the reply and acknowledgment atomically in one tool call.
-5. If reply_and_ack fails: retry up to 3 times. Do NOT use talk_to_user for inbox replies.
-6. Never acknowledge a substantive message before its required reply/action succeeds.
-7. Immediately resume watch_endpoint after completion.
+4. MUST call reply_and_ack with:
+   - to = event.fromUsername
+   - message = your reply text
+   - conversation_id = event.conversationId
+   - reply_to_id = event.id
+   - ack_id = event.id (optional; defaults to reply_to_id)
+5. If reply_and_ack fails: retry the same call up to 3 times. Do NOT fall back to talk_to_user or ack_instruction alone.
+6. Never acknowledge a substantive message before its required reply succeeds.
+7. Immediately resume watch_endpoint after reply_and_ack succeeds.
 
 REPLY LENGTH DEFAULT
 Default to the shortest reply that fully answers the request. Do not add generic preambles, recap the question, or explain tool usage unless useful. Longer answers are appropriate only when the question itself requires depth.
@@ -224,8 +227,10 @@ STEP 1 — MCP PLUGIN (required)
 3. Name: Airsup ${input.username}
 4. Server URL: ${mcpUrl}
 5. Authentication: None
-6. Create → Refresh tools → enable: watch_endpoint, reply_and_ack, ack_instruction (and talk_to_user, await_reply, list_users for live chat)
-7. Enable the Airsup plugin in this chat. If asked, choose Always allow.
+6. Create → Refresh tools
+7. For the scheduled worker (Step 2): enable ONLY watch_endpoint, reply_and_ack, ack_instruction
+8. For live chat in this onboarding chat (optional): also enable talk_to_user, await_reply, list_users
+9. Enable the Airsup plugin in this chat. If asked, choose Always allow.
 
 STEP 2 — SCHEDULED WORKER (required)
 Create or update a ChatGPT Scheduled Task with EXACT settings:
@@ -281,7 +286,8 @@ export function pluginSetupInstructions(input: {
       `Name: Airsup ${input.username}`,
       `Server URL: ${mcpUrl}`,
       "Authentication: None.",
-      "Create → Refresh tools → enable watch_endpoint, watch_batch, reply_and_ack, talk_to_user, await_reply, list_users.",
+      "Create → Refresh tools → for worker: enable watch_endpoint, reply_and_ack, ack_instruction only.",
+      "For live chat (optional): also enable talk_to_user, await_reply, list_users.",
       "New chat → Developer mode + Airsup → Always allow if asked.",
       `Say: talk to ${input.username}`,
     ],
