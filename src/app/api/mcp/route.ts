@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { createAinetMcpServer } from "@/lib/mcp-server";
+import { createAirsupMcpServer } from "@/lib/mcp-server";
 import { authUserFromRequest } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -75,7 +75,7 @@ async function handleMcp(request: Request): Promise<Response> {
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = createAinetMcpServer(user);
+  const server = createAirsupMcpServer(user);
   await server.connect(transport);
   const response = await transport.handleRequest(request);
   const totalMs = Date.now() - started;

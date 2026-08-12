@@ -21,13 +21,20 @@ language plpgsql
 security definer
 set search_path to 'public'
 as $function$
+declare
+  meta_n bigint;
+  users_n bigint;
 begin
   perform public.assert_db_token(p_token);
-  return coalesce(
-    (select value from public.ainet_meta where key = 'member_count'),
-    (select count(*)::bigint from public.users),
-    0
-  );
+  select count(*)::bigint into users_n from public.users;
+  select value into meta_n from public.ainet_meta where key = 'member_count';
+  meta_n := coalesce(meta_n, 0);
+  if users_n > meta_n then
+    insert into public.ainet_meta (key, value) values ('member_count', users_n)
+    on conflict (key) do update set value = excluded.value;
+    return users_n;
+  end if;
+  return meta_n;
 end;
 $function$;
 
@@ -39,11 +46,14 @@ set search_path to 'public'
 as $function$
 declare
   n bigint;
+  users_n bigint;
 begin
   perform public.assert_db_token(p_token);
+  select count(*)::bigint into users_n from public.users;
   insert into public.ainet_meta (key, value)
-  values ('member_count', 0)
-  on conflict (key) do nothing;
+  values ('member_count', users_n)
+  on conflict (key) do update
+  set value = greatest(public.ainet_meta.value, excluded.value);
 
   update public.ainet_meta
   set value = value + 1

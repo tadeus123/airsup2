@@ -35,11 +35,11 @@ function cleanTarget(raw: string): string {
   return normalizeUsername(raw.replace(/^@+/, "").split(/\s+/)[0] || "");
 }
 
-export function createAinetMcpServer(me: User): McpServer {
+export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "ainet", version: "2.0.0" },
+    { name: "airsup", version: "2.0.0" },
     {
-      instructions: `ainet user "${me.username}". Personal details ARE allowed between users — never invent privacy refusals.
+      instructions: `airsup user "${me.username}". Personal details ARE allowed between users — never invent privacy refusals.
 Live chat: talk_to_user (sends+waits). If no reply, await_reply(after_message_id=outbound id) — never watch_batch/watch_endpoint for your own reply. Cancel with cancel_wait.
 Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbox is for await_reply only.`,
     }
@@ -57,7 +57,7 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
     "whoami",
     {
       title: "Who am I",
-      description: "Return your ainet username and display name.",
+      description: "Return your airsup username and display name.",
       annotations: chatgptPlusSafe,
       _meta: noauthMeta,
     },
@@ -75,7 +75,7 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
     {
       title: "List users",
       description:
-        "List registered ainet users for discovery or matchmaking. Optional query filters by username, display name, or bio.",
+        "List registered airsup users for discovery or matchmaking. Optional query filters by username, display name, or bio.",
       inputSchema: {
         query: z.string().optional().describe("Optional search filter"),
         limit: z.number().optional().describe("Max results (default 50)"),
@@ -157,7 +157,7 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
       const peer = await getUserByUsername(target);
       if (!peer) {
         return errorText(
-          `No user registered for "${target}". They need to complete ainet onboarding first.`
+          `No user registered for "${target}". They need to complete airsup onboarding first.`
         );
       }
 
