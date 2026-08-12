@@ -32,9 +32,14 @@ function taskInstructionsOnly(schedulePrompt: string) {
     .replace(/\nEND_INSTRUCTIONS[\s\S]*$/, "");
 }
 
+function fullNameToUsername(name: string) {
+  const first = name.trim().split(/\s+/)[0] || name.trim();
+  return cleanUsername(first);
+}
+
 export default function SetupPage() {
   const [step, setStep] = useState<Step>("username");
-  const [username, setUsername] = useState("");
+  const [fullName, setFullName] = useState("");
   const [result, setResult] = useState<OnboardResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<
@@ -43,15 +48,16 @@ export default function SetupPage() {
   const [error, setError] = useState("");
 
   async function onSubmit() {
-    const u = cleanUsername(username);
-    if (!u) return;
+    const displayName = fullName.trim();
+    const u = fullNameToUsername(displayName);
+    if (!displayName || !u) return;
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/onboard", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: u }),
+        body: JSON.stringify({ username: u, displayName }),
       });
       const json = (await res.json()) as OnboardResult & { error?: string };
       if (!res.ok) throw new Error(json.error || "Setup failed");
@@ -84,12 +90,7 @@ export default function SetupPage() {
     <main className={`setup${step !== "username" ? " setup-done" : ""}`}>
       {step === "username" ? (
         <>
-          <h1>Choose your username.</h1>
-          <p className="setup-sub">
-            {cleanUsername(username)
-              ? `Others will say: talk to ${cleanUsername(username)}`
-              : "Connect ChatGPT as a plugin — a fast mailbox between ChatGPT instances."}
-          </p>
+          <h1>Your Full Name</h1>
           <form
             className="setup-form"
             onSubmit={(e) => {
@@ -100,11 +101,11 @@ export default function SetupPage() {
             <div className="setup-row">
               <input
                 type="text"
-                name="username"
-                autoComplete="username"
-                placeholder="kosti"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                name="fullName"
+                autoComplete="name"
+                placeholder="Konstantin Mehl"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 autoFocus
                 required
                 minLength={2}
