@@ -82,123 +82,82 @@ export default function SetupPage() {
   return (
     <div className="pg">
       <header className="pg-header">
-        <span className="pg-brand">Airsup</span>
-        <nav className="pg-nav" aria-label="Setup steps">
-          <button type="button" className="pg-nav-link" onClick={() => scrollToPanel(nameRef)}>
-            1 name
-          </button>
-          <span className="pg-nav-sep">·</span>
-          <button
-            type="button"
-            className="pg-nav-link"
-            disabled={!result}
-            onClick={() => scrollToPanel(workerRef)}
-          >
-            2 worker
-          </button>
-          <span className="pg-nav-sep">·</span>
-          <button
-            type="button"
-            className="pg-nav-link"
-            disabled={!result}
-            onClick={() => scrollToPanel(gatewayRef)}
-          >
-            3 gateway
-          </button>
-        </nav>
-        <span className="pg-scroll-hint">scroll right →</span>
+        <a className="pg-brand" href="/" onClick={(e) => { e.preventDefault(); scrollToPanel(nameRef); }}>
+          Airsup
+        </a>
+        <span className="pg-nav">
+          <button type="button" onClick={() => scrollToPanel(nameRef)}>1</button>
+          <button type="button" disabled={!result} onClick={() => scrollToPanel(workerRef)}>2</button>
+          <button type="button" disabled={!result} onClick={() => scrollToPanel(gatewayRef)}>3</button>
+        </span>
       </header>
 
       <div className="pg-viewport">
         <div className="pg-band">
-          <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your Full Name">
+          <section className="pg-panel" ref={nameRef} aria-label="Name">
             <h1>Your Full Name</h1>
             <form
-              className="pg-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 void onSubmit();
               }}
             >
-              <div className="pg-form-row">
-                <input
-                  id="fullName"
-                  type="text"
-                  name="fullName"
-                  autoComplete="name"
-                  placeholder="Konstantin Mehl"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  autoFocus
-                  required
-                  minLength={2}
-                  aria-label="Your Full Name"
-                />
-                <button type="submit" disabled={busy}>
-                  {busy ? "…" : "Enter"}
-                </button>
-              </div>
+              <input
+                type="text"
+                name="fullName"
+                autoComplete="name"
+                placeholder="Konstantin Mehl"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                autoFocus
+                required
+                minLength={2}
+                aria-label="Your Full Name"
+              />
+              <button type="submit" disabled={busy}>
+                {busy ? "…" : "Enter"}
+              </button>
             </form>
-            {result ? (
-              <p className="pg-note ok">
-                Registered as <strong>{result.username}</strong>.
-              </p>
-            ) : null}
-            {error ? <p className="pg-note err">{error}</p> : null}
+            {error ? <p className="err">{error}</p> : null}
           </section>
 
-          <section className="pg-panel pg-panel-wide" ref={workerRef} aria-label="Step 2: Scheduled worker">
-            <p className="pg-kicker">2 · worker</p>
-            <h1>Schedule worker</h1>
+          <section className="pg-panel pg-wide" ref={workerRef} aria-label="Worker">
+            <h1>Worker</h1>
             {!result ? (
-              <p className="pg-lead pg-muted">Register on the left first.</p>
+              <p className="dim">←</p>
             ) : (
               <>
-                <p className="pg-lead">
-                  Open ChatGPT with the prompt ready, or copy it yourself — both work.
-                </p>
-                <p className="pg-actions">
-                  <a
-                    className="pg-btn"
-                    href={result.workerChatgptUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open in ChatGPT →
+                <p>
+                  <a href={result.workerChatgptUrl} target="_blank" rel="noreferrer">
+                    open chatgpt
                   </a>
-                  <button type="button" className="pg-linkish" onClick={() => void copyPrompt()}>
-                    {copiedPrompt ? "copied." : "copy prompt"}
+                  {" · "}
+                  <button type="button" className="link" onClick={() => void copyPrompt()}>
+                    {copiedPrompt ? "copied" : "copy"}
                   </button>
                 </p>
-                <textarea className="pg-code" readOnly value={result.workerPrompt} spellCheck={false} />
-                <p className="pg-actions">
-                  <button type="button" className="pg-linkish" onClick={() => scrollToPanel(gatewayRef)}>
-                    next: gateway →
-                  </button>
-                </p>
+                <textarea readOnly value={result.workerPrompt} spellCheck={false} />
               </>
             )}
           </section>
 
-          <section className="pg-panel" ref={gatewayRef} aria-label="Step 3: Live chat gateway">
-            <p className="pg-kicker">3 · gateway</p>
-            <h1>setup now your gateway to talk to other peoples chatgpts.</h1>
+          <section className="pg-panel" ref={gatewayRef} aria-label="Gateway">
+            <h1>Gateway</h1>
             {!result ? (
-              <p className="pg-lead pg-muted">Register on the left first.</p>
+              <p className="dim">←</p>
             ) : (
               <>
-                <ol className="pg-steps">
+                <ol>
                   {result.plugin.steps.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
                 </ol>
-                <p className="pg-label">MCP URL</p>
-                <textarea className="pg-code pg-code-short" readOnly value={result.mcpUrl} spellCheck={false} />
-                <p className="pg-actions">
-                  <button type="button" className="pg-linkish" onClick={() => void copyUrl()}>
-                    {copiedUrl ? "copied." : "copy url"}
+                <p>
+                  <button type="button" className="link" onClick={() => void copyUrl()}>
+                    {copiedUrl ? "copied" : "copy url"}
                   </button>
                 </p>
+                <textarea className="short" readOnly value={result.mcpUrl} spellCheck={false} />
               </>
             )}
           </section>

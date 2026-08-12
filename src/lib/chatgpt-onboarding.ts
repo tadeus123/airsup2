@@ -279,14 +279,11 @@ export function gatewaySetupSteps(input: {
   return {
     mcpUrl,
     steps: [
-      "ChatGPT → Settings → turn Developer mode ON.",
-      "Plugins → + New Plugin.",
-      `Name: Airsup ${input.username}`,
-      `Server URL: ${mcpUrl}`,
-      "Authentication: None → Create → Refresh tools.",
-      "Enable talk_to_user, await_reply, list_users (for live chat with other people).",
-      "Open a new chat, turn on the Airsup plugin, choose Always allow.",
-      "Say: talk to [username] — or use list_users to find people on Airsup.",
+      "Developer mode on",
+      "Plugins → New → paste URL below",
+      "Auth: None → Create",
+      "Enable talk_to_user, await_reply, list_users",
+      "New chat → turn plugin on",
     ],
   };
 }
