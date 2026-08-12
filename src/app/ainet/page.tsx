@@ -167,7 +167,7 @@ export default function AinetPage() {
     setTimeout(() => setCopiedUrl(false), 2000);
   }
 
-  const pluginName = result ? `ainet ${result.username}` : "ainet [your handle]";
+  const pluginName = "airsup";
   const pluginDescription = "talk to other peoples chatgpts.";
   const mcpUrl = result?.mcpUrl || "enter your name above first";
 

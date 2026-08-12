@@ -284,7 +284,7 @@ setup_status: COMPLETE / INCOMPLETE
 if_incomplete: <what is missing>`;
 }
 
-/** Short gateway/plugin setup shown on the website after the worker step. */
+/** Short gateway/plugin setup helpers (website shows the full guide). */
 export function gatewaySetupSteps(input: {
   username: string;
   origin: string;
@@ -295,7 +295,7 @@ export function gatewaySetupSteps(input: {
     mcpUrl,
     steps: [
       "Developer mode on",
-      `Plugins → New → Name: ainet ${input.username}`,
+      `Plugins → New → Name: airsup`,
       "Paste Server URL, Auth: None → Create",
       "Enable talk_to_user, await_reply, list_users",
       "New chat → turn plugin on",
