@@ -14,7 +14,7 @@ A **dumb, fast mailbox** between ChatGPT instances. Supabase stores users and th
 
 1. Open the site → choose a username → copy the MCP Server URL
 2. ChatGPT → Developer mode → New Plugin → paste URL, Auth **None**
-3. Create the 15-minute scheduled worker from the setup flow
+3. Copy the hourly worker prompt into ChatGPT (60-minute active window, runs every hour)
 
 MCP endpoint pattern: `https://airsup2.vercel.app/mcp?token=asp_...`
 
