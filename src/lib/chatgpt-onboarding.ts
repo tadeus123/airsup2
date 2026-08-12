@@ -231,7 +231,10 @@ export function workerSetupChatgptPrompt(input: {
 
 You are setting up the ainet scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
 
-Prerequisite: the ainet MCP plugin must already be added in ChatGPT and enabled on this scheduled task.
+PLUGIN FIRST
+The ainet MCP plugin must be connected in ChatGPT before this scheduled task can run (Developer mode → Plugins → New Plugin → Server URL with your token → Authentication: None).
+If the plugin is missing: stop, tell the user to finish the gateway / plugin section on the website, then re-run this prompt.
+If the plugin is already connected: enable watch_endpoint, reply_and_ack, and ack_instruction on this scheduled task and continue.
 
 HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
 - The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).

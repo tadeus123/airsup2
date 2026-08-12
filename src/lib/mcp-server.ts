@@ -439,7 +439,7 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
     {
       title: "Watch batch",
       description:
-        "Preferred worker watch. Skips reply-linked inbox. Do NOT use to wait for replies to your own talk_to_user.",
+        "Optional batch watch. Prefer watch_endpoint in a ~25s loop for scheduled workers. Do NOT use to wait for replies to your own talk_to_user.",
       inputSchema: {
         cursor: z.string().optional(),
         watch_until: z.string().optional(),
@@ -474,7 +474,8 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
     "ack_instruction",
     {
       title: "Ack instruction",
-      description: "Ack an inbox id only after required reply succeeded. Prefer reply_and_ack.",
+      description:
+        "Ack a terminal/non-actionable inbox id without sending a reply. For substantive messages use reply_and_ack instead.",
       inputSchema: { id: z.number() },
       annotations: chatgptPlusSafe,
       _meta: noauthMeta,

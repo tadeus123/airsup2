@@ -164,6 +164,10 @@ export default function AinetPage() {
           <p className="ainet-muted">enter your name above first.</p>
         ) : (
           <>
+            <p>
+              note: install the ainet plugin in the gateway section below first, then come back
+              and run this prompt.
+            </p>
             <textarea className="ainet-code" readOnly value={result.workerPrompt} spellCheck={false} />
             <p>
               copy paste this into chatgpt and run the prompt to setup your schedule worker
@@ -239,6 +243,11 @@ export default function AinetPage() {
           <li>dont change anything in the advanced settings..</li>
           <li>checkmark the safety warning..</li>
           <li>click create.</li>
+          <li>
+            enable tools: <code>watch_endpoint</code>, <code>reply_and_ack</code>,{" "}
+            <code>ack_instruction</code>, <code>talk_to_user</code>, <code>await_reply</code>,{" "}
+            <code>list_users</code>, <code>cancel_wait</code>, <code>whoami</code>.
+          </li>
         </ul>
 
         <img className="ainet-shot" src="/ainet/plugin-3.png" alt="new plugin fields and create button" />
