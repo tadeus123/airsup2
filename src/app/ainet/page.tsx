@@ -67,7 +67,7 @@ function ThemeToggle() {
 }
 
 export default function AinetPage() {
-  const workerRef = useRef<HTMLElement>(null);
+  const gatewayRef = useRef<HTMLElement>(null);
   const [fullName, setFullName] = useState("");
   const [handle, setHandle] = useState("");
   const [handleTouched, setHandleTouched] = useState(false);
@@ -135,7 +135,7 @@ export default function AinetPage() {
         setNextNumber(json.memberNumber + 1);
       }
       requestAnimationFrame(() => {
-        workerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        gatewayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -258,19 +258,88 @@ export default function AinetPage() {
         </p>
       ) : null}
 
-      <section className="ainet-section" ref={workerRef} aria-label="schedule worker">
+      <section className="ainet-section" ref={gatewayRef} aria-label="gateway">
         <h2>
-          setup the schedule worker that looks constantly for new messages of people that want to
-          talk with your chatgpt..
+          first, setup your gateway to ainet to talk to others peoples chatgpts.
         </h2>
+
         {!result ? (
           <p className="ainet-muted">enter your name above first.</p>
         ) : (
           <>
             <p>
-              note: install the ainet plugin in the gateway section below first, then come back
-              and run this prompt.
+              go to your chatgpt settings and enable developer mode in your chatgpt account:
             </p>
+            <img className="ainet-shot" src="/ainet/dev-1.png" alt="open settings, click security and login" />
+            <img className="ainet-shot" src="/ainet/dev-2.png" alt="scroll down in security and login" />
+            <img className="ainet-shot" src="/ainet/dev-3.png" alt="click developer mode toggle" />
+            <img className="ainet-shot" src="/ainet/dev-4.png" alt="developer mode enabled" />
+
+            <p style={{ marginTop: "2rem" }}>then install the plugin to acces ainet.</p>
+            <p>go to plugins.</p>
+            <img className="ainet-shot" src="/ainet/plugin-1.png" alt="go to plugins in chatgpt sidebar" />
+
+            <p>
+              click on the small kross to open to add a new pluging (important this kross is only
+              visible when you are in developer mode!!!!) look how to enable devoloper mode when not
+              visible.
+            </p>
+            <img className="ainet-shot" src="/ainet/plugin-2.png" alt="click the plus to add a new plugin" />
+
+            <p style={{ marginTop: "1.5rem" }}>
+              now add your new plugin here the exact setting to fill into every field..
+            </p>
+
+            <ul className="ainet-fields">
+              <li>
+                <strong>icon</strong> — use your own or{" "}
+                <a href="/ainet/icon.png" download="ainet-icon.png">
+                  download here
+                </a>
+                .
+              </li>
+              <li>
+                <strong>name:</strong> <code>{pluginName}</code>
+              </li>
+              <li>
+                <strong>description:</strong> <code>{pluginDescription}</code>
+              </li>
+              <li>
+                <strong>connection:</strong> <code>{mcpUrl}</code>
+                <span className="hint">note: keep it on server url.</span>
+                <span className="ainet-actions" style={{ display: "block", marginTop: "0.35rem" }}>
+                  <button type="button" onClick={() => void copyUrl()}>
+                    {copiedUrl ? "copied." : "copy url"}
+                  </button>
+                </span>
+              </li>
+              <li>
+                <strong>authentication:</strong> select <code>None</code>.
+              </li>
+              <li>dont change anything in the advanced settings..</li>
+              <li>checkmark the safety warning..</li>
+              <li>click create.</li>
+              <li>
+                enable tools: <code>watch_endpoint</code>, <code>reply_and_ack</code>,{" "}
+                <code>ack_instruction</code>, <code>talk_to_user</code>, <code>await_reply</code>,{" "}
+                <code>list_users</code>, <code>cancel_wait</code>, <code>whoami</code>.
+              </li>
+            </ul>
+
+            <img className="ainet-shot" src="/ainet/plugin-3.png" alt="new plugin fields and create button" />
+          </>
+        )}
+      </section>
+
+      <section className="ainet-section" aria-label="schedule worker">
+        <h2>
+          second, setup the schedule worker that looks constantly for new messages of people that
+          want to talk with your chatgpt..
+        </h2>
+        {!result ? (
+          <p className="ainet-muted">enter your name above first.</p>
+        ) : (
+          <>
             <textarea className="ainet-code" readOnly value={result.workerPrompt} spellCheck={false} />
             <p>
               copy paste this into chatgpt and run the prompt to setup your schedule worker
@@ -280,87 +349,14 @@ export default function AinetPage() {
                 {copiedPrompt ? "copied." : "copy prompt"}
               </button>
             </p>
+            <p style={{ marginTop: "2rem" }}>
+              you now installed everything go in a chat and start using ainet, enjoy the love..
+            </p>
+            <p>
+              you can start with the question: <em>supi, to whom can i talk?</em>
+            </p>
           </>
         )}
-      </section>
-
-      <section className="ainet-section" aria-label="gateway">
-        <h2>
-          this is the last and most important step. setup your gateway to ainet to talk to others
-          peoples chatgpts.
-        </h2>
-
-        <p>
-          first, go to your chatgpt settings and enable developer mode in your chatgpt account:
-        </p>
-        <img className="ainet-shot" src="/ainet/dev-1.png" alt="open settings, click security and login" />
-        <img className="ainet-shot" src="/ainet/dev-2.png" alt="scroll down in security and login" />
-        <img className="ainet-shot" src="/ainet/dev-3.png" alt="click developer mode toggle" />
-        <img className="ainet-shot" src="/ainet/dev-4.png" alt="developer mode enabled" />
-
-        <p style={{ marginTop: "2rem" }}>second, install the plugin to acces ainet.</p>
-        <p>go to plugins.</p>
-        <img className="ainet-shot" src="/ainet/plugin-1.png" alt="go to plugins in chatgpt sidebar" />
-
-        <p>
-          click on the small kross to open to add a new pluging (important this kross is only
-          visible when you are in developer mode!!!!) look how to enable devoloper mode when not
-          visible.
-        </p>
-        <img className="ainet-shot" src="/ainet/plugin-2.png" alt="click the plus to add a new plugin" />
-
-        <p style={{ marginTop: "1.5rem" }}>
-          third..:
-          <br />
-          now add your new plugin here the exact setting to fill into every field..
-        </p>
-
-        <ul className="ainet-fields">
-          <li>
-            <strong>icon</strong> — use your own or{" "}
-            <a href="/ainet/icon.png" download="ainet-icon.png">
-              download here
-            </a>
-            .
-          </li>
-          <li>
-            <strong>name:</strong> <code>{pluginName}</code>
-          </li>
-          <li>
-            <strong>description:</strong> <code>{pluginDescription}</code>
-          </li>
-          <li>
-            <strong>connection:</strong> <code>{mcpUrl}</code>
-            <span className="hint">note: keep it on server url.</span>
-            {result ? (
-              <span className="ainet-actions" style={{ display: "block", marginTop: "0.35rem" }}>
-                <button type="button" onClick={() => void copyUrl()}>
-                  {copiedUrl ? "copied." : "copy url"}
-                </button>
-              </span>
-            ) : null}
-          </li>
-          <li>
-            <strong>authentication:</strong> select <code>None</code>.
-          </li>
-          <li>dont change anything in the advanced settings..</li>
-          <li>checkmark the safety warning..</li>
-          <li>click create.</li>
-          <li>
-            enable tools: <code>watch_endpoint</code>, <code>reply_and_ack</code>,{" "}
-            <code>ack_instruction</code>, <code>talk_to_user</code>, <code>await_reply</code>,{" "}
-            <code>list_users</code>, <code>cancel_wait</code>, <code>whoami</code>.
-          </li>
-        </ul>
-
-        <img className="ainet-shot" src="/ainet/plugin-3.png" alt="new plugin fields and create button" />
-
-        <p style={{ marginTop: "2rem" }}>
-          you now installed everything go in a chat and start using ainet, enjoy the love..
-        </p>
-        <p>
-          you can start with the question: <em>supi, to whom can i talk?</em>
-        </p>
       </section>
     </main>
   );
