@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "airsup",
-  description: "try to spread: truth, love and courage. join the airsup.",
+  description: "try to spread: truth, love and courage. join the ai-net.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

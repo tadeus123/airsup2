@@ -199,7 +199,7 @@ export default function AinetPage() {
 
       <div className="ainet-tagline">
         <p>try to spread: truth, love and courage.</p>
-        <p>join the airsup. don&apos;t be a jerk!</p>
+        <p>join the ai-net. don&apos;t be a jerk!</p>
       </div>
 
       <div className="ainet-name-row">
