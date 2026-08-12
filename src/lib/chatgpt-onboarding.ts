@@ -231,15 +231,15 @@ export function workerSetupChatgptPrompt(input: {
 
 You are setting up the ainet scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
 
-WAIT FOR THE AINET PLUGIN (do this before creating the task)
-The ainet MCP plugin must be connected in ChatGPT (Developer mode → Plugins → New Plugin → Server URL with token → Authentication: None).
-1. Check whether tools watch_endpoint, reply_and_ack, and ack_instruction are available in this chat / for scheduled tasks.
-2. If they are missing: do NOT abort and do NOT ask the user to re-run this prompt. Wait and keep checking.
-   - Tell the user once, briefly: "waiting for your ainet plugin — finish the gateway section on the website, then come back here."
-   - Re-check availability every ~20–30 seconds.
-   - Keep waiting up to 15 minutes until the three tools appear.
-   - Only if still missing after 15 minutes: mark setup INCOMPLETE and say what is missing.
-3. When the tools are available: enable watch_endpoint, reply_and_ack, and ack_instruction on the scheduled task and continue.
+The user should already have installed the ainet MCP plugin on the website (gateway step). Your job here is only the scheduled worker.
+
+PLUGIN CHECK (quick)
+1. Confirm tools watch_endpoint, reply_and_ack, and ack_instruction are available for this scheduled task.
+2. If they are available: enable those three on the scheduled task and continue.
+3. If they are missing: the plugin is not ready yet. Do NOT abort and do NOT ask the user to re-run this whole prompt.
+   - Say once: "your ainet plugin is not connected yet — finish installing it, then I will continue."
+   - Re-check every ~20–30 seconds for up to 15 minutes.
+   - When the tools appear, continue. If still missing after 15 minutes: mark setup INCOMPLETE.
 
 HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
 - The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).
@@ -275,7 +275,7 @@ task_name: ainet Continuous 60-Minute Worker - ${input.username}
 schedule_ui: Frequency Hourly, every 1 hour, End repeat Never — yes / no
 first_run: <actual clock time you set>
 first_run_about_5_min_from_setup: yes / no
-plugin_waited_until_tools_ready: yes / no / already_present
+plugin_already_installed_or_waited: already_present / waited / missing
 active_window_per_run: 60 minutes (in worker instructions; not configured on ainet server)
 enabled: yes / no
 worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
