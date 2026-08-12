@@ -42,10 +42,14 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
-.pg-brand {
+.pg a.pg-brand {
   font-weight: 700;
   color: var(--ink);
   text-decoration: none;
+}
+
+.pg a.pg-brand:visited {
+  color: var(--ink);
 }
 
 .pg-nav {
