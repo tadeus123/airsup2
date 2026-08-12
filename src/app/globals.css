@@ -130,6 +130,11 @@ a {
   text-align: left;
 }
 
+.setup-prompt-single {
+  min-height: 20rem;
+  margin-top: 0.5rem;
+}
+
 .setup-copy {
   border: 0;
   border-radius: 0.85rem;
