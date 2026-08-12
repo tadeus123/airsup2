@@ -233,6 +233,12 @@ STEP 1 — MCP PLUGIN (required)
 9. Enable the Airsup plugin in this chat. If asked, choose Always allow.
 
 STEP 2 — SCHEDULED WORKER (required)
+
+HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
+- The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).
+- ChatGPT must fire this task every hour: Frequency: Hourly, End repeat: Never — set this in the Scheduled Task UI, NOT on the Airsup server.
+- Each hourly trigger starts one 60-minute watch loop; back-to-back hourly runs create near-continuous coverage.
+
 Create or update a ChatGPT Scheduled Task with EXACT settings:
 - Name: Airsup Continuous 60-Minute Worker - ${input.username}
 - Description: ${scheduledTaskDescription(input.username)}
@@ -256,7 +262,8 @@ user: ${input.username} (${label})
 plugin_url: ${mcpUrl}
 plugin_connected: yes / no
 task_name: Airsup Continuous 60-Minute Worker - ${input.username}
-schedule: every 1 hour, recurring, never end
+schedule_ui: Frequency Hourly, every 1 hour, End repeat Never — yes / no
+active_window_per_run: 60 minutes (in worker instructions; not configured on Airsup server)
 enabled: yes / no
 first_run: <actual time>
 worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
