@@ -2,18 +2,15 @@
 
 import { useState } from "react";
 
-type Step = "username" | "plugin" | "schedule";
+type Step = "name" | "worker";
 
 type OnboardResult = {
   username: string;
   displayName: string;
-  token: string;
+  setupPrompt: string;
+  schedulePrompt?: string;
   chatgptUrl: string;
-  schedulePrompt: string;
-  scheduleDescription?: string;
-  scheduleName?: string;
   mcpUrl: string;
-  plugin: { mcpUrl: string; steps: string[] };
 };
 
 function cleanUsername(raw: string) {
@@ -26,26 +23,21 @@ function cleanUsername(raw: string) {
     .slice(0, 40);
 }
 
-function taskInstructionsOnly(schedulePrompt: string) {
-  return schedulePrompt
-    .replace(/^[\s\S]*BEGIN_INSTRUCTIONS\n/, "")
-    .replace(/\nEND_INSTRUCTIONS[\s\S]*$/, "");
-}
-
 function fullNameToUsername(name: string) {
   const first = name.trim().split(/\s+/)[0] || name.trim();
   return cleanUsername(first);
 }
 
 export default function SetupPage() {
-  const [step, setStep] = useState<Step>("username");
+  const [step, setStep] = useState<Step>("name");
   const [fullName, setFullName] = useState("");
   const [result, setResult] = useState<OnboardResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<
-    "plugin" | "prompt" | "instructions" | "description" | "name" | ""
-  >("");
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+
+  const setupPrompt =
+    result?.setupPrompt || result?.schedulePrompt || "";
 
   async function onSubmit() {
     const displayName = fullName.trim();
@@ -61,8 +53,11 @@ export default function SetupPage() {
       });
       const json = (await res.json()) as OnboardResult & { error?: string };
       if (!res.ok) throw new Error(json.error || "Setup failed");
-      setResult(json);
-      setStep("plugin");
+      setResult({
+        ...json,
+        setupPrompt: json.setupPrompt || json.schedulePrompt || "",
+      });
+      setStep("worker");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -70,25 +65,16 @@ export default function SetupPage() {
     }
   }
 
-  async function copy(
-    kind: "plugin" | "prompt" | "instructions" | "description" | "name",
-    value: string
-  ) {
-    await navigator.clipboard.writeText(value);
-    setCopied(kind);
-    setTimeout(() => setCopied(""), 1500);
+  async function copyPrompt() {
+    if (!setupPrompt) return;
+    await navigator.clipboard.writeText(setupPrompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
-  const mcpUrl = result?.mcpUrl || result?.plugin?.mcpUrl || "";
-  const scheduleName =
-    result?.scheduleName || (result ? `Airsup Continuous Worker - ${result.username}` : "");
-  const scheduleDescription =
-    result?.scheduleDescription ||
-    (result ? `Airsup scanner for ${result.username} every 15m` : "");
-
   return (
-    <main className={`setup${step !== "username" ? " setup-done" : ""}`}>
-      {step === "username" ? (
+    <main className={`setup${step === "worker" ? " setup-done setup-wide" : ""}`}>
+      {step === "name" ? (
         <>
           <h1>Your Full Name</h1>
           <form
@@ -118,95 +104,49 @@ export default function SetupPage() {
         </>
       ) : null}
 
-      {step === "plugin" && result ? (
-        <>
-          <h1>Add the Airsup plugin.</h1>
-          <p className="setup-sub">
-            Developer Mode MCP plugin first. Without it, the scheduled worker has no tools.
+      {step === "worker" && result ? (
+        <div className="setup-worker">
+          <h1 className="setup-worker-title">Set up ChatGPT worker</h1>
+          <p className="setup-worker-lead">
+            Both options run the same prompt — plugin + 15-minute scheduled worker for{" "}
+            <strong>{result.displayName}</strong> (@{result.username}).
           </p>
-          <p className="setup-sub">
-            Username: <strong>{result.username}</strong>
-          </p>
-          <ol className="setup-steps">
-            <li>ChatGPT → Settings → enable <strong>Developer mode</strong></li>
-            <li>ChatGPT → Plugins → <strong>+ New Plugin</strong></li>
-            <li>Name: <strong>Airsup {result.username}</strong></li>
-            <li>Connection: <strong>Server URL</strong></li>
-            <li>Paste the Server URL below (token included)</li>
-            <li>Authentication: <strong>None</strong></li>
-            <li>Create → Refresh tools → enable watch_batch, talk_to_user, await_reply, list_users</li>
-            <li>New chat → Developer mode → enable Airsup → <strong>Always allow</strong></li>
-          </ol>
-          <label className="setup-label">Server URL</label>
-          <textarea className="setup-prompt" readOnly value={mcpUrl} rows={3} />
-          <button type="button" className="setup-copy" onClick={() => void copy("plugin", mcpUrl)}>
-            {copied === "plugin" ? "Copied" : "Copy Server URL"}
-          </button>
-          <div className="setup-actions">
-            <button type="button" className="setup-copy" onClick={() => setStep("schedule")}>
-              Next — create worker
-            </button>
-          </div>
-        </>
-      ) : null}
 
-      {step === "schedule" && result ? (
-        <>
-          <h1>Create the continuous worker.</h1>
-          <p className="setup-sub">
-            Schedule every 15 minutes. Uses watch_batch (~100s internal polls). Unacked events replay until
-            reply_and_ack succeeds.
-          </p>
-          <label className="setup-label">Name</label>
-          <textarea className="setup-prompt" readOnly value={scheduleName} rows={2} />
-          <button
-            type="button"
-            className="setup-copy setup-copy-muted"
-            onClick={() => void copy("name", scheduleName)}
-          >
-            {copied === "name" ? "Copied" : "Copy name"}
-          </button>
-          <label className="setup-label">Description</label>
-          <textarea className="setup-prompt" readOnly value={scheduleDescription} rows={3} />
-          <button
-            type="button"
-            className="setup-copy"
-            onClick={() => void copy("description", scheduleDescription)}
-          >
-            {copied === "description" ? "Copied" : "Copy description"}
-          </button>
-          <label className="setup-label">Task instructions</label>
-          <textarea
-            className="setup-prompt"
-            readOnly
-            value={taskInstructionsOnly(result.schedulePrompt)}
-            rows={10}
-          />
-          <div className="setup-actions">
-            <a className="setup-copy" href={result.chatgptUrl} target="_blank" rel="noreferrer">
-              Open ChatGPT with schedule prompt
-            </a>
-            <button
-              type="button"
-              className="setup-copy setup-copy-muted"
-              onClick={() =>
-                void copy("instructions", taskInstructionsOnly(result.schedulePrompt))
-              }
-            >
-              {copied === "instructions" ? "Copied" : "Copy task instructions"}
-            </button>
-            <button
-              type="button"
-              className="setup-copy setup-copy-muted"
-              onClick={() => void copy("prompt", result.schedulePrompt)}
-            >
-              {copied === "prompt" ? "Copied prompt" : "Copy full setup prompt"}
-            </button>
-            <button type="button" className="setup-copy setup-copy-muted" onClick={() => setStep("plugin")}>
-              Back
-            </button>
+          <div className="setup-worker-grid">
+            <section className="setup-worker-panel">
+              <h2>Option A — Open ChatGPT</h2>
+              <p className="setup-worker-hint">
+                Opens a new ChatGPT chat with the prompt loaded. Press Enter in ChatGPT to
+                run it.
+              </p>
+              <a
+                className="setup-copy setup-worker-cta"
+                href={result.chatgptUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open in ChatGPT
+              </a>
+            </section>
+
+            <section className="setup-worker-panel">
+              <h2>Option B — Copy &amp; paste</h2>
+              <p className="setup-worker-hint">
+                Copy the full prompt below and paste it into any ChatGPT chat (Developer mode
+                on).
+              </p>
+              <textarea
+                className="setup-prompt setup-worker-prompt"
+                readOnly
+                value={setupPrompt}
+                spellCheck={false}
+              />
+              <button type="button" className="setup-copy" onClick={() => void copyPrompt()}>
+                {copied ? "Copied" : "Copy prompt"}
+              </button>
+            </section>
           </div>
-        </>
+        </div>
       ) : null}
 
       {error ? <p className="err">{error}</p> : null}
