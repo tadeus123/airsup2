@@ -275,7 +275,7 @@ export default function AinetPage() {
             <img className="ainet-shot" src="/ainet/dev-3.png" alt="click developer mode toggle" />
             <img className="ainet-shot" src="/ainet/dev-4.png" alt="developer mode enabled" />
 
-            <p style={{ marginTop: "2rem" }}>then install the plugin to acces ainet.</p>
+            <p style={{ marginTop: "2rem" }}>then install the plugin to acces airsup.</p>
             <p>go to plugins.</p>
             <img className="ainet-shot" src="/ainet/plugin-1.png" alt="go to plugins in chatgpt sidebar" />
 
