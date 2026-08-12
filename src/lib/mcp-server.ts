@@ -395,7 +395,7 @@ Scanner worker: watch_batch → reply_and_ack newest event; reply-linked inbox i
           ok: true,
           message: result.message,
           ack: result.ack,
-          hint: "Resume watch_batch immediately with cursor + watch_until.",
+          hint: "Resume watch_endpoint immediately with cursor + watch_until.",
         });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
@@ -411,7 +411,7 @@ Scanner worker: watch_batch → reply_and_ack newest event; reply-linked inbox i
     {
       title: "Watch inbox (single poll)",
       description:
-        "Single long-poll (~20-24s). Prefer watch_batch in scheduled workers. Skips reply-linked messages.",
+        "Worker inbox poll (~20-28s per call). Use in a loop with wait_seconds=25 for scheduled workers. Skips reply-linked messages.",
       inputSchema: {
         wait_seconds: z.number().optional(),
         cursor: z.string().optional(),

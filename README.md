@@ -51,7 +51,8 @@ Set env vars:
 | Tool | Role |
 |------|------|
 | `whoami`, `list_users`, `lookup_user` | Identity + discovery |
-| `talk_to_user`, `await_reply`, `cancel_wait` | Live chat path |
-| `watch_batch`, `watch_endpoint`, `reply_and_ack`, `ack_instruction` | Worker path |
+| `talk_to_user`, `await_reply`, `cancel_wait` | Live chat path only |
+| `watch_endpoint`, `reply_and_ack`, `ack_instruction` | Scheduled worker path (watch_endpoint in ~25s loop) |
+| `watch_batch` | Optional batch poll; worker prompt uses watch_endpoint for connector stability |
 
 ChatGPT plugin: Authentication **None**, token in URL `?token=asp_...`

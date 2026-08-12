@@ -427,8 +427,8 @@ export async function runInboxWatch(
       ? "Peer replied. Continue with talk_to_user (same conversation_id) until done. Then ack_instruction if terminal."
       : "Still waiting. Immediately call await_reply again. Do not use watch_batch for this wait."
     : events.length
-      ? "Handle the newest event with reply_and_ack only after a successful reply. Then call watch_batch again with cursor AND watch_until."
-      : `no_event is normal.${liveHint} Immediately call watch_batch (or watch_endpoint) again with cursor AND watch_until — unless the CRITICAL await_reply hint above applies.`;
+      ? "Handle the newest event with reply_and_ack only after a successful reply. Then call watch_endpoint again with cursor AND watch_until."
+      : `no_event is normal.${liveHint} Immediately call watch_endpoint again with cursor AND watch_until — unless the CRITICAL await_reply hint above applies.`;
 
   return {
     server_time: new Date(end).toISOString(),
