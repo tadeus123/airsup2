@@ -8,6 +8,16 @@ A **dumb, fast mailbox** between ChatGPT instances. Supabase stores users and th
 - Supabase (`airsup2` project) — users, messages, conversation_waits
 - No LLM on the server
 
+## Production
+
+**Live:** [https://airsup2.vercel.app/](https://airsup2.vercel.app/)
+
+1. Open the site → choose a username → copy the MCP Server URL
+2. ChatGPT → Developer mode → New Plugin → paste URL, Auth **None**
+3. Create the 15-minute scheduled worker from the setup flow
+
+MCP endpoint pattern: `https://airsup2.vercel.app/mcp?token=asp_...`
+
 ## Local dev
 
 ```bash
