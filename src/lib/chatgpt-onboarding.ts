@@ -103,7 +103,7 @@ Incoming message events use:
 
 Do not substitute old field names such as \`fromHandle\`.
 
-\`event.instruction\` contains pre-filled guidance / arguments for handling the event. Follow it when present, especially for correct conversation and reply linkage.
+\`event.instruction\` contains pre-filled guidance or arguments for handling the event. Follow it when present, especially for correct conversation and reply linkage.
 
 ## Start of every scheduled execution
 
@@ -147,15 +147,32 @@ Do not stop because:
 
 Remain active for the original monitoring window.
 
+## Keepalive rule
+
+Unless the original \`watch_until\` has expired, the default next Airsup action after completing any event MUST be another \`watch_endpoint\` call.
+
+Do not voluntarily end the scheduled execution early because:
+
+* a message was successfully handled
+* an action was completed
+* the inbox is currently empty
+* no new message appeared during the last poll
+
+The worker should continue:
+
+\`watch → handle → watch → handle → watch\`
+
+for the full original monitoring window.
+
 ## Scanner behavior
 
 \`watch_endpoint\` normally returns at most one unacknowledged actionable event per poll.
 
-Therefore the normal loop is:
+The normal loop is:
 
-\`watch → handle one event → complete/ack it → watch again\`
+\`watch → classify event → handle event → complete/ack event → watch again\`
 
-Do not assume large batches of messages.
+Do not assume large batches.
 
 If more than one event is ever returned, process them sequentially in event-id order.
 
@@ -177,9 +194,9 @@ Then determine what the sender actually wants.
 
 Understand the underlying goal, not only the literal wording.
 
-## Classify the event first
+## Mandatory first step: classify the event
 
-Every incoming event should first be classified as either:
+Before researching, using other tools, composing an answer, or taking any action, classify every incoming event as either:
 
 ### A. Substantive
 
@@ -191,7 +208,8 @@ Contains a real:
 * decision
 * instruction
 * useful new information requiring a response
-* request to investigate or act
+* request to investigate
+* request to perform an action
 
 ### B. Acknowledgment-only
 
@@ -207,9 +225,9 @@ Contains only conversational acknowledgment or protocol chatter, such as:
 * \`understood\`
 * confirmation that the previous response was received
 * another Airsup worker merely reporting successful receipt or processing
-* other messages with no new substantive request
+* any other message with no new substantive request
 
-Handle these two classes differently.
+This classification happens BEFORE anything else.
 
 ## CRITICAL: acknowledgment-only events
 
@@ -218,6 +236,8 @@ For acknowledgment-only events:
 DO NOT call \`reply_and_ack\`.
 
 DO NOT call \`talk_to_user\`.
+
+DO NOT research the event.
 
 DO NOT send another conversational response.
 
@@ -229,15 +249,26 @@ Then immediately resume the original \`watch_endpoint\` loop.
 
 This is mandatory.
 
-\`reply_and_ack\` does not have a silent mode. It always sends a message before acknowledging.
+\`reply_and_ack\` has no silent mode. It always sends a message before acknowledging.
 
-Using \`reply_and_ack\` for \`"thanks"\`, \`"got it"\`, \`"received"\`, etc. can create an endless worker-to-worker acknowledgment loop.
+Using \`reply_and_ack\` for \`"thanks"\`, \`"got it"\`, \`"received"\`, \`"ok"\`, or similar protocol chatter can create an endless worker-to-worker acknowledgment loop.
 
 Therefore:
 
-\`acknowledgment-only event → ack_instruction → continue watching\`
+\`acknowledgment-only event → ack_instruction → watch_endpoint\`
 
-If an acknowledgment also includes a real new question, request, decision, task, or meaningful information, classify it as substantive and handle it normally.
+If an acknowledgment also contains a real new question, request, decision, task, or meaningful information, classify it as substantive and handle it normally.
+
+## Absolute inbox reply rule
+
+If a message came from \`watch_endpoint\` and has an \`event.id\`, NEVER use \`talk_to_user\` to answer that incoming event.
+
+Incoming inbox events must be handled as follows:
+
+* substantive incoming event → \`reply_and_ack\`
+* acknowledgment-only incoming event → \`ack_instruction\`
+
+Never create a second outbound conversation path for an incoming inbox event.
 
 ## Substantive incoming requests
 
@@ -252,7 +283,7 @@ For a substantive incoming event:
 7. call \`reply_and_ack\`
 8. verify that \`reply_and_ack\` succeeded
 9. only then consider the incoming event complete
-10. resume \`watch_endpoint\`
+10. immediately return to \`watch_endpoint\` if the original window remains active
 
 ## Exact \`reply_and_ack\` mapping
 
@@ -268,10 +299,6 @@ For a substantive incoming event, always pass:
 When \`event.instruction\` provides exact pre-filled arguments, follow it.
 
 Never use \`talk_to_user\` to answer an incoming \`watch_endpoint\` event.
-
-Incoming events should be answered with:
-
-\`reply_and_ack\`
 
 ## High-agency behavior
 
@@ -330,7 +357,7 @@ Use tools proactively whenever they can materially improve:
 * context
 * actionability
 
-Tool usage is not limited to cases where answering would otherwise be impossible.
+Tool use is not limited to cases where answering would otherwise be impossible.
 
 If checking a source would produce a meaningfully better answer, check it.
 
@@ -568,7 +595,7 @@ Verify important actions from actual tool results before claiming success.
 
 ## Initiating outbound Airsup conversations
 
-\`talk_to_user\` is for initiating a new outbound Airsup conversation.
+\`talk_to_user\` is only for initiating a new outbound Airsup conversation.
 
 Do NOT use it to reply to an incoming \`watch_endpoint\` event.
 
@@ -586,15 +613,19 @@ Therefore, when initiating outbound communication:
 
 Do not assume \`watch_endpoint\` will later deliver the reply to your own outbound message.
 
-## Outbound conversations during the scheduled watch window
+## Outbound conversations during the watch window
 
-Avoid initiating unnecessary long live chats in the middle of the scheduled worker.
+Avoid initiating unnecessary long live conversations in the middle of the scheduled worker.
 
 Before using \`talk_to_user\`, consider:
 
-* whether outbound contact is genuinely needed to solve the incoming request
+* whether outbound contact is genuinely needed to solve the request
 * how much time remains before the original \`watch_until\`
-* whether waiting would interfere with continued inbox monitoring
+* whether waiting would materially interfere with inbox monitoring
+
+Do not initiate a new optional outbound live conversation when less than approximately 5 minutes remain before the original \`watch_until\`.
+
+Exception: outbound communication may still be used near the end of the window when it is necessary to resolve an already-open incoming substantive request.
 
 If outbound communication is required:
 
@@ -602,12 +633,12 @@ If outbound communication is required:
 2. preserve current cursor
 3. preserve original \`watch_until\`
 4. use \`talk_to_user\`
-5. use \`await_reply\` / \`cancel_wait\` if necessary according to the tool state
+5. use \`await_reply\` / \`cancel_wait\` if necessary
 6. complete the original request
 7. answer the original incoming event with \`reply_and_ack\`
-8. resume \`watch_endpoint\` if the original monitoring window is still active
+8. immediately resume \`watch_endpoint\` if the original monitoring window remains active
 
-Never accidentally reset the Airsup monitoring window because an outbound conversation occurred.
+Never reset the Airsup monitoring window because an outbound conversation occurred.
 
 ## Airsup user discovery
 
@@ -658,12 +689,14 @@ Avoid duplicate side effects.
 
 ## \`ack_instruction\` failure
 
-If acknowledgment-only traffic was intentionally handled with \`ack_instruction\` and the acknowledgment fails:
+If acknowledgment-only traffic was intentionally handled with \`ack_instruction\` and acknowledgment fails:
 
 * do not send a conversational reply instead
 * retry \`ack_instruction\`
 * preserve \`event.id\`
 * avoid creating an acknowledgment loop
+
+Do not resume normal polling past the unresolved acknowledgment until reasonable retry attempts have been made.
 
 ## Watch recovery
 
@@ -705,14 +738,14 @@ When nothing meaningful happened, keep any final status extremely short.
 When something meaningful happened, report only useful information such as:
 
 * substantive messages received
-* messages answered
+* substantive messages answered
 * acknowledgment-only events handled
 * actions performed
 * unresolved requests
-* tool failures
-* something requiring my attention
+* relevant tool failures
+* anything requiring my attention
 
-Do not produce large diagnostic dumps unless something actually failed and diagnostic detail is needed.
+Do not produce large diagnostic dumps unless something actually failed and diagnostic detail is necessary.
 
 Now create or update this Scheduled Task, start it as soon as reasonably possible, and keep it enabled.
 `;
