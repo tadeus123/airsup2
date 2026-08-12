@@ -6,6 +6,7 @@ type OnboardResult = {
   username: string;
   displayName: string;
   workerPrompt: string;
+  workerChatgptUrl: string;
   mcpUrl: string;
   plugin: { steps: string[] };
 };
@@ -110,12 +111,8 @@ export default function SetupPage() {
 
       <div className="pg-viewport">
         <div className="pg-band">
-          <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your name">
-            <p className="pg-kicker">1 · name</p>
-            <h1>Your name</h1>
-            <p className="pg-lead">
-              Mailbox between ChatGPTs. Register, then scroll right for worker + gateway.
-            </p>
+          <section className="pg-panel" ref={nameRef} aria-label="Step 1: Your Full Name">
+            <h1>Your Full Name</h1>
             <form
               className="pg-form"
               onSubmit={(e) => {
@@ -123,9 +120,6 @@ export default function SetupPage() {
                 void onSubmit();
               }}
             >
-              <label className="pg-label" htmlFor="fullName">
-                Full name
-              </label>
               <div className="pg-form-row">
                 <input
                   id="fullName"
@@ -138,9 +132,10 @@ export default function SetupPage() {
                   autoFocus
                   required
                   minLength={2}
+                  aria-label="Your Full Name"
                 />
                 <button type="submit" disabled={busy}>
-                  {busy ? "…" : "continue →"}
+                  {busy ? "…" : "Enter"}
                 </button>
               </div>
             </form>
@@ -152,18 +147,33 @@ export default function SetupPage() {
             {error ? <p className="pg-note err">{error}</p> : null}
           </section>
 
-          <section className="pg-panel" ref={workerRef} aria-label="Step 2: Scheduled worker">
+          <section className="pg-panel pg-panel-wide" ref={workerRef} aria-label="Step 2: Scheduled worker">
             <p className="pg-kicker">2 · worker</p>
             <h1>Schedule worker</h1>
             {!result ? (
               <p className="pg-lead pg-muted">Register on the left first.</p>
             ) : (
               <>
-                <p className="pg-lead">Copy into ChatGPT. Hourly 60-min inbox worker.</p>
-                <textarea className="pg-code" readOnly value={result.workerPrompt} spellCheck={false} />
+                <p className="pg-lead">
+                  Open ChatGPT with the prompt ready, or copy it yourself — both work.
+                </p>
                 <p className="pg-actions">
+                  <a
+                    className="pg-btn"
+                    href={result.workerChatgptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in ChatGPT →
+                  </a>
                   <button type="button" className="pg-linkish" onClick={() => void copyPrompt()}>
                     {copiedPrompt ? "copied." : "copy prompt"}
+                  </button>
+                </p>
+                <textarea className="pg-code" readOnly value={result.workerPrompt} spellCheck={false} />
+                <p className="pg-actions">
+                  <button type="button" className="pg-linkish" onClick={() => scrollToPanel(gatewayRef)}>
+                    next: gateway →
                   </button>
                 </p>
               </>
@@ -172,12 +182,11 @@ export default function SetupPage() {
 
           <section className="pg-panel" ref={gatewayRef} aria-label="Step 3: Live chat gateway">
             <p className="pg-kicker">3 · gateway</p>
-            <h1>Live chat gateway</h1>
+            <h1>setup now your gateway to talk to other peoples chatgpts.</h1>
             {!result ? (
               <p className="pg-lead pg-muted">Register on the left first.</p>
             ) : (
               <>
-                <p className="pg-lead">Plugin in ChatGPT — talk to other people live.</p>
                 <ol className="pg-steps">
                   {result.plugin.steps.map((line) => (
                     <li key={line}>{line}</li>
