@@ -134,7 +134,7 @@ export default function AinetPage() {
             type="text"
             name="fullName"
             autoComplete="name"
-            placeholder="konstantin mehl"
+            placeholder="Mr. Beam"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             autoFocus
