@@ -40,28 +40,32 @@ async function main() {
     __resetWaitsForTests();
   }
 
-  const tade = await registerUser({ username: "tadee2e", displayName: "Tade E2E" });
-  const kostis = await registerUser({ username: "kostise2e", displayName: "Kostis E2E" });
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const tadeName = `tadee2e${suffix}`;
+  const kostisName = `kostise2e${suffix}`;
 
-  assert(tade.user.username === "tadee2e", "tade username");
-  assert(kostis.user.username === "kostise2e", "kostis username");
-  assert((await getUserByUsername("kostise2e"))?.username === "kostise2e", "lookup");
+  const tade = await registerUser({ username: tadeName, displayName: "Tade E2E" });
+  const kostis = await registerUser({ username: kostisName, displayName: "Kostis E2E" });
+
+  assert(tade.user.username === tadeName, "tade username");
+  assert(kostis.user.username === kostisName, "kostis username");
+  assert((await getUserByUsername(kostisName))?.username === kostisName, "lookup");
 
   const tadeReq = new Request("https://airsup.test/api/mcp", {
     headers: { authorization: `Bearer ${tade.token}` },
   });
   const me = await authUserFromRequest(tadeReq);
-  assert(me.username === "tadee2e", "auth tade");
+  assert(me.username === tadeName, "auth tade");
 
   const outbound = await sendMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "Hey Kostis — free Thursday afternoon?",
   });
   await upsertConversationWait({
-    username: "tadee2e",
+    username: tadeName,
     conversationId: outbound.conversationId,
-    peerUsername: "kostise2e",
+    peerUsername: kostisName,
     ttlMs: LIVE_AWAIT_TTL_MS,
     liveAwait: true,
   });
@@ -76,17 +80,17 @@ async function main() {
     kostisScan.events.some((e) => e.id === outbound.id),
     "scanner sees new inbound"
   );
-  await ackMessage("kostise2e", outbound.id);
+  await ackMessage(kostisName, outbound.id);
 
   const reply = await sendMessage({
-    fromUsername: "kostise2e",
-    toUsername: "tadee2e",
+    fromUsername: kostisName,
+    toUsername: tadeName,
     body: "Yes — Thursday 3pm works.",
     conversationId: outbound.conversationId,
     replyToId: outbound.id,
   });
 
-  const scanned = filterMessages(await readInboxUnacked("tadee2e"), {}, { scanner: true });
+  const scanned = filterMessages(await readInboxUnacked(tadeName), {}, { scanner: true });
   assert(!scanned.some((m) => m.id === reply.id), "scanner filter skips reply-linked");
 
   const tadeScan = await runInboxWatch(
@@ -103,17 +107,17 @@ async function main() {
       polls: 1,
       maxSeconds: 1,
       windowSeconds: 60,
-      fromUsername: "kostise2e",
+      fromUsername: kostisName,
       conversationId: outbound.conversationId,
     },
     { batch: true, mode: "conversation" }
   );
   assert(tadeAwait.events.some((e) => e.id === reply.id), "conversation await receives reply");
-  await markDelivered("tadee2e", [reply.id]);
+  await markDelivered(tadeName, [reply.id]);
 
   const followUp = await sendMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "One more thing — confirm Thursday?",
     conversationId: outbound.conversationId,
     replyToId: reply.id,
@@ -125,7 +129,7 @@ async function main() {
       polls: 1,
       maxSeconds: 1,
       windowSeconds: 60,
-      fromUsername: "kostise2e",
+      fromUsername: kostisName,
       conversationId: outbound.conversationId,
       afterMessageId: followUp.id,
     },
@@ -135,8 +139,8 @@ async function main() {
   assert(falseReply.event_count === 0, "no fake instant reply");
 
   const combined = await replyAndAckMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "Thanks — Thursday confirmed.",
     conversationId: outbound.conversationId,
     replyToId: reply.id,
@@ -146,21 +150,21 @@ async function main() {
   assert(combined.ack?.id === reply.id, "reply_and_ack acked");
 
   const cancelledMsg = await sendMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "Please ignore — cancelled",
   });
   await upsertConversationWait({
-    username: "tadee2e",
+    username: tadeName,
     conversationId: cancelledMsg.conversationId,
-    peerUsername: "kostise2e",
+    peerUsername: kostisName,
     ttlMs: LIVE_AWAIT_TTL_MS,
     liveAwait: true,
   });
   await cancelConversationWait({
-    username: "tadee2e",
+    username: tadeName,
     conversationId: cancelledMsg.conversationId,
-    peerUsername: "kostise2e",
+    peerUsername: kostisName,
   });
   const kostisAfterCancel = await runInboxWatch(
     kostis.user,
@@ -171,26 +175,26 @@ async function main() {
   assert(kostisAfterCancel.skipped_abandoned >= 1, "reports skipped_abandoned");
 
   const older = await sendMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "Older ask",
   });
   await upsertConversationWait({
-    username: "tadee2e",
+    username: tadeName,
     conversationId: older.conversationId,
-    peerUsername: "kostise2e",
+    peerUsername: kostisName,
     ttlMs: LIVE_AWAIT_TTL_MS,
     liveAwait: true,
   });
   const newer = await sendMessage({
-    fromUsername: "tadee2e",
-    toUsername: "kostise2e",
+    fromUsername: tadeName,
+    toUsername: kostisName,
     body: "Newer ask",
   });
   await upsertConversationWait({
-    username: "tadee2e",
+    username: tadeName,
     conversationId: newer.conversationId,
-    peerUsername: "kostise2e",
+    peerUsername: kostisName,
     ttlMs: LIVE_AWAIT_TTL_MS,
     liveAwait: true,
   });
@@ -201,19 +205,19 @@ async function main() {
   );
   assert(newestScan.event_count === 1, "scanner returns one event");
   assert(newestScan.events[0]?.id === newer.id, "newest first");
-  await ackMessage("kostise2e", newer.id);
-  await ackMessage("kostise2e", older.id);
+  await ackMessage(kostisName, newer.id);
+  await ackMessage(kostisName, older.id);
 
   if (!usingSupabase) {
     const staleOutbound = await sendMessage({
-      fromUsername: "kostise2e",
-      toUsername: "tadee2e",
+      fromUsername: kostisName,
+      toUsername: tadeName,
       body: "old question",
     });
-    await ackMessage("tadee2e", staleOutbound.id);
+    await ackMessage(tadeName, staleOutbound.id);
     const staleReply = await sendMessage({
-      fromUsername: "kostise2e",
-      toUsername: "tadee2e",
+      fromUsername: kostisName,
+      toUsername: tadeName,
       body: "stale reply",
       conversationId: staleOutbound.conversationId,
       replyToId: staleOutbound.id,
@@ -227,7 +231,7 @@ async function main() {
       { waitSeconds: 0, polls: 1, maxSeconds: 1, windowSeconds: 60 },
       { batch: true, mode: "scanner" }
     );
-    const afterSweep = await readInboxUnacked("tadee2e");
+    const afterSweep = await readInboxUnacked(tadeName);
     assert(!afterSweep.some((m) => m.id === staleReply.id), "stale reply-linked auto-acked");
   }
 

@@ -148,30 +148,65 @@ function mapMessage(row: Record<string, unknown>): InboxMessage {
   };
 }
 
+export async function getMemberCount(): Promise<number> {
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const n = await supabaseRpc<number>("ainet_member_count", {
+      p_token: cfg.token,
+    });
+    return Number(n ?? 0);
+  }
+  return memory.users.size;
+}
+
+export async function claimMemberNumber(): Promise<number> {
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const n = await supabaseRpc<number>("ainet_claim_member_number", {
+      p_token: cfg.token,
+    });
+    const num = Number(n ?? 0);
+    if (!num) throw new Error("Failed to claim member number");
+    return num;
+  }
+  return memory.users.size + 1;
+}
+
 export async function registerUser(input: {
   username?: string;
   displayName?: string;
   bio?: string;
-}): Promise<{ user: User; token: string }> {
+  memberNumber?: number;
+}): Promise<{ user: User; token: string; memberNumber?: number }> {
   const username = normalizeUsername(input.username || "");
   if (!username) throw new Error("Username is required");
   if (username.length < 2) throw new Error("Username must be at least 2 characters");
   const displayName = (input.displayName || username).trim();
   const bio = (input.bio || "").trim();
   const minted = mintUserToken();
+  const memberNumber = input.memberNumber;
 
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown>>("user_upsert", {
+    const row = await supabaseRpc<Record<string, unknown>>("user_register", {
       p_token: cfg.token,
       p_username: username,
       p_display_name: displayName,
       p_token_hash: minted.hash,
       p_token_prefix: minted.prefix,
       p_bio: bio,
+      p_member_number: memberNumber ?? null,
     });
     if (!row?.username) throw new Error("Failed to register user");
-    return { user: mapUser(row), token: minted.token };
+    return {
+      user: mapUser(row),
+      token: minted.token,
+      memberNumber: row.memberNumber != null ? Number(row.memberNumber) : memberNumber,
+    };
+  }
+
+  if (memory.users.has(username)) {
+    throw new Error("username taken");
   }
 
   const user: MemoryUser = {
@@ -183,8 +218,6 @@ export async function registerUser(input: {
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
-  const previous = memory.users.get(username);
-  if (previous) memory.byHash.delete(previous.tokenHash);
   memory.users.set(username, user);
   memory.byHash.set(minted.hash, username);
   return {
@@ -197,6 +230,7 @@ export async function registerUser(input: {
       updatedAt: user.updatedAt,
     },
     token: minted.token,
+    memberNumber,
   };
 }
 

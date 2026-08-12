@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 type OnboardResult = {
   username: string;
   displayName: string;
+  memberNumber: number;
+  handle: string;
   workerPrompt: string;
   mcpUrl: string;
 };
@@ -16,10 +18,10 @@ function cleanUsername(raw: string) {
     .replace(/^@+/, "")
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "")
-    .slice(0, 40);
+    .slice(0, 32);
 }
 
-function fullNameToUsername(name: string) {
+function fullNameToHandle(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const isTitle = (p: string) => /^(mr|mrs|ms|miss|dr|prof)\.?$/i.test(p);
   const pick = parts.find((p) => !isTitle(p)) || parts[0] || name.trim();
@@ -48,7 +50,12 @@ function ThemeToggle() {
       {theme === "light" ? (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          <path
+            d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            fill="none"
+          />
         </svg>
       ) : (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -62,32 +69,85 @@ function ThemeToggle() {
 export default function AinetPage() {
   const workerRef = useRef<HTMLElement>(null);
   const [fullName, setFullName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [handleTouched, setHandleTouched] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+  const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [result, setResult] = useState<OnboardResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/onboard");
+        const json = (await res.json()) as {
+          count?: number;
+          nextNumber?: number;
+          error?: string;
+        };
+        if (!res.ok) throw new Error(json.error || "could not load count");
+        if (!cancelled) {
+          setCount(typeof json.count === "number" ? json.count : 0);
+          setNextNumber(typeof json.nextNumber === "number" ? json.nextNumber : 1);
+        }
+      } catch {
+        if (!cancelled) {
+          setCount(0);
+          setNextNumber(1);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function onNameChange(value: string) {
+    setFullName(value);
+    if (!handleTouched) setHandle(fullNameToHandle(value));
+  }
+
   async function onSubmit() {
     const displayName = fullName.trim();
-    const u = fullNameToUsername(displayName);
-    if (!displayName || !u) return;
+    const h = cleanUsername(handle) || fullNameToHandle(displayName);
+    if (!displayName || !h) return;
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/onboard", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: u, displayName }),
+        body: JSON.stringify({ handle: h, displayName }),
       });
-      const json = (await res.json()) as OnboardResult & { error?: string };
+      const json = (await res.json()) as OnboardResult & {
+        error?: string;
+        count?: number;
+        nextNumber?: number;
+      };
       if (!res.ok) throw new Error(json.error || "setup failed");
       setResult(json);
+      if (typeof json.memberNumber === "number") {
+        setCount(json.memberNumber);
+        setNextNumber(json.memberNumber + 1);
+      }
       requestAnimationFrame(() => {
         workerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // refresh counter after failed claim/race
+      try {
+        const res = await fetch("/api/onboard");
+        const json = (await res.json()) as { count?: number; nextNumber?: number };
+        if (typeof json.count === "number") setCount(json.count);
+        if (typeof json.nextNumber === "number") setNextNumber(json.nextNumber);
+      } catch {
+        // ignore
+      }
     } finally {
       setBusy(false);
     }
@@ -107,12 +167,26 @@ export default function AinetPage() {
     setTimeout(() => setCopiedUrl(false), 2000);
   }
 
-  const pluginName = result ? `ainet ${result.username}` : "ainet [your name]";
+  const previewHandle = cleanUsername(handle) || fullNameToHandle(fullName) || "…";
+  const previewNumber = result?.memberNumber ?? nextNumber ?? "…";
+  const previewUsername = result?.username ?? `${previewHandle}${previewNumber}`;
+  const pluginName = result ? `ainet ${result.username}` : "ainet [your handle]";
   const pluginDescription = "talk to other peoples chatgpts.";
   const mcpUrl = result?.mcpUrl || "enter your name above first";
 
   return (
     <main className="ainet">
+      <aside className="ainet-count" aria-label="member count">
+        <div className="ainet-count-n">{count === null ? "…" : count}</div>
+        <div className="ainet-count-hint">
+          {result
+            ? `you are number ${result.memberNumber}.`
+            : nextNumber == null
+              ? "loading…"
+              : `you would get the number ${nextNumber}.`}
+        </div>
+      </aside>
+
       <nav className="ainet-nav" aria-label="ainet">
         <h1 className="ainet-title">ainet</h1>
         <ThemeToggle />
@@ -138,16 +212,44 @@ export default function AinetPage() {
             autoComplete="name"
             placeholder="Mr. Beam"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => onNameChange(e.target.value)}
             autoFocus
             required
             minLength={2}
+            disabled={Boolean(result)}
           />
-          <button type="submit" disabled={busy}>
-            {busy ? "…" : "enter"}
+          <button type="submit" disabled={busy || Boolean(result)}>
+            {busy ? "…" : result ? "done" : "enter"}
           </button>
         </form>
       </div>
+
+      <p className="ainet-handle-row">
+        <span>you&apos;ll be:</span>{" "}
+        {result ? (
+          <strong>{result.username}</strong>
+        ) : (
+          <>
+            <input
+              className="ainet-handle-input"
+              aria-label="handle"
+              value={handle}
+              placeholder="beam"
+              onChange={(e) => {
+                setHandleTouched(true);
+                setHandle(cleanUsername(e.target.value));
+              }}
+              disabled={busy}
+            />
+            <span className="ainet-handle-num">{nextNumber ?? "…"}</span>
+          </>
+        )}
+      </p>
+      <p className="ainet-note">
+        your permanent ainet name is handle + number — e.g. <em>{previewUsername}</em>. nobody can
+        take your number.
+      </p>
+
       {error ? <p className="ainet-note err">{error}</p> : null}
       {result ? (
         <p className="ainet-note">

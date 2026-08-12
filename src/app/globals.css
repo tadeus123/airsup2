@@ -62,6 +62,28 @@ button {
   margin-bottom: 2.5rem;
 }
 
+.ainet-count {
+  position: fixed;
+  top: 1.15rem;
+  right: 1.35rem;
+  text-align: right;
+  max-width: 9.5rem;
+  z-index: 20;
+  line-height: 1.25;
+}
+
+.ainet-count-n {
+  font-size: 1.85rem;
+  color: var(--accent-color);
+  letter-spacing: -0.03em;
+}
+
+.ainet-count-hint {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .ainet-title {
   font-size: 1.8rem;
   font-weight: 400;
@@ -159,8 +181,41 @@ button {
   cursor: wait;
 }
 
+.ainet-handle-row {
+  margin: -1.5rem 0 0.35rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.ainet-handle-row strong {
+  color: var(--text-color);
+  font-weight: 400;
+}
+
+.ainet-handle-input {
+  width: 7.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-color);
+  padding: 0.1rem 0.15rem;
+  font: inherit;
+}
+
+.ainet-handle-input:focus {
+  outline: none;
+  border-bottom-color: var(--accent-color);
+}
+
+.ainet-handle-num {
+  color: var(--accent-color);
+}
+
 .ainet-note {
-  margin: -2.5rem 0 3rem;
+  margin: 0 0 2.25rem;
   color: var(--muted);
   font-size: 0.95rem;
 }
@@ -282,6 +337,20 @@ button {
 
   .ainet-title {
     font-size: 1.5rem;
+  }
+
+  .ainet-count {
+    top: 0.85rem;
+    right: 0.85rem;
+    max-width: 7.5rem;
+  }
+
+  .ainet-count-n {
+    font-size: 1.45rem;
+  }
+
+  .ainet-count-hint {
+    font-size: 0.72rem;
   }
 
   body {
