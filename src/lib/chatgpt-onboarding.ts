@@ -13,26 +13,26 @@ export function scheduledWorkerBody(input: {
   const { origin, username, token } = input;
   const name = input.displayName?.trim() || username;
 
-  return `Run the continuous ainet worker for handle "${username}" (${name}) for one 60-minute monitoring window. This task runs hourly to create near-continuous coverage.
+  return `Run the continuous airsup worker for handle "${username}" (${name}) for one 60-minute monitoring window. This task runs hourly to create near-continuous coverage.
 
 IDENTITY (private)
 - Username: ${username}
-- ainet MCP: ${origin}/mcp?token=${token}
+- airsup MCP: ${origin}/mcp?token=${token}
 
 PRIMARY GOAL
-Minimize response latency while still answering correctly. Keep ainet polling continuously. When a message arrives, use the lightest-weight path that can answer it truthfully, reply fast, acknowledge it safely, and immediately resume watching.
+Minimize response latency while still answering correctly. Keep airsup polling continuously. When a message arrives, use the lightest-weight path that can answer it truthfully, reply fast, acknowledge it safely, and immediately resume watching.
 
 LATENCY IS A FIRST-CLASS GOAL
 Do not investigate by default. Simple conversational messages should normally receive an immediate FAST-path answer with no retrieval.
 
-EXTERNAL CONNECTORS (NOT part of ainet MCP)
-ainet MCP provides only inbox tools (watch_endpoint, reply_and_ack, ack_instruction). Gmail, Drive, Calendar, web, files, and personal_context.search are optional ChatGPT-side connectors — use them only when CONTEXT or DEEP truly requires them and you have them connected. If a connector is not connected, do not pretend you used it; answer from available context or state what is missing (e.g. PAST_CHAT_SEARCH_TOOL_MISSING). Missing connectors never break ainet — they only limit what you can retrieve.
+EXTERNAL CONNECTORS (NOT part of airsup MCP)
+airsup MCP provides only inbox tools (watch_endpoint, reply_and_ack, ack_instruction). Gmail, Drive, Calendar, web, files, and personal_context.search are optional ChatGPT-side connectors — use them only when CONTEXT or DEEP truly requires them and you have them connected. If a connector is not connected, do not pretend you used it; answer from available context or state what is missing (e.g. PAST_CHAT_SEARCH_TOOL_MISSING). Missing connectors never break airsup — they only limit what you can retrieve.
 
 THREE RESPONSE PATHS
 Classify each substantive incoming message into exactly one of these paths before doing work. Default to FAST unless the message clearly requires more.
 
 FAST (default — use for most messages)
-Use when the answer is available from the current ainet conversation, the current message, already-present context, or general reasoning.
+Use when the answer is available from the current airsup conversation, the current message, already-present context, or general reasoning.
 - No external retrieval.
 - No past-chat search.
 - No Gmail/Drive/Calendar/web calls.
@@ -40,7 +40,7 @@ Use when the answer is available from the current ainet conversation, the curren
 - Prefer one direct useful reply over a long explanation.
 
 CONTEXT (optional ChatGPT-side retrieval only)
-Use only when the request depends on ${name}'s past ChatGPT conversations, previous statements, old decisions, dates mentioned in chats, prior plans, or personal context not already present in the current ainet thread.
+Use only when the request depends on ${name}'s past ChatGPT conversations, previous statements, old decisions, dates mentioned in chats, prior plans, or personal context not already present in the current airsup thread.
 - Use personal_context.search or equivalent past-conversation search only if that ChatGPT connector is available.
 - Search semantically and only as deeply as needed to answer reliably.
 - If one strong search result is enough, stop. Do not perform multiple searches mechanically.
@@ -56,7 +56,7 @@ Use only when the request genuinely requires Gmail, Calendar, Contacts, files/Dr
 - If the needed connector is not connected, say so honestly and answer from what you can verify without inventing data.
 
 CURRENT-CONVERSATION CONTEXT RULE
-If the needed context is already present in the current ainet conversation or recent messages, use it directly. Do not search past ChatGPT history again for a follow-up that can be answered from the active thread.
+If the needed context is already present in the current airsup conversation or recent messages, use it directly. Do not search past ChatGPT history again for a follow-up that can be answered from the active thread.
 
 PAST CHAT SEARCH FALLBACK
 If the request genuinely requires past-chat context and no prior-conversation search tool is available:
@@ -80,7 +80,7 @@ This scheduled worker must NEVER call talk_to_user, await_reply, or cancel_wait.
 If watch_endpoint, reply_and_ack, or ack_instruction is unavailable at the beginning, post a visible FAIL report naming the missing tool.
 
 START
-The first ainet call must be watch_endpoint with:
+The first airsup call must be watch_endpoint with:
 - wait_seconds: 25
 - cursor: "0"
 - window_seconds: ${WORKER_WINDOW_SECONDS}
@@ -112,7 +112,7 @@ If watch_endpoint returns no_event=true or events=[]:
 - do not call any other tool
 - immediately call watch_endpoint again with the returned cursor and watch_until from the response (or original_watch_until if watch_until absent)
 
-SCANNER BEHAVIOR (how ainet delivers events)
+SCANNER BEHAVIOR (how airsup delivers events)
 - Returns at most 1 unacked actionable event per poll (newest first).
 - Skips reply-linked messages (reply_to_id set) — those belong to live chat, not this worker.
 - Auto-acks abandoned waits from cancelled live conversations.
@@ -121,7 +121,7 @@ SCANNER BEHAVIOR (how ainet delivers events)
 - If next_action="await_reply" appears, ignore it — this worker does not run live chat; resume watch_endpoint.
 
 AUTHORITATIVE CLOCK
-Use ainet server_time, original_watch_until, remaining_seconds, next_action, and cursor from ainet responses — not your own wall clock.
+Use airsup server_time, original_watch_until, remaining_seconds, next_action, and cursor from airsup responses — not your own wall clock.
 
 WINDOW SAFETY
 The first successful watch defines original_watch_until. Never intentionally open a second monitoring window inside the same scheduled execution.
@@ -167,7 +167,7 @@ TOOL-USE STOP RULE
 After every retrieval/tool result ask: "Do I now have enough to answer or complete the action reliably?" If yes, stop using tools and reply. Do not continue researching for marginal completeness.
 
 TOOL RECOVERY
-If a needed ainet or connected tool fails:
+If a needed airsup or connected tool fails:
 - preserve event/conversation/window state
 - retry the exact failed operation up to 3 times when callable
 - never fabricate success
@@ -186,11 +186,11 @@ When no events are unresolved and original_watch_until has not elapsed, immediat
 If repeated 25-second calls fail, retry with wait_seconds=20. Do NOT use watch_batch — keep each MCP call short (~25s) for connector stability.
 
 FINISH
-Finish when watch_endpoint returns next_action="finish" or latest ainet server_time reaches/passes original_watch_until with no unresolved messages.
+Finish when watch_endpoint returns next_action="finish" or latest airsup server_time reaches/passes original_watch_until with no unresolved messages.
 
 FINAL REPORT
 Only at the end of the hourly run, post:
-ainet 60-Minute Scheduled Worker
+airsup 60-Minute Scheduled Worker
 observed_start: <actual>
 observed_end: <actual>
 observed_duration_seconds: <actual>
@@ -214,7 +214,7 @@ PASS only if the worker stayed alive for approximately the original ${WORKER_WIN
 }
 
 export function scheduledTaskDescription(username: string): string {
-  return `ainet hourly 60-minute worker for ${username} — watch_endpoint loop, FAST/terminal classification, reply_and_ack.`;
+  return `airsup hourly 60-minute worker for ${username} — watch_endpoint loop, FAST/terminal classification, reply_and_ack.`;
 }
 
 /** Copy-paste prompt: scheduled worker setup only (no MCP plugin UI — that is a separate onboarding step). */
@@ -227,23 +227,23 @@ export function workerSetupChatgptPrompt(input: {
   const body = scheduledWorkerBody(input);
   const label = input.displayName?.trim() || input.username;
 
-  return `=== SET UP THIS AINET WORKER NOW ===
+  return `=== SET UP THIS AIRSUP WORKER NOW ===
 
-You are setting up the ainet scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
+You are setting up the airsup scheduled worker for ${label} (@${input.username}). Execute now. Do not ask clarifying questions. Do not explain while working — create the scheduled task, then confirm at the end.
 
-The user should already have installed the ainet MCP plugin on the website (gateway step). Your job here is only the scheduled worker.
+The user should already have installed the airsup MCP plugin on the website (gateway step). Your job here is only the scheduled worker.
 
 PLUGIN CHECK (quick)
 1. Confirm tools watch_endpoint, reply_and_ack, and ack_instruction are available for this scheduled task.
 2. If they are available: enable those three on the scheduled task and continue.
 3. If they are missing: the plugin is not ready yet. Do NOT abort and do NOT ask the user to re-run this whole prompt.
-   - Say once: "your ainet plugin is not connected yet — finish installing it, then I will continue."
+   - Say once: "your airsup plugin is not connected yet — finish installing it, then I will continue."
    - Re-check every ~20–30 seconds for up to 15 minutes.
    - When the tools appear, continue. If still missing after 15 minutes: mark setup INCOMPLETE.
 
 HOURLY RUN vs 60-MINUTE ACTIVE WINDOW (important — read before creating the task)
 - The worker instructions below define a 60-minute active monitoring window per run (window_seconds=${WORKER_WINDOW_SECONDS}).
-- ChatGPT must fire this task every hour: Frequency: Hourly, End repeat: Never — set this in the Scheduled Task UI, NOT on the ainet server.
+- ChatGPT must fire this task every hour: Frequency: Hourly, End repeat: Never — set this in the Scheduled Task UI, NOT on the airsup server.
 - Each hourly trigger starts one 60-minute watch loop; back-to-back hourly runs create near-continuous coverage.
 
 FIRST RUN TIMING (important)
@@ -252,13 +252,13 @@ FIRST RUN TIMING (important)
 - After the first run, continue on the Hourly schedule forever (End repeat: Never).
 
 Create or update a ChatGPT Scheduled Task with EXACT settings:
-- Name: ainet Continuous 60-Minute Worker - ${input.username}
+- Name: airsup Continuous 60-Minute Worker - ${input.username}
 - Description: ${scheduledTaskDescription(input.username)}
 - Schedule: Hourly, every 1 hour, End repeat: Never
 - First run: about 5 minutes from now (the time this setup prompt is run)
 - Enabled: yes (leave enabled permanently)
 - Developer Mode: on (for this scheduled task)
-- ainet MCP plugin: enabled for this scheduled task (enable watch_endpoint, reply_and_ack, ack_instruction)
+- airsup MCP plugin: enabled for this scheduled task (enable watch_endpoint, reply_and_ack, ack_instruction)
 - Prompt / Task instructions: copy EXACTLY everything between BEGIN_WORKER_INSTRUCTIONS and END_WORKER_INSTRUCTIONS below (no edits, no summarizing)
 
 BEGIN_WORKER_INSTRUCTIONS
@@ -269,14 +269,14 @@ END_WORKER_INSTRUCTIONS
 
 After the scheduled task is created/updated, reply in this chat with ONLY the confirmation block below. Fill in actual values. Do not skip any line.
 
-AINET WORKER SETUP CONFIRMATION
+AIRSUP WORKER SETUP CONFIRMATION
 user: ${input.username} (${label})
-task_name: ainet Continuous 60-Minute Worker - ${input.username}
+task_name: airsup Continuous 60-Minute Worker - ${input.username}
 schedule_ui: Frequency Hourly, every 1 hour, End repeat Never — yes / no
 first_run: <actual clock time you set>
 first_run_about_5_min_from_setup: yes / no
 plugin_already_installed_or_waited: already_present / waited / missing
-active_window_per_run: 60 minutes (in worker instructions; not configured on ainet server)
+active_window_per_run: 60 minutes (in worker instructions; not configured on airsup server)
 enabled: yes / no
 worker_instructions: pasted verbatim between BEGIN/END markers — yes / no
 tools_available: watch_endpoint, reply_and_ack, ack_instruction — yes / no

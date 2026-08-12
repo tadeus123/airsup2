@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       workerSetupPrompt: workerPrompt,
       workerChatgptUrl: chatgptPrefillUrl(workerPrompt),
       scheduleDescription: scheduledTaskDescription(user.username),
-      scheduleName: `ainet Continuous 60-Minute Worker - ${user.username}`,
+      scheduleName: `airsup Continuous 60-Minute Worker - ${user.username}`,
       mcpUrl: plugin.mcpUrl,
       plugin,
     });
