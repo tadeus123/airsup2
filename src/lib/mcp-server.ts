@@ -1,12 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  inboundFirstContactBlocksTalk,
+  getInboundMessage,
   listUsers,
+  markDelivered,
   normalizeUsername,
   replyAndAckMessage,
   resolvePeerUsername,
   sendMessage,
   setOrgoComputerForUsername,
+  type InboxMessage,
   type User,
 } from "./users";
 import { logActivitySafe, newRequestId } from "./activity";
@@ -21,7 +25,6 @@ import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
 import { wakePeerViaOrgo } from "./orgo-wake-relay";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
-import type { InboxMessage } from "./users";
 import {
   bindProgressReporter,
   formatProgressTiming,
@@ -138,13 +141,13 @@ function formatWakeSent(
     conversation_id: msg.conversationId,
     peer_username: peerUsername,
     timing,
-    instructions: `Message stored and ${peerUsername} woken. Call await_reply(from="${peerUsername}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). Their Supi will pick up the message via check_inbox and reply via reply_to_user.`,
+    instructions: `Message stored in its own thread and ${peerUsername} woken. Call await_reply(from="${peerUsername}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). That wait is isolated to this conversation_id only.`,
   });
 }
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.0.0" },
+    { name: "airsup", version: "3.1.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -249,96 +252,84 @@ export function createAirsupMcpServer(me: User): McpServer {
   server.registerTool(
     "check_inbox",
     {
-      title: "Check inbound messages",
+      title: "Open one inbound message",
       description:
-        "Call immediately when you see @airsup inbound from {sender} #{id}. Fetches that one message. Then reply_to_user — never ask the human, never talk_to_user.",
+        "REQUIRED: from + message_id from the wake line. Returns that one message only — never the rest of the inbox.",
       inputSchema: {
-        from: z.string().optional().describe("Optional filter by sender username or nickname"),
-        message_id: z
-          .number()
-          .optional()
-          .describe("Exact inbound message id from wake line (@airsup sender #123)"),
-        max_seconds: z.number().optional().describe("Max wait (default 15)"),
+        from: z.string().describe("Sender from the wake line, e.g. kosti"),
+        message_id: z.number().describe("Exact id from the wake line, e.g. 163"),
       },
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
-    async ({ from, message_id, max_seconds }, extra: McpToolExtra) => {
-      let sender: string | undefined;
-      if (from) {
-        const match = await resolveTarget(from);
-        if (!match.ok) return errorText(match.error);
-        sender = match.username;
+    async ({ from, message_id }, extra: McpToolExtra) => {
+      const match = await resolveTarget(from);
+      if (!match.ok) return errorText(match.error);
+      const sender = match.username;
+      const messageId = Number(message_id);
+      if (!Number.isFinite(messageId) || messageId <= 0) {
+        return errorText(
+          "message_id is required from the wake line. Airsup will not list other inbox messages."
+        );
       }
-      const exactId = Number(message_id);
-      const messageId =
-        Number.isFinite(exactId) && exactId > 0 ? exactId : undefined;
-      const maxSec = max_seconds ?? 15;
+
       const report = bindProgressReporter(extra, 100);
-      const label = sender ? `@${sender}` : "inbox";
+      await report(`Opening inbound #${messageId} from @${sender} only…`, 20);
 
-      const result = await withProgressHeartbeat(
-        () =>
-          runInboxWatch(
-            me,
-            {
-              waitSeconds: 5,
-              polls: 3,
-              maxSeconds: maxSec,
-              windowSeconds: 120,
-              fromUsername: sender,
-              messageId,
-              maxAgeSeconds: 300,
-            },
-            { batch: true, mode: "scanner" }
-          ),
-        report,
-        {
-          startMessage: sender
-            ? `Checking airsup for new message from ${sender}…`
-            : "Checking airsup inbox for new messages…",
-          tickMessage: (t) => `Scanning ${label}… ${formatProgressTiming(t)}`,
-          startProgress: 10,
-          endProgress: 88,
-          intervalMs: 3000,
-          typicalMinSec: 2,
-          typicalMaxSec: maxSec,
-        }
-      );
-
-      if (result.event_count) {
-        const fromWho = result.events[0]?.fromUsername || sender || "peer";
-        await report(`Found message from @${fromWho} — reading…`, 95);
-      } else {
-        await report(`No new messages in ${label}.`, 95);
+      const inbound = await getInboundMessage({
+        toUsername: me.username,
+        messageId,
+        fromUsername: sender,
+      });
+      if (!inbound) {
+        logActivitySafe({
+          kind: "check_inbox",
+          ok: false,
+          username: me.username,
+          peerUsername: sender,
+          httpStatus: 404,
+          summary: `${me.username} check_inbox #${messageId} not in isolated thread`,
+          detail: { from: sender, messageId },
+        });
+        return errorText(
+          `No inbound #${messageId} from @${sender} for ${me.username}. Do not invent a reply. Do not open other messages.`
+        );
       }
+
+      await markDelivered(me.username, [inbound.id]).catch(() => {});
+      await report(`Locked thread ${inbound.conversationId} — this message only.`, 90);
 
       logActivitySafe({
         kind: "check_inbox",
         ok: true,
         username: me.username,
-        peerUsername: sender || result.events[0]?.fromUsername || "",
+        peerUsername: sender,
         httpStatus: 200,
-        durationMs: result.timing.total_ms ?? 0,
-        summary: `${me.username} check_inbox → ${result.event_count} message(s)`,
-        detail: { from: sender || null, eventCount: result.event_count },
+        summary: `${me.username} opened isolated #${inbound.id} from ${sender}`,
+        detail: {
+          messageId: inbound.id,
+          conversationId: inbound.conversationId,
+          isolated: true,
+        },
       });
+
       return jsonText({
-        ...result,
-        thread: result.event_count
-          ? { direction: "inbound", handle_this_message_only: true }
-          : { direction: "inbound", empty: true },
-        reply_hints: result.events.map((e) => ({
-          to: e.fromUsername,
-          conversation_id: e.conversationId,
-          reply_to_id: e.id,
-        })),
-        next_action: result.event_count ? "reply_to_user" : "check_inbox",
-        instructions: result.event_count
-          ? "Inbound thread only — answer THIS events[0].text now, then reply_to_user using reply_hints[0]. Ignore older chats/calendar. Do NOT talk_to_user."
-          : messageId
-            ? `Message #${messageId} not found yet — retry check_inbox with same message_id. Do not invent a reply from memory.`
-            : "No new messages. Call check_inbox again or wait for another @airsup wake.",
+        ok: true,
+        isolation: "strict",
+        peer_message: {
+          id: inbound.id,
+          from: inbound.fromUsername,
+          text: inbound.body,
+          conversation_id: inbound.conversationId,
+          created_at: inbound.createdAt,
+        },
+        reply_hints: {
+          to: inbound.fromUsername,
+          conversation_id: inbound.conversationId,
+          reply_to_id: inbound.id,
+        },
+        scope: `Use ONLY peer_message.text. Ignore calendar, memory, and any other airsup message. Then reply_to_user with reply_hints. Do not talk_to_user.`,
+        next_action: "reply_to_user",
       });
     }
   );
@@ -460,13 +451,27 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
+      const continueId = (conversation_id || "").trim();
+      if (continueId) {
+        const mustReply = await inboundFirstContactBlocksTalk({
+          me: me.username,
+          peer: peer.username,
+          conversationId: continueId,
+        });
+        if (mustReply) {
+          return errorText(
+            `This conversation is an inbound thread from ${peer.username}. Use reply_to_user, not talk_to_user. Start a new talk_to_user without conversation_id if you are initiating a separate message.`
+          );
+        }
+      }
+
       await report(`Recording message for ${peer.username}…`, 12);
       const tSend0 = Date.now();
       const msg = await sendMessage({
         fromUsername: me.username,
         toUsername: peer.username,
         body: text,
-        conversationId: conversation_id,
+        conversationId: continueId || undefined,
         replyToId: reply_to_id ?? null,
       });
       const sendMs = Date.now() - tSend0;
@@ -539,26 +544,32 @@ export function createAirsupMcpServer(me: User): McpServer {
         conversation_id: z.string(),
         after_message_id: z
           .number()
-          .optional()
-          .describe("Outbound talk_to_user message id"),
+          .describe("Your outbound talk_to_user message id — required so this wait cannot see other threads"),
         max_seconds: z.number().optional().describe("Max wait this call (default 40)"),
       },
       annotations: relayTool,
       _meta: noauthMeta,
     },
     async (args, extra: McpToolExtra) => {
+      const cid = args.conversation_id.trim();
+      if (!cid) return errorText("conversation_id is required");
+      const afterId = Number(args.after_message_id);
+      if (!Number.isFinite(afterId) || afterId <= 0) {
+        return errorText(
+          "after_message_id is required. Airsup will not wait across other conversations."
+        );
+      }
       const match = await resolveTarget(args.from);
       if (!match.ok) return errorText(match.error);
       const from = match.username;
       const report = bindProgressReporter(extra, 100);
       await upsertConversationWait({
         username: me.username,
-        conversationId: args.conversation_id,
+        conversationId: cid,
         peerUsername: from,
         ttlMs: LIVE_AWAIT_TTL_MS,
         liveAwait: true,
       });
-      const afterId = Number(args.after_message_id);
       const result = await withProgressHeartbeat(
         () =>
           runInboxWatch(
@@ -569,17 +580,16 @@ export function createAirsupMcpServer(me: User): McpServer {
               maxSeconds: args.max_seconds ?? DEFAULT_AWAIT_MAX_SECONDS,
               windowSeconds: 900,
               fromUsername: from,
-              conversationId: args.conversation_id,
-              afterMessageId:
-                Number.isFinite(afterId) && afterId > 0 ? afterId : undefined,
+              conversationId: cid,
+              afterMessageId: afterId,
             },
             { batch: true, mode: "conversation" }
           ),
         report,
         {
-          startMessage: `Waiting for reply from ${from}…`,
+          startMessage: `Waiting on thread ${cid.slice(0, 8)}… from ${from}`,
           tickMessage: (t) =>
-            `Waiting for ${from}'s Supi… ${formatProgressTiming(t)}`,
+            `Waiting for ${from}'s reply in this thread only… ${formatProgressTiming(t)}`,
           startProgress: 10,
           endProgress: 90,
           intervalMs: 5000,
@@ -588,14 +598,36 @@ export function createAirsupMcpServer(me: User): McpServer {
         }
       );
       if (result.event_count) {
-        await report(`Reply received from ${from}.`, 100);
+        await report(`Reply received from ${from} on this thread.`, 100);
       }
+      const isolated = result.events
+        .filter(
+          (e) =>
+            e.fromUsername === from &&
+            e.conversationId === cid &&
+            e.id > afterId
+        )
+        .slice(0, 1);
       return jsonText({
-        ...result,
-        next_action: result.event_count ? "continue_conversation" : "await_reply",
+        ok: true,
+        isolation: "strict",
+        conversation_id: cid,
         peer_username: from,
-        conversation_id: args.conversation_id,
+        after_message_id: afterId,
+        peer_message: isolated[0]
+          ? {
+              id: isolated[0].id,
+              from: isolated[0].fromUsername,
+              text: isolated[0].text,
+              conversation_id: isolated[0].conversationId,
+              reply_to_id: isolated[0].replyToId,
+            }
+          : null,
+        next_action: isolated.length ? "continue_conversation" : "await_reply",
         cancel_hint: "If the user stopped waiting, call cancel_wait with this conversation_id.",
+        instructions: isolated.length
+          ? "This is the reply to YOUR outbound message in this conversation_id only. Ignore other threads."
+          : "Still waiting on this conversation_id only. Call await_reply again with the same ids.",
       });
     }
   );

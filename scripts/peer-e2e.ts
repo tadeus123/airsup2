@@ -7,7 +7,10 @@ import {
   __resetUserMemoryForTests,
   ackMessage,
   authUserFromRequest,
+  assertIsolatedReply,
+  getInboundMessage,
   getUserByUsername,
+  inboundFirstContactBlocksTalk,
   markDelivered,
   parsePeerHint,
   readInboxUnacked,
@@ -53,6 +56,108 @@ async function testNicknameResolve() {
   __resetUserMemoryForTests();
 }
 
+async function testThreadIsolation() {
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const tadeName = `isot${suffix}`;
+  const kostiName = `isok${suffix}`;
+  const tade = await registerUser({
+    username: tadeName,
+    displayName: "Tade",
+    orgoComputerId: "099c33f0-8459-47bb-8e4d-3b94329e2c85",
+  });
+  const kosti = await registerUser({
+    username: kostiName,
+    displayName: "Kosti",
+    orgoComputerId: "dca96bed-5904-4e6b-ada3-8be624df291a",
+  });
+
+  const kostiToTade = await sendMessage({
+    fromUsername: kosti.user.username,
+    toUsername: tade.user.username,
+    body: "what is your life goal?",
+  });
+  const tadeToKosti = await sendMessage({
+    fromUsername: tade.user.username,
+    toUsername: kosti.user.username,
+    body: "are you free monday?",
+  });
+  assert(kostiToTade.conversationId !== tadeToKosti.conversationId, "simultaneous threads differ");
+
+  const opened = await getInboundMessage({
+    toUsername: tade.user.username,
+    messageId: kostiToTade.id,
+    fromUsername: kosti.user.username,
+  });
+  assert(opened?.id === kostiToTade.id, "tade opens kosti inbound");
+  assert(opened?.body === "what is your life goal?", "body is the kosti message");
+
+  const leaked = await getInboundMessage({
+    toUsername: tade.user.username,
+    messageId: tadeToKosti.id,
+    fromUsername: kosti.user.username,
+  });
+  assert(!leaked, "tade cannot open his outbound as if it were from kosti");
+
+  const wrongPeer = await getInboundMessage({
+    toUsername: tade.user.username,
+    messageId: kostiToTade.id,
+    fromUsername: "someoneelse",
+  });
+  assert(!wrongPeer, "from filter rejects other senders");
+
+  try {
+    assertIsolatedReply({
+      me: tade.user.username,
+      peer: kosti.user.username,
+      conversationId: tadeToKosti.conversationId,
+      inbound: kostiToTade,
+    });
+    assert(false, "mixed conversation_id must throw");
+  } catch (e) {
+    assert(e instanceof Error && /mix threads/.test(e.message), "mix threads error");
+  }
+
+  assert(
+    await inboundFirstContactBlocksTalk({
+      me: tade.user.username,
+      peer: kosti.user.username,
+      conversationId: kostiToTade.conversationId,
+    }),
+    "inbound first-contact blocks talk_to_user on that thread"
+  );
+  assert(
+    !(await inboundFirstContactBlocksTalk({
+      me: tade.user.username,
+      peer: kosti.user.username,
+      conversationId: tadeToKosti.conversationId,
+    })),
+    "tade outbound thread does not block talk_to_user"
+  );
+
+  await replyAndAckMessage({
+    fromUsername: tade.user.username,
+    toUsername: kosti.user.username,
+    body: "leave the solar system",
+    conversationId: kostiToTade.conversationId,
+    replyToId: kostiToTade.id,
+    ackId: kostiToTade.id,
+  });
+
+  try {
+    await replyAndAckMessage({
+      fromUsername: tade.user.username,
+      toUsername: kosti.user.username,
+      body: "wrong thread",
+      conversationId: tadeToKosti.conversationId,
+      replyToId: kostiToTade.id,
+      ackId: kostiToTade.id,
+    });
+    assert(false, "reply to mixed conversation must fail");
+  } catch (e) {
+    assert(e instanceof Error, "mixed reply throws");
+  }
+}
+
 function testWakePrompt() {
   const wake = buildWakePrompt("tade1", 140);
   assert(wake.includes("check_inbox(from=\"tade1\", message_id=140)"), "wake prompt tools");
@@ -66,6 +171,7 @@ function testWakePrompt() {
 async function main() {
   testWakePrompt();
   await testNicknameResolve();
+  await testThreadIsolation();
   const usingSupabase = Boolean(
     process.env.SUPABASE_URL &&
       process.env.SUPABASE_ANON_KEY &&

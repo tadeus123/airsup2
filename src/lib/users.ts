@@ -501,6 +501,8 @@ export async function sendMessage(input: {
   const toUsername = normalizeUsername(input.toUsername);
   const body = input.body.trim();
   if (!body) throw new Error("Message body is required");
+  const conversationId =
+    (input.conversationId || "").trim() || crypto.randomUUID();
 
   const cfg = supabaseConfig();
   if (cfg) {
@@ -509,7 +511,7 @@ export async function sendMessage(input: {
       p_from: fromUsername,
       p_to: toUsername,
       p_body: body,
-      p_conversation_id: input.conversationId || "",
+      p_conversation_id: conversationId,
       p_reply_to_id: input.replyToId ?? null,
     });
     if (!row?.id) throw new Error("Send failed");
@@ -521,7 +523,7 @@ export async function sendMessage(input: {
   memory.seq += 1;
   const msg: InboxMessage = {
     id: memory.seq,
-    conversationId: input.conversationId || `mem_${memory.seq}`,
+    conversationId,
     fromUsername,
     toUsername,
     body,
@@ -533,7 +535,93 @@ export async function sendMessage(input: {
   return msg;
 }
 
-/** Returns all pending + delivered (unacked). Cursor ignored for correctness. */
+/** One inbound message for this user only. Never returns another peer's or another thread's mail. */
+export async function getInboundMessage(input: {
+  toUsername: string;
+  messageId: number;
+  fromUsername?: string;
+}): Promise<InboxMessage | null> {
+  const to = normalizeUsername(input.toUsername);
+  const id = Number(input.messageId);
+  if (!to || !Number.isFinite(id) || id <= 0) return null;
+  const from = input.fromUsername ? normalizeUsername(input.fromUsername) : "";
+
+  const cfg = supabaseConfig();
+  if (cfg) {
+    try {
+      const row = await supabaseRpc<Record<string, unknown> | null>(
+        "message_get_inbound",
+        {
+          p_token: cfg.token,
+          p_username: to,
+          p_message_id: id,
+        }
+      );
+      if (row?.id) {
+        const msg = mapMessage(row);
+        if (from && msg.fromUsername !== from) return null;
+        return msg;
+      }
+    } catch {
+      // RPC may not exist yet — fall through to unacked scan of this user only.
+    }
+    const inbox = await readInboxUnacked(to);
+    return inbox.find((m) => m.id === id && (!from || m.fromUsername === from)) ?? null;
+  }
+
+  return (
+    memory.messages.find(
+      (m) =>
+        m.id === id &&
+        m.toUsername === to &&
+        (!from || m.fromUsername === from)
+    ) ?? null
+  );
+}
+
+export function assertIsolatedReply(input: {
+  me: string;
+  peer: string;
+  conversationId: string;
+  inbound: InboxMessage;
+}): void {
+  const me = normalizeUsername(input.me);
+  const peer = normalizeUsername(input.peer);
+  const cid = input.conversationId.trim();
+  if (input.inbound.toUsername !== me) {
+    throw new Error("That message was not sent to you");
+  }
+  if (input.inbound.fromUsername !== peer) {
+    throw new Error(
+      "That message is not from this peer — refusing to mix threads"
+    );
+  }
+  if (input.inbound.conversationId !== cid) {
+    throw new Error(
+      "conversation_id does not match this inbound message — refusing to mix threads"
+    );
+  }
+}
+
+/** True when this conversation is an inbound first-contact we must reply_to_user, not talk_to_user. */
+export async function inboundFirstContactBlocksTalk(input: {
+  me: string;
+  peer: string;
+  conversationId: string;
+}): Promise<boolean> {
+  const me = normalizeUsername(input.me);
+  const peer = normalizeUsername(input.peer);
+  const cid = input.conversationId.trim();
+  if (!cid) return false;
+  const inbox = await readInboxUnacked(me);
+  return inbox.some(
+    (m) =>
+      m.fromUsername === peer &&
+      m.toUsername === me &&
+      m.conversationId === cid &&
+      m.replyToId == null
+  );
+}
 export async function readInboxUnacked(username: string): Promise<InboxMessage[]> {
   const u = normalizeUsername(username);
   const cfg = supabaseConfig();
@@ -615,6 +703,24 @@ export async function replyAndAckMessage(input: {
   if (!Number.isFinite(ackId) || ackId <= 0) {
     throw new Error("ack_id required");
   }
+  if (ackId !== replyToId) {
+    throw new Error("ack_id must match reply_to_id");
+  }
+
+  const inbound = await getInboundMessage({
+    toUsername: fromUsername,
+    messageId: replyToId,
+    fromUsername: toUsername,
+  });
+  if (!inbound) {
+    throw new Error("Inbound message not found for this thread");
+  }
+  assertIsolatedReply({
+    me: fromUsername,
+    peer: toUsername,
+    conversationId,
+    inbound,
+  });
 
   const cfg = supabaseConfig();
   if (cfg) {
