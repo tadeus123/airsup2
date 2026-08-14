@@ -6,19 +6,23 @@ if (!ORGO_API_KEY) {
   process.exit(1);
 }
 
-const prompt = `You are an Airsup relay. ChatGPT is ALREADY open and logged in in the browser on this desktop.
+const prompt = `You are an Airsup relay. ChatGPT is already open and logged in in the browser.
 
-RULES (strict):
-1. Use ONLY the existing ChatGPT browser tab. Do NOT open terminal, new apps, or other sites.
-2. Open a NEW ChatGPT chat: focus the browser, press Ctrl+Shift+O (or use ChatGPT's New chat button).
-3. Click the message input box.
-4. Type this exact message and press Enter:
-   Say hello in exactly one word.
-5. Wait until ChatGPT's response is fully complete (stop button gone).
-6. Select and copy the assistant's response text.
-7. Return ONLY the copied response text as your final answer — no commentary, no markdown, no explanation.
+Do ONLY these steps, in order:
 
-If ChatGPT is not visible, click the Chrome/Chromium window first.`;
+1. Click the browser window with ChatGPT so it is focused.
+2. Press Ctrl+Shift+O (Strg+Shift+O) to open a NEW ChatGPT chat. Do NOT click menus — use this keyboard shortcut.
+3. Click the message input box if it is not focused.
+4. Paste this FULL prompt into the input (Ctrl+V). If paste fails, type it exactly:
+
+Say hello in exactly one word.
+
+5. Press Enter.
+6. Wait until ChatGPT has FULLY finished responding (no stop button, no loading spinner).
+7. Select and copy ChatGPT's complete answer text.
+8. Return ONLY that copied answer — no prefix, no explanation.
+
+Do NOT open terminal, other apps, or other websites.`;
 
 const started = Date.now();
 const res = await fetch("https://www.orgo.ai/api/v1/chat/completions", {

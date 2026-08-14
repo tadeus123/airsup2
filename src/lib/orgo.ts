@@ -24,22 +24,25 @@ function orgoApiKey(): string {
 export function buildChatGptRelayPrompt(input: OrgoRelayInput): string {
   const from = input.fromUsername.trim();
   const message = input.message.trim();
-  return `You are an Airsup message relay. ChatGPT is ALREADY open and logged in in the browser on this desktop.
+  return `You are an Airsup relay. ChatGPT is already open and logged in in the browser.
 
-STRICT RULES — follow exactly:
-1. Use ONLY the existing ChatGPT browser tab. Do NOT open terminal, new apps, or other websites.
-2. If the browser is not focused, click the Chrome/Chromium window showing ChatGPT first.
-3. Start a NEW ChatGPT chat: press Ctrl+Shift+O (or click ChatGPT's "New chat" button).
-4. Click the ChatGPT message input box.
-5. Type the following message EXACTLY (do not add prefixes or explain who sent it):
+Do ONLY these steps, in order:
+
+1. Click the browser window with ChatGPT so it is focused.
+2. Press Ctrl+Shift+O (Strg+Shift+O) to open a NEW ChatGPT chat. Do NOT click menus — use this keyboard shortcut.
+3. Click the message input box if it is not focused.
+4. Paste this FULL prompt into the input (Ctrl+V). If paste fails, type it exactly as written:
+
 ${message}
-6. Press Enter and wait until ChatGPT's response is FULLY complete (the stop button must be gone).
-7. Copy the assistant's full response text (not your own commentary).
-8. Return ONLY the copied ChatGPT response as your final answer — no markdown, no quotes, no explanation, no "Here is the response".
 
-Context (do not repeat in the chat): this message came from Airsup user "${from}".
+5. Press Enter.
+6. Wait until ChatGPT has FULLY finished responding (no stop button, no loading spinner).
+7. Select and copy ChatGPT's complete answer text.
+8. Return ONLY that copied answer to Airsup — no prefix, no explanation, no markdown.
 
-If the input box is not ready, wait briefly and retry. If ChatGPT shows an error, return that error text.`;
+Do NOT open terminal, other apps, or other websites. Do NOT add "from ${from}" or any wrapper to the pasted prompt.
+
+If ChatGPT shows an error, return that error text as-is.`;
 }
 
 type ChatCompletionResponse = {
