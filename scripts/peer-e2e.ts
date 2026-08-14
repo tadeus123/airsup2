@@ -17,6 +17,7 @@ import {
   sendMessage,
 } from "../src/lib/users";
 import { filterMessages, runInboxWatch } from "../src/lib/inbox-watch";
+import { buildWakePrompt, parseWakePrompt } from "../src/lib/orgo-wake-relay";
 import {
   __resetWaitsForTests,
   LIVE_AWAIT_TTL_MS,
@@ -52,7 +53,16 @@ async function testNicknameResolve() {
   __resetUserMemoryForTests();
 }
 
+function testWakePrompt() {
+  assert(buildWakePrompt("tade1", 140) === "@airsup tade1 #140", "wake prompt");
+  const parsed = parseWakePrompt("@airsup tade1 #140");
+  assert(parsed.fromUsername === "tade1" && parsed.messageId === 140, "parse tagged wake");
+  const legacy = parseWakePrompt("@airsup kosti new message");
+  assert(legacy.fromUsername === "kosti" && legacy.legacy, "parse legacy wake");
+}
+
 async function main() {
+  testWakePrompt();
   await testNicknameResolve();
   const usingSupabase = Boolean(
     process.env.SUPABASE_URL &&

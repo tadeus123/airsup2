@@ -35,6 +35,7 @@ export type WatchArgs = {
   fromUsername?: string;
   conversationId?: string;
   afterMessageId?: number;
+  messageId?: number;
 };
 
 export type WatchEvent = {
@@ -120,6 +121,10 @@ export function filterMessages(
   const afterId = Number(args.afterMessageId);
   if (Number.isFinite(afterId) && afterId > 0) {
     out = out.filter((m) => m.id > afterId);
+  }
+  const exactId = Number(args.messageId);
+  if (Number.isFinite(exactId) && exactId > 0) {
+    out = out.filter((m) => m.id === exactId);
   }
   if (opts?.scanner) {
     out = out.filter((m) => m.replyToId == null);

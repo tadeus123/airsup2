@@ -102,6 +102,7 @@ async function wakePeerOnOrgo(input: {
     run: () =>
       wakePeerViaOrgo(input.computerId, {
         fromUsername: input.fromUsername,
+        messageId: input.outboundId,
         peerUsername: input.peerUsername,
         onProgress: input.report,
       }),
@@ -252,19 +253,26 @@ export function createAirsupMcpServer(me: User): McpServer {
       description:
         "Check for new airsup messages sent to you. Call when woken by @airsup or polling for peers.",
       inputSchema: {
-        from: z.string().optional().describe("Optional filter by sender username"),
+        from: z.string().optional().describe("Optional filter by sender username or nickname"),
+        message_id: z
+          .number()
+          .optional()
+          .describe("Exact inbound message id from wake line (@airsup sender #123)"),
         max_seconds: z.number().optional().describe("Max wait (default 15)"),
       },
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
-    async ({ from, max_seconds }, extra: McpToolExtra) => {
+    async ({ from, message_id, max_seconds }, extra: McpToolExtra) => {
       let sender: string | undefined;
       if (from) {
         const match = await resolveTarget(from);
         if (!match.ok) return errorText(match.error);
         sender = match.username;
       }
+      const exactId = Number(message_id);
+      const messageId =
+        Number.isFinite(exactId) && exactId > 0 ? exactId : undefined;
       const maxSec = max_seconds ?? 15;
       const report = bindProgressReporter(extra, 100);
       const label = sender ? `@${sender}` : "inbox";
@@ -279,6 +287,7 @@ export function createAirsupMcpServer(me: User): McpServer {
               maxSeconds: maxSec,
               windowSeconds: 120,
               fromUsername: sender,
+              messageId,
             },
             { batch: true, mode: "scanner" }
           ),
@@ -315,6 +324,9 @@ export function createAirsupMcpServer(me: User): McpServer {
       });
       return jsonText({
         ...result,
+        thread: result.event_count
+          ? { direction: "inbound", handle_this_message_only: true }
+          : { direction: "inbound", empty: true },
         reply_hints: result.events.map((e) => ({
           to: e.fromUsername,
           conversation_id: e.conversationId,
@@ -322,8 +334,10 @@ export function createAirsupMcpServer(me: User): McpServer {
         })),
         next_action: result.event_count ? "reply_to_user" : "check_inbox",
         instructions: result.event_count
-          ? "Answer on behalf of your user, then call reply_to_user using reply_hints[0]. Do NOT use talk_to_user."
-          : "No new messages. Call check_inbox again or wait for another @airsup wake.",
+          ? "Inbound thread only — answer and reply_to_user using reply_hints[0]. Do NOT talk_to_user."
+          : messageId
+            ? `Message #${messageId} not found yet — retry check_inbox with same message_id.`
+            : "No new messages. Call check_inbox again or wait for another @airsup wake.",
       });
     }
   );
