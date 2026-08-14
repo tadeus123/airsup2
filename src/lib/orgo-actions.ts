@@ -113,8 +113,8 @@ xdotool keyup Shift_L Shift_R Control_L Control_R 2>/dev/null || true`
 }
 
 /**
- * Ctrl+Shift+O → Ctrl+V → Enter.
- * Must release Shift after new-chat or ChatGPT treats Enter as a newline.
+ * Ctrl+Shift+O → Ctrl+V → focus composer → Enter.
+ * Paste can leave focus outside the input; Enter then does nothing.
  */
 export async function orgoSendChat(
   computerId: string,
@@ -124,16 +124,15 @@ export async function orgoSendChat(
   await orgoSetClipboard(computerId, text);
   if (newChat) {
     await orgoPressKey(computerId, "ctrl+shift+o");
-    await localSleep(600);
+    await localSleep(700);
     await orgoReleaseModifiers(computerId);
   }
   await orgoPressKey(computerId, "ctrl+v");
   await localSleep(300);
-  await orgoReleaseModifiers(computerId);
+  // ChatGPT shortcut: Shift+Esc focuses the message box.
+  await orgoPressKey(computerId, "shift+Escape");
+  await localSleep(200);
   await orgoPressKey(computerId, "Enter");
-  await localSleep(150);
-  // Some ChatGPT accounts bind send to Ctrl+Enter (Enter = newline). Empty box is a no-op.
-  await orgoPressKey(computerId, "ctrl+Enter");
 }
 
 export function localSleep(ms: number): Promise<void> {
