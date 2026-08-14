@@ -167,7 +167,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.8.0" },
+    { name: "airsup", version: "2.9.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -270,10 +270,14 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Message peer via ChatGPT",
       description:
-        "Send a message to another user and wait for their ChatGPT reply. Shows live step-by-step progress (paste → thinking → writing → verify).",
+        "Send a plain message to another user's ChatGPT and wait for their reply. You think here; they see only a natural message from you.",
       inputSchema: {
         to: z.string().describe("Target username"),
-        message: z.string().describe("Message text"),
+        message: z
+          .string()
+          .describe(
+            "Plain message their ChatGPT will read — natural language, no meta-instructions"
+          ),
         conversation_id: z
           .string()
           .optional()

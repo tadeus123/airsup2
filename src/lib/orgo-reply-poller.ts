@@ -27,14 +27,12 @@ function stablePollsRequired(): number {
   return Math.max(2, Math.min(Math.floor(n), 4));
 }
 
-/** Copied text looks like a ChatGPT reply, not our outbound AIRSUP prompt. */
+/** Copied text looks like a ChatGPT reply, not our outbound paste. */
 export function looksLikeChatGptReply(text: string, sentBody: string): boolean {
   const t = text.trim();
   if (t.length < 1) return false;
-  if (t.includes("[AIRSUP message from") || t.includes("[AIRSUP follow-up from")) {
-    return false;
-  }
-  if (t.includes("Airsup rules (recipient's ChatGPT)")) return false;
+  if (/^@\S+ · [a-f0-9]{8}\s*$/m.test(t)) return false;
+  if (t.includes("[AIRSUP")) return false;
   const sent = sentBody.trim();
   if (sent.length > 20 && t.includes(sent.slice(0, Math.min(80, sent.length)))) {
     return false;
@@ -42,11 +40,11 @@ export function looksLikeChatGptReply(text: string, sentBody: string): boolean {
   return true;
 }
 
-const AIRSUP_RULES_MARKER = "Airsup rules (recipient's ChatGPT):";
+const PEER_HEADER_RE = /^@\S+ · [a-f0-9]{8}\s*$/gm;
 
 /**
  * Parse the last assistant reply from a full ChatGPT thread copy (Ctrl+A).
- * Our AIRSUP user turn ends with a rules block; the assistant reply follows it.
+ * Peer messages use "@user · threadId" header; reply follows the message body.
  */
 export function extractLastAssistantReply(
   fullChat: string,
@@ -55,32 +53,34 @@ export function extractLastAssistantReply(
   const raw = fullChat.trim();
   if (!raw) return null;
 
-  let replyStart = -1;
-  let pos = 0;
-  while (pos < raw.length) {
-    const idx = raw.indexOf(AIRSUP_RULES_MARKER, pos);
-    if (idx < 0) break;
-    const afterRules = raw.slice(idx + AIRSUP_RULES_MARKER.length);
-    const blank = afterRules.match(/[\s\S]*?\n\n/);
-    replyStart = idx + AIRSUP_RULES_MARKER.length + (blank ? blank[0].length : 0);
-    pos = idx + AIRSUP_RULES_MARKER.length;
+  const headers = [...raw.matchAll(PEER_HEADER_RE)];
+  const last = headers.at(-1);
+  if (!last || last.index === undefined) {
+    return looksLikeChatGptReply(raw, sentBody) ? raw : null;
   }
 
-  let reply =
-    replyStart >= 0
-      ? raw.slice(replyStart).trim()
-      : raw;
+  let after = raw.slice(last.index + last[0].length).trim();
+  const sent = sentBody.trim();
 
-  const nextTurn = reply.search(/\n\[AIRSUP (?:message|follow-up) from/);
-  if (nextTurn >= 0) reply = reply.slice(0, nextTurn).trim();
+  if (sent) {
+    if (after.startsWith(sent)) {
+      after = after.slice(sent.length).trim();
+    } else {
+      const idx = after.indexOf(sent);
+      if (idx >= 0) after = after.slice(idx + sent.length).trim();
+    }
+  }
 
-  reply = reply
+  const nextHeader = after.search(/^@\S+ · [a-f0-9]{8}\s*$/m);
+  if (nextHeader >= 0) after = after.slice(0, nextHeader).trim();
+
+  after = after
     .replace(/^(?:ChatGPT|Assistant)(?:\s+said)?:?\s*\n+/i, "")
     .replace(/^You(?:\s+said)?:?\s*\n+/i, "")
     .trim();
 
-  if (!reply) return null;
-  return looksLikeChatGptReply(reply, sentBody) ? reply : null;
+  if (!after) return null;
+  return looksLikeChatGptReply(after, sentBody) ? after : null;
 }
 
 /** Copy entire ChatGPT thread via Ctrl+A (more reliable than partial select). */
