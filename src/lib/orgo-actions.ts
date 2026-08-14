@@ -151,48 +151,92 @@ async function orgoClickSendIfStillArmed(computerId: string): Promise<boolean> {
   return true;
 }
 
-async function orgoSubmitComposer(computerId: string): Promise<void> {
+function norm(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function composerHasOnly(expected: string, got: string): boolean {
+  const want = norm(expected);
+  const have = norm(got);
+  if (!have) return false;
+  const inbound = have.match(/@airsup inbound/gi)?.length ?? 0;
+  if (inbound > 1) return false;
+  if (have.includes(want)) return true;
+  const id = /after_message_id=(\d+)/.exec(want)?.[1];
+  return Boolean(id && have.includes(`after_message_id=${id}`) && have.includes("@airsup inbound"));
+}
+
+async function orgoReadComposer(computerId: string): Promise<string> {
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(80);
+  await orgoPressKey(computerId, "ctrl+c");
+  await localSleep(120);
+  return orgoReadClipboard(computerId);
+}
+
+async function orgoReplaceComposer(computerId: string, text: string): Promise<void> {
+  await orgoSetClipboard(computerId, text);
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(80);
+  await orgoPressKey(computerId, "ctrl+v");
+  await localSleep(250);
+}
+
+async function orgoPasteVerified(computerId: string, text: string): Promise<void> {
+  await orgoFocusComposer(computerId);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await orgoReplaceComposer(computerId, text);
+    const got = await orgoReadComposer(computerId);
+    if (composerHasOnly(text, got)) {
+      await orgoSetClipboard(computerId, text);
+      await orgoPressKey(computerId, "End");
+      return;
+    }
+  }
+  await orgoSetClipboard(computerId, text);
+  await orgoFocusComposer(computerId);
+  await orgoReplaceComposer(computerId, text);
+}
+
+async function orgoSubmitComposer(computerId: string, sentText: string): Promise<void> {
   await orgoPressKey(computerId, "End");
   await localSleep(80);
-  // Extra Enters after send are a no-op on an empty ChatGPT box.
   for (let i = 0; i < 10; i += 1) {
     await orgoPressKey(computerId, "Enter");
     await localSleep(160);
   }
-  await orgoClickSendIfStillArmed(computerId).catch(() => false);
+  const leftover = await orgoReadComposer(computerId).catch(() => "");
+  if (leftover && composerHasOnly(sentText, leftover)) {
+    await orgoClickSendIfStillArmed(computerId).catch(() => false);
+    for (let i = 0; i < 5; i += 1) {
+      await orgoPressKey(computerId, "Enter");
+      await localSleep(160);
+    }
+  }
 }
 
-/** New chat (optional) → paste → Enter, with a screenshot click if Enter no-ops. */
+/** New chat → replace composer contents (don't append) → verify → spam Enter. */
 export async function orgoSendChat(
   computerId: string,
   text: string,
   newChat: boolean
 ): Promise<void> {
   try {
-    const clip = orgoSetClipboard(computerId, text);
     if (newChat) {
+      await orgoPressKey(computerId, "Escape");
       await orgoPressKey(computerId, "Escape");
       await orgoPressKey(computerId, "ctrl+shift+o");
-      await localSleep(650);
+      await localSleep(900);
     }
-    await clip;
-    if (newChat) {
-      // New chat already focuses the composer. Skip Shift+Esc (it leaves Shift down).
-      await orgoPressKey(computerId, "Escape");
-      await localSleep(80);
-      await orgoPressKey(computerId, "End");
-    } else {
-      await orgoFocusComposer(computerId);
-    }
-    await orgoPressKey(computerId, "ctrl+v");
-    await localSleep(500);
+    await orgoPasteVerified(computerId, text);
   } catch (err) {
     console.warn("[orgo] clipboard send failed, typing with delay 0", err);
     await orgoFocusComposer(computerId);
+    await orgoPressKey(computerId, "ctrl+a");
     await orgoTypeText(computerId, text);
     await localSleep(250);
   }
-  await orgoSubmitComposer(computerId);
+  await orgoSubmitComposer(computerId, text);
 }
 
 export function localSleep(ms: number): Promise<void> {
