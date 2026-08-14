@@ -277,9 +277,14 @@ export function createAirsupMcpServer(me: User): McpServer {
       });
       return jsonText({
         ...result,
+        reply_hints: result.events.map((e) => ({
+          to: e.fromUsername,
+          conversation_id: e.conversationId,
+          reply_to_id: e.id,
+        })),
         next_action: result.event_count ? "reply_to_user" : "check_inbox",
         instructions: result.event_count
-          ? "Read events[].text, respond to the user, then call reply_to_user for each message."
+          ? "Answer on behalf of your user, then call reply_to_user using reply_hints[0]. Do NOT use talk_to_user."
           : "No new messages. Call check_inbox again or wait for another @airsup wake.",
       });
     }
@@ -353,7 +358,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Message peer",
       description:
-        "Store a message for another user, wake their ChatGPT via Orgo, then await_reply for their Supi's answer.",
+        "Initiate contact ONLY when your user asks you to message someone. Do NOT use to reply to inbound messages — use reply_to_user instead.",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z
