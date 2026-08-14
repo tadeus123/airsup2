@@ -288,6 +288,7 @@ export function createAirsupMcpServer(me: User): McpServer {
               windowSeconds: 120,
               fromUsername: sender,
               messageId,
+              maxAgeSeconds: 300,
             },
             { batch: true, mode: "scanner" }
           ),
@@ -334,9 +335,9 @@ export function createAirsupMcpServer(me: User): McpServer {
         })),
         next_action: result.event_count ? "reply_to_user" : "check_inbox",
         instructions: result.event_count
-          ? "Inbound thread only — answer and reply_to_user using reply_hints[0]. Do NOT talk_to_user."
+          ? "Inbound thread only — answer THIS events[0].text now, then reply_to_user using reply_hints[0]. Ignore older chats/calendar. Do NOT talk_to_user."
           : messageId
-            ? `Message #${messageId} not found yet — retry check_inbox with same message_id.`
+            ? `Message #${messageId} not found yet — retry check_inbox with same message_id. Do not invent a reply from memory.`
             : "No new messages. Call check_inbox again or wait for another @airsup wake.",
       });
     }

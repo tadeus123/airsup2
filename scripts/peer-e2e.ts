@@ -130,6 +130,12 @@ async function main() {
 
   const scanned = filterMessages(await readInboxUnacked(tadeName), {}, { scanner: true });
   assert(!scanned.some((m) => m.id === reply.id), "scanner filter skips reply-linked");
+  const byId = filterMessages(
+    await readInboxUnacked(tadeName),
+    { messageId: reply.id },
+    { scanner: true }
+  );
+  assert(byId.some((m) => m.id === reply.id), "message_id fetch includes reply-linked");
 
   const tadeScan = await runInboxWatch(
     tade.user,

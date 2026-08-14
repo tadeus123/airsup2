@@ -21,7 +21,9 @@ import {
   DEFAULT_WAIT_SLICE,
   DEFAULT_WINDOW,
   SCANNER_MAX_EVENTS,
+  SCANNER_MAX_AGE_MS,
   SCANNER_POLL_SLEEP_MS,
+  SCANNER_STALE_FIRST_CONTACT_MS,
 } from "./constants";
 
 export type WatchArgs = {
@@ -36,6 +38,7 @@ export type WatchArgs = {
   conversationId?: string;
   afterMessageId?: number;
   messageId?: number;
+  maxAgeSeconds?: number;
 };
 
 export type WatchEvent = {
@@ -123,11 +126,22 @@ export function filterMessages(
     out = out.filter((m) => m.id > afterId);
   }
   const exactId = Number(args.messageId);
-  if (Number.isFinite(exactId) && exactId > 0) {
+  const hasExactId = Number.isFinite(exactId) && exactId > 0;
+  if (hasExactId) {
     out = out.filter((m) => m.id === exactId);
   }
-  if (opts?.scanner) {
+  if (opts?.scanner && !hasExactId) {
     out = out.filter((m) => m.replyToId == null);
+    const maxAgeSec = Number(args.maxAgeSeconds);
+    const maxAgeMs =
+      Number.isFinite(maxAgeSec) && maxAgeSec > 0
+        ? maxAgeSec * 1000
+        : SCANNER_MAX_AGE_MS;
+    const cutoff = Date.now() - maxAgeMs;
+    out = out.filter((m) => {
+      const t = Date.parse(m.createdAt);
+      return Number.isFinite(t) && t >= cutoff;
+    });
   }
   return out;
 }
@@ -188,6 +202,38 @@ async function sweepStaleReplyLinked(me: User, timer: StepTimer): Promise<number
       reason: "stale_reply_linked_no_live_await",
       staleAfterMs: STALE_REPLY_LINKED_MS,
       timing: timer.snapshot(),
+    },
+  });
+  return staleIds.length;
+}
+
+async function sweepStaleFirstContact(me: User, timer: StepTimer): Promise<number> {
+  const inbox = await readInboxUnacked(me.username);
+  const now = Date.now();
+  const staleIds = inbox
+    .filter((m) => m.replyToId == null)
+    .filter((m) => {
+      const t = Date.parse(m.createdAt);
+      return Number.isFinite(t) && now - t >= SCANNER_STALE_FIRST_CONTACT_MS;
+    })
+    .map((m) => m.id);
+  timer.mark("stale_first_contact_check_ms");
+  if (!staleIds.length) return 0;
+  for (const id of staleIds) {
+    await ackMessage(me.username, id);
+  }
+  timer.mark("stale_first_contact_ack_ms");
+  logActivitySafe({
+    kind: "watch_skip",
+    ok: true,
+    username: me.username,
+    httpStatus: 200,
+    durationMs: 0,
+    summary: `${me.username} auto-acked ${staleIds.length} stale first-contact inbox item(s)`,
+    detail: {
+      staleIds,
+      reason: "stale_first_contact",
+      staleAfterMs: SCANNER_STALE_FIRST_CONTACT_MS,
     },
   });
   return staleIds.length;
@@ -293,7 +339,12 @@ export async function runInboxWatch(
   let rawInboxCount = 0;
 
   if (scannerMode) {
-    await sweepStaleReplyLinked(me, timer);
+    const exactId = Number(args.messageId);
+    const targeting = Number.isFinite(exactId) && exactId > 0;
+    if (!targeting) {
+      await sweepStaleReplyLinked(me, timer);
+      await sweepStaleFirstContact(me, timer);
+    }
   }
 
   for (let i = 0; i < polls; i++) {
@@ -378,6 +429,8 @@ export async function runInboxWatch(
     conversationId: string;
   }> = [];
   if (scannerMode && messages.length === 0 && skippedReplyLinked > 0) {
+    const targeting = Number.isFinite(Number(args.messageId)) && Number(args.messageId) > 0;
+    if (!targeting) {
     const inboxPeek = await readInboxUnacked(me.username);
     const replyPeek = inboxPeek.filter((m) => m.replyToId != null);
     const waits = await loadWaitsForMessages(replyPeek, () => me.username);
@@ -390,6 +443,7 @@ export async function runInboxWatch(
           conversationId: m.conversationId,
         });
       }
+    }
     }
   }
   timer.mark("live_reply_hint_ms");

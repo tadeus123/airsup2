@@ -10,6 +10,8 @@ export const DEFAULT_WAIT_SLICE = 20;
 export const DEFAULT_BATCH_MAX = 100;
 export const DEFAULT_WINDOW = 3600;
 export const SCANNER_MAX_EVENTS = 1;
+export const SCANNER_MAX_AGE_MS = 5 * 60 * 1000;
+export const SCANNER_STALE_FIRST_CONTACT_MS = 10 * 60 * 1000;
 export const SCANNER_POLL_SLEEP_MS = 500;
 export const CONVERSATION_POLL_SLEEP_MS = 150;
 
