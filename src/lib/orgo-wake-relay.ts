@@ -7,14 +7,42 @@ import {
 import type { RelayStepReporter } from "./orgo-relay-progress";
 import { relayProgressMessage } from "./orgo-relay-progress";
 
-/** Wake line pasted into peer ChatGPT — names tools so Supi acts without asking the human. */
+/** Wake line pasted into peer ChatGPT — id is inside `from` so cached ChatGPT schemas still work. */
 export function buildWakePrompt(fromUsername: string, messageId: number): string {
   const from = fromUsername.trim();
   const id = Number(messageId);
   if (!from || !Number.isFinite(id) || id <= 0) {
     throw new Error("buildWakePrompt requires fromUsername and messageId");
   }
-  return `@airsup inbound from ${from} #${id}. Immediately call check_inbox(from="${from}", message_id=${id}), answer as this user, then reply_to_user. Do not ask the human. Do not use talk_to_user.`;
+  return `@airsup inbound from ${from} #${id}. Immediately call check_inbox(from="${from}#${id}"), answer as this user, then reply_to_user. Do not ask the human. Do not use talk_to_user.`;
+}
+
+/** Parse "tade1#184" / "tade1 #184" plus an optional separate message_id. */
+export function parseInboxRef(
+  fromRaw: string,
+  messageIdRaw?: unknown
+): { from: string; messageId: number } | { error: string } {
+  const s = (fromRaw || "").trim();
+  const hashed =
+    /^@?([a-z0-9._-]+)\s*[#:/]\s*(\d+)\s*$/i.exec(s) ||
+    /^@?([a-z0-9._-]+)\s+#(\d+)\s*$/i.exec(s);
+  const from = hashed ? hashed[1] : s.replace(/#\d+\s*$/, "").trim();
+  const fromId = hashed ? Number(hashed[2]) : NaN;
+  const extra = Number(messageIdRaw);
+  const messageId =
+    Number.isFinite(extra) && extra > 0
+      ? extra
+      : Number.isFinite(fromId) && fromId > 0
+        ? fromId
+        : NaN;
+  if (!from) return { error: "from is required" };
+  if (!Number.isFinite(messageId) || messageId <= 0) {
+    return {
+      error:
+        'Pass the wake id inside from, like from="tade1#184". Airsup will not list other inbox messages.',
+    };
+  }
+  return { from, messageId };
 }
 
 /** Parse wake line from Orgo paste or user chat. Supports legacy "new message" too. */

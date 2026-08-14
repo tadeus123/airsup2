@@ -23,7 +23,7 @@ import {
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
 import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
-import { wakePeerViaOrgo } from "./orgo-wake-relay";
+import { wakePeerViaOrgo, parseInboxRef } from "./orgo-wake-relay";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import {
   bindProgressReporter,
@@ -254,24 +254,27 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Open one inbound message",
       description:
-        "REQUIRED: from + message_id from the wake line. Returns that one message only — never the rest of the inbox.",
+        'Open exactly one inbound airsup message. Pass from as "tade1#184" from the wake line (handle#id). Do not list the inbox.',
       inputSchema: {
-        from: z.string().describe("Sender from the wake line, e.g. kosti"),
-        message_id: z.number().describe("Exact id from the wake line, e.g. 163"),
+        from: z
+          .string()
+          .describe('Sender, preferably "tade1#184" (handle#message id from the wake line)'),
+        message_id: z
+          .union([z.number(), z.string()])
+          .optional()
+          .describe("Optional if from already contains #id"),
+        max_seconds: z.number().optional().describe("Ignored — kept for older ChatGPT plugin schemas"),
       },
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async ({ from, message_id }, extra: McpToolExtra) => {
-      const match = await resolveTarget(from);
+      const parsed = parseInboxRef(from, message_id);
+      if ("error" in parsed) return errorText(parsed.error);
+      const match = await resolveTarget(parsed.from);
       if (!match.ok) return errorText(match.error);
       const sender = match.username;
-      const messageId = Number(message_id);
-      if (!Number.isFinite(messageId) || messageId <= 0) {
-        return errorText(
-          "message_id is required from the wake line. Airsup will not list other inbox messages."
-        );
-      }
+      const messageId = parsed.messageId;
 
       const report = bindProgressReporter(extra, 100);
       await report(`Opening inbound #${messageId} from @${sender} only…`, 20);

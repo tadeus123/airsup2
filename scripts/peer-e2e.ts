@@ -20,7 +20,7 @@ import {
   sendMessage,
 } from "../src/lib/users";
 import { filterMessages, runInboxWatch } from "../src/lib/inbox-watch";
-import { buildWakePrompt, parseWakePrompt } from "../src/lib/orgo-wake-relay";
+import { buildWakePrompt, parseInboxRef, parseWakePrompt } from "../src/lib/orgo-wake-relay";
 import {
   __resetWaitsForTests,
   LIVE_AWAIT_TTL_MS,
@@ -167,9 +167,14 @@ async function testThreadIsolation() {
 
 function testWakePrompt() {
   const wake = buildWakePrompt("tade1", 140);
-  assert(wake.includes("check_inbox(from=\"tade1\", message_id=140)"), "wake prompt tools");
+  assert(wake.includes('check_inbox(from="tade1#140")'), "wake prompt tools");
   assert(wake.includes("#140"), "wake prompt id");
   const parsed = parseWakePrompt(wake);
+  assert(parsed.fromUsername === "tade1" && parsed.messageId === 140, "parse tagged wake");
+  const ref = parseInboxRef("tade1#140");
+  assert(!("error" in ref) && ref.from === "tade1" && ref.messageId === 140, "parse inbox ref");
+  const refSep = parseInboxRef("tade1", 140);
+  assert(!("error" in refSep) && refSep.messageId === 140, "parse inbox ref separate id");
   assert(parsed.fromUsername === "tade1" && parsed.messageId === 140, "parse tagged wake");
   const legacy = parseWakePrompt("@airsup kosti new message");
   assert(legacy.fromUsername === "kosti" && legacy.legacy, "parse legacy wake");

@@ -21,7 +21,11 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`FAIL: ${msg}`);
 }
 
-function toolJson(result: { content?: Array<{ type: string; text?: string }>; isError?: boolean }) {
+function toolJson(result: {
+  content?: Array<{ type: string; text?: string }>;
+  isError?: boolean;
+  [key: string]: unknown;
+}) {
   const text = result.content?.find((c) => c.type === "text")?.text || "";
   try {
     return { isError: Boolean(result.isError), data: JSON.parse(text) as Record<string, unknown>, text };
@@ -119,7 +123,7 @@ async function main() {
     const openA = toolJson(
       await tadeMcp.callTool({
         name: "check_inbox",
-        arguments: { from: kostiName, message_id: a.id },
+        arguments: { from: `${kostiName}#${a.id}` },
       })
     );
     assert(!openA.isError, `check_inbox A error: ${openA.text}`);
