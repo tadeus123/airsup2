@@ -95,6 +95,54 @@ export async function orgoScreenshotB64(computerId: string): Promise<string> {
   }
 }
 
+/** Local sleep (Vercel side) — use between poll attempts instead of Orgo /wait HTTP. */
+export function localSleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, Math.max(0, ms)));
+}
+
+/** Focus ChatGPT, optionally open new chat, paste text, send — one VM round-trip. */
+export async function orgoSendPeerMessage(
+  computerId: string,
+  text: string,
+  mode: "ready" | "parallel_new" | "continue"
+): Promise<void> {
+  const b64 = Buffer.from(text, "utf8").toString("base64");
+  const newChat =
+    mode === "parallel_new"
+      ? "xdotool key ctrl+shift+o\nsleep 0.2\n"
+      : "";
+  const script = `
+set -e
+command -v xdotool >/dev/null || exit 1
+W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
+[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
+[ -n "$W" ] || exit 1
+xdotool windowfocus "$W"
+sleep 0.05
+xdotool mousemove --window "$W" 640 520 click 1
+sleep 0.03
+${newChat}echo '${b64}' | base64 -d | xclip -selection clipboard 2>/dev/null || echo '${b64}' | base64 -d | xsel --clipboard --input
+sleep 0.03
+xdotool key ctrl+v
+sleep 0.04
+xdotool key Return
+`.trim();
+  await orgoBash(computerId, script);
+}
+
+/** Prep empty ChatGPT chat for the next relay (non-blocking friendly). */
+export async function orgoPrepFreshChatGptChat(computerId: string): Promise<void> {
+  const script = `
+command -v xdotool >/dev/null || exit 0
+W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
+[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
+[ -n "$W" ] && xdotool windowfocus "$W"
+xdotool key ctrl+shift+o
+sleep 0.2
+`.trim();
+  await orgoBash(computerId, script);
+}
+
 /** Focus ChatGPT browser window and click the message input. */
 export async function orgoFocusChatGptInput(computerId: string): Promise<void> {
   const script = `
@@ -112,8 +160,7 @@ xdotool mousemove --window "$W" 640 520 click 1
 
 /** Open a fresh empty ChatGPT chat for the next relay. */
 export async function orgoOpenFreshChatGptChat(computerId: string): Promise<void> {
-  await orgoPressKey(computerId, "ctrl+shift+o");
-  await orgoWait(computerId, 0.35);
+  await orgoPrepFreshChatGptChat(computerId);
 }
 
 export type OrgoRelayMode = "auto" | "direct" | "agent";

@@ -1,11 +1,8 @@
 import { buildPeerChatGptMessage } from "./airsup-relay-prompt";
 import type { OrgoRelayInput, OrgoRelayResult } from "./orgo";
 import {
-  orgoFocusChatGptInput,
-  orgoOpenFreshChatGptChat,
-  orgoPressKey,
-  orgoSetClipboard,
-  orgoWait,
+  orgoPrepFreshChatGptChat,
+  orgoSendPeerMessage,
 } from "./orgo-actions";
 import { relayProgressMessage } from "./orgo-relay-progress";
 import { looksLikeChatGptReply, pollUntilChatGptReply } from "./orgo-reply-poller";
@@ -66,6 +63,8 @@ export async function agentCopyReply(computerId: string): Promise<string> {
 export type DirectRelayResult = OrgoRelayResult & {
   /** Message was pasted; a copy-only retry is safe (no duplicate send). */
   pasteSent: boolean;
+  /** Per-phase timing for diagnostics (ms). */
+  timing?: Record<string, number>;
 };
 
 export async function relayViaChatGptDirect(
@@ -73,6 +72,11 @@ export async function relayViaChatGptDirect(
   input: OrgoRelayInput
 ): Promise<DirectRelayResult> {
   const started = Date.now();
+  const timing: Record<string, number> = {};
+  const mark = (name: string) => {
+    timing[name] = Date.now() - started;
+  };
+
   const continueThread = Boolean(input.continueThread);
   const parallel = Boolean(input.parallelWithOthers);
   const peer = input.peerUsername || "peer";
@@ -85,42 +89,43 @@ export async function relayViaChatGptDirect(
     continueThread,
   });
 
-  if (continueThread) {
-    await report?.(
-      relayProgressMessage({ peer, phase: "continue_thread" }),
-      32
-    );
-    await orgoFocusChatGptInput(computerId);
-    await orgoWait(computerId, 0.1);
-  } else if (parallel) {
-    await report?.(
-      relayProgressMessage({ peer, phase: "new_chat" }),
-      32
-    );
-    await orgoOpenFreshChatGptChat(computerId);
-  } else {
-    await report?.(relayProgressMessage({ peer, phase: "paste" }), 36);
-    await orgoFocusChatGptInput(computerId);
-    await orgoWait(computerId, 0.08);
-  }
+  const pasteMode = continueThread
+    ? "continue"
+    : parallel
+      ? "parallel_new"
+      : "ready";
 
-  await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
+  void report?.(
+    relayProgressMessage({
+      peer,
+      phase: continueThread
+        ? "continue_thread"
+        : parallel
+          ? "new_chat"
+          : "paste",
+    }),
+    32
+  );
 
-  await orgoSetClipboard(computerId, peerText);
-  await orgoPressKey(computerId, "ctrl+v");
-  await orgoWait(computerId, 0.08);
-  await orgoPressKey(computerId, "Return");
+  const tPaste0 = Date.now();
+  await orgoSendPeerMessage(computerId, peerText, pasteMode);
+  timing.paste_ms = Date.now() - tPaste0;
+  mark("paste_done");
 
-  await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
+  void report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
 
   let replyText: string;
+  const tPoll0 = Date.now();
   try {
     const polled = await pollUntilChatGptReply(computerId, input.message, {
       peer,
       onProgress: report,
     });
     replyText = polled.replyText;
-    await report?.(
+    timing.poll_ms = Date.now() - tPoll0;
+    timing.stable_polls = polled.stablePolls;
+    mark("poll_done");
+    void report?.(
       relayProgressMessage({
         peer,
         phase: "done",
@@ -129,25 +134,33 @@ export async function relayViaChatGptDirect(
       92
     );
   } catch {
+    timing.poll_ms = Date.now() - tPoll0;
     const elapsedSec = Math.round((Date.now() - started) / 1000);
-    await report?.(
+    void report?.(
       relayProgressMessage({ peer, phase: "copy_agent", elapsedSec }),
       85
     );
+    const tCopy0 = Date.now();
     replyText = await agentCopyReply(computerId);
+    timing.copy_agent_ms = Date.now() - tCopy0;
     if (!looksLikeChatGptReply(replyText, input.message)) {
       const err = new Error("Could not read a valid ChatGPT reply");
       (err as Error & { pasteSent?: boolean }).pasteSent = true;
       throw err;
     }
-    await report?.(
+    void report?.(
       relayProgressMessage({ peer, phase: "done", elapsedSec }),
       92
     );
   }
 
   if (!continueThread && !parallel) {
-    void orgoOpenFreshChatGptChat(computerId).catch(() => {});
+    void orgoPrepFreshChatGptChat(computerId).catch(() => {});
+  }
+
+  timing.total_ms = Date.now() - started;
+  if (timing.total_ms > 15_000) {
+    console.info("[orgo] relay timing", { peer, ...timing, continueThread, parallel });
   }
 
   return {
@@ -155,5 +168,6 @@ export async function relayViaChatGptDirect(
     durationMs: Date.now() - started,
     continueThread,
     pasteSent: true,
+    timing,
   };
 }
