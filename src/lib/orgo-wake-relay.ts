@@ -1,9 +1,4 @@
-import {
-  localSleep,
-  orgoClickChatInput,
-  orgoPasteText,
-  orgoPressKey,
-} from "./orgo-actions";
+import { orgoSendChat } from "./orgo-actions";
 import type { RelayStepReporter } from "./orgo-relay-progress";
 import { relayProgressMessage } from "./orgo-relay-progress";
 
@@ -91,16 +86,8 @@ export async function wakePeerViaOrgo(
   const wakeText = buildWakePrompt(input.fromUsername, input.messageId);
 
   await report?.(relayProgressMessage({ peer, phase: "new_chat" }), 30);
-  await orgoClickChatInput(computerId);
-  await orgoPressKey(computerId, "Escape");
-  await orgoPressKey(computerId, "ctrl+shift+o");
-  await localSleep(600);
-
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 55);
-  await orgoClickChatInput(computerId);
-  await localSleep(120);
-  await orgoPasteText(computerId, wakeText);
-  await orgoPressKey(computerId, "Return");
+  await orgoSendChat(computerId, wakeText, true);
 
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 75);
 

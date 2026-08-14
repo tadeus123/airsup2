@@ -1,11 +1,6 @@
 import { buildPeerChatGptMessage } from "./airsup-relay-prompt";
 import type { OrgoRelayInput, OrgoRelayResult } from "./orgo";
-import {
-  localSleep,
-  orgoClickChatInput,
-  orgoPasteText,
-  orgoPressKey,
-} from "./orgo-actions";
+import { orgoSendChat } from "./orgo-actions";
 import { relayProgressMessage } from "./orgo-relay-progress";
 import { pollUntilChatGptReply } from "./orgo-reply-poller";
 
@@ -32,18 +27,12 @@ export async function relayViaChatGptDirect(
 
   if (!continueThread) {
     await report?.(relayProgressMessage({ peer, phase: "new_chat" }), 32);
-    await orgoClickChatInput(computerId);
-    await orgoPressKey(computerId, "ctrl+shift+o");
-    await localSleep(600);
   } else {
     await report?.(relayProgressMessage({ peer, phase: "continue_thread" }), 32);
   }
 
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
-  await orgoClickChatInput(computerId);
-  await localSleep(120);
-  await orgoPasteText(computerId, peerText);
-  await orgoPressKey(computerId, "Return");
+  await orgoSendChat(computerId, peerText, !continueThread);
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
 
   const polled = await pollUntilChatGptReply(computerId, input.message, {
