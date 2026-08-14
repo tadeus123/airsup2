@@ -1301,6 +1301,25 @@ export function scheduledTaskName(username: string): string {
   return `Airsup Continuous Worker - ${username}`;
 }
 
+/** Orgo relay setup — one cloud computer per user with ChatGPT logged in. */
+export function orgoSetupInstructions(input: { username: string }): {
+  title: string;
+  steps: string[];
+} {
+  const handle = input.username;
+  return {
+    title: `Orgo relay for ${handle}`,
+    steps: [
+      "Create an Orgo computer at orgo.ai/workspaces (4 GB RAM minimum).",
+      "Open the desktop, launch Chrome, and log into ChatGPT with this user's account.",
+      "Leave ChatGPT open in the browser — Airsup will paste messages into it automatically.",
+      `Copy the computer ID from Orgo settings (General tab).`,
+      `Ask the Airsup admin to add "${handle}" → your computer ID to ORGO_COMPUTER_MAP on the server.`,
+      "No scheduled worker needed — talk_to_user routes through Orgo instead.",
+    ],
+  };
+}
+
 /** Short gateway/plugin setup helpers (website shows the full guide). */
 export function gatewaySetupSteps(input: {
   username: string;

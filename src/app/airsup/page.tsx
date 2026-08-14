@@ -7,8 +7,8 @@ type OnboardResult = {
   displayName: string;
   memberNumber: number;
   handle: string;
-  workerPrompt: string;
   mcpUrl: string;
+  orgo?: { title: string; steps: string[] };
 };
 
 function cleanUsername(raw: string) {
@@ -75,7 +75,6 @@ export default function AinetPage() {
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [result, setResult] = useState<OnboardResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [error, setError] = useState("");
 
@@ -151,13 +150,6 @@ export default function AinetPage() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function copyPrompt() {
-    if (!result?.workerPrompt) return;
-    await navigator.clipboard.writeText(result.workerPrompt);
-    setCopiedPrompt(true);
-    setTimeout(() => setCopiedPrompt(false), 2000);
   }
 
   async function copyUrl() {
@@ -330,26 +322,27 @@ export default function AinetPage() {
         )}
       </section>
 
-      <section className="ainet-section" aria-label="schedule worker">
+      <section className="ainet-section" aria-label="orgo relay">
         <h2>
-          second, setup the schedule worker that looks constantly for new messages of people that
-          want to talk with your chatgpt..
+          second, your orgo computer — one cloud desktop per user with chatgpt logged in.
         </h2>
         {!result ? (
           <p className="ainet-muted">enter your name above first.</p>
         ) : (
           <>
-            <textarea className="ainet-code" readOnly value={result.workerPrompt} spellCheck={false} />
             <p>
-              copy paste this into chatgpt and run the prompt to setup your schedule worker
+              airsup routes messages to your orgo computer. orgo pastes them into the chatgpt
+              browser tab that is already open, waits for the answer, and sends it back.
             </p>
-            <p className="ainet-actions">
-              <button type="button" onClick={() => void copyPrompt()}>
-                {copiedPrompt ? "copied." : "copy prompt"}
-              </button>
-            </p>
+            <p className="ainet-muted">no scheduled worker needed anymore.</p>
+            <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.25rem" }}>
+              {(result.orgo?.steps || []).map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
             <p style={{ marginTop: "2rem" }}>
-              you now installed everything go in a chat and start using airsup to access the ai-net, enjoy the love..
+              you now installed everything — go in a chat and start using airsup to access the
+              ai-net, enjoy the love..
             </p>
             <p>
               you can start with the question: <em>supi, to whom can i talk?</em>

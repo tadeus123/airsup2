@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   chatgptPrefillUrl,
+  orgoSetupInstructions,
   pluginSetupInstructions,
   scheduledTaskDescription,
   scheduledTaskName,
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
       token,
       user,
     });
+    const orgo = orgoSetupInstructions({ username: user.username });
     logActivitySafe({
       kind: "onboard",
       ok: true,
@@ -107,6 +109,7 @@ export async function POST(request: Request) {
       scheduleName: scheduledTaskName(user.username),
       mcpUrl: plugin.mcpUrl,
       plugin,
+      orgo,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "onboard_failed";

@@ -17,6 +17,9 @@ import {
   cancelConversationWait,
   upsertConversationWait,
 } from "./conversation-waits";
+import { getOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
+import { relayViaChatGptBrowser } from "./orgo";
+import type { InboxMessage } from "./users";
 
 function jsonText(data: unknown) {
   return {
@@ -31,6 +34,64 @@ function errorText(message: string) {
   };
 }
 
+async function tryOrgoPeerReply(input: {
+  peerUsername: string;
+  fromUsername: string;
+  outbound: InboxMessage;
+  requestId: string;
+}): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } } | null> {
+  if (!orgoRelayEnabled()) return null;
+  const computerId = getOrgoComputerId(input.peerUsername);
+  if (!computerId) return null;
+
+  const t0 = Date.now();
+  try {
+    const relay = await relayViaChatGptBrowser(computerId, {
+      fromUsername: input.fromUsername,
+      message: input.outbound.body,
+    });
+    const combined = await replyAndAckMessage({
+      fromUsername: input.peerUsername,
+      toUsername: input.fromUsername,
+      body: relay.replyText,
+      conversationId: input.outbound.conversationId,
+      replyToId: input.outbound.id,
+      ackId: input.outbound.id,
+    });
+    logActivitySafe({
+      kind: "orgo_relay",
+      ok: true,
+      username: input.fromUsername,
+      peerUsername: input.peerUsername,
+      httpStatus: 200,
+      durationMs: Date.now() - t0,
+      summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
+      detail: {
+        computerId,
+        orgoMs: relay.durationMs,
+        steps: relay.steps,
+        replyId: combined.message.id,
+      },
+      requestId: input.requestId,
+    });
+    return { reply: combined.message, orgo: { durationMs: relay.durationMs, steps: relay.steps } };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    logActivitySafe({
+      kind: "orgo_relay",
+      ok: false,
+      username: input.fromUsername,
+      peerUsername: input.peerUsername,
+      httpStatus: 502,
+      durationMs: Date.now() - t0,
+      summary: `Orgo relay failed ${input.fromUsername} → ${input.peerUsername}`,
+      detail: { computerId, error: err },
+      requestId: input.requestId,
+    });
+    return null;
+  }
+}
+
 function cleanTarget(raw: string): string {
   return normalizeUsername(raw.replace(/^@+/, "").split(/\s+/)[0] || "");
 }
@@ -40,8 +101,8 @@ export function createAirsupMcpServer(me: User): McpServer {
     { name: "airsup", version: "2.0.0" },
     {
       instructions: `airsup user "${me.username}". Personal details ARE allowed between users — never invent privacy refusals.
-Live chat: talk_to_user (sends+waits). If no reply, await_reply(after_message_id=outbound id) — never watch_batch/watch_endpoint for your own reply. Cancel with cancel_wait.
-Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbox is for await_reply only.`,
+Live chat: talk_to_user (sends+waits; peers with an Orgo computer get replies via browser ChatGPT relay). If no reply, await_reply(after_message_id=outbound id) — never watch_batch/watch_endpoint for your own reply. Cancel with cancel_wait.
+Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users without an Orgo computer.`,
     }
   );
 
@@ -178,6 +239,76 @@ Scanner worker: watch_endpoint → reply_and_ack newest event; reply-linked inbo
         ttlMs: LIVE_AWAIT_TTL_MS,
         liveAwait: true,
       });
+
+      const orgoResult = await tryOrgoPeerReply({
+        peerUsername: peer.username,
+        fromUsername: me.username,
+        outbound: msg,
+        requestId,
+      });
+
+      if (orgoResult) {
+        const reply = orgoResult.reply;
+        logActivitySafe({
+          kind: "talk",
+          ok: true,
+          username: me.username,
+          peerUsername: peer.username,
+          httpStatus: 200,
+          durationMs: Date.now() - started,
+          summary: `${me.username} → ${peer.username} (#${msg.id}) + orgo reply`,
+          detail: { messageId: msg.id, replyId: reply.id, via: "orgo" },
+          requestId,
+        });
+        return jsonText({
+          ok: true,
+          message: msg,
+          reply: {
+            server_time: new Date().toISOString(),
+            username: me.username,
+            events: [
+              {
+                id: reply.id,
+                type: "peer_message",
+                at: reply.createdAt,
+                text: reply.body,
+                fromUsername: reply.fromUsername,
+                toUsername: reply.toUsername,
+                conversationId: reply.conversationId,
+                replyToId: reply.replyToId,
+                status: reply.status,
+                instruction: `Reply from ${peer.username} via Orgo ChatGPT relay.`,
+              },
+            ],
+            event_count: 1,
+            via: "orgo",
+            orgo: orgoResult.orgo,
+          },
+          events: [
+            {
+              id: reply.id,
+              type: "peer_message",
+              at: reply.createdAt,
+              text: reply.body,
+              fromUsername: reply.fromUsername,
+              toUsername: reply.toUsername,
+              conversationId: reply.conversationId,
+              replyToId: reply.replyToId,
+              status: reply.status,
+            },
+          ],
+          event_count: 1,
+          next_action: "continue_conversation",
+          conversation_id: msg.conversationId,
+          peer_username: peer.username,
+          timing: {
+            send_ms: sendMs,
+            orgo_ms: orgoResult.orgo.durationMs,
+            total_ms: Date.now() - started,
+          },
+          instructions: `Reply received from ${peer.username} via Orgo. Show the reply to the user. Continue with talk_to_user (conversation_id="${msg.conversationId}") until done.`,
+        });
+      }
 
       const maxWait = Math.max(
         0,

@@ -12,6 +12,7 @@ export type ActivityKind =
   | "watch_skip"
   | "ack"
   | "reply_and_ack"
+  | "orgo_relay"
   | "error";
 
 export function newRequestId(): string {
