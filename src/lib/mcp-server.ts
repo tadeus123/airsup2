@@ -92,10 +92,10 @@ async function relayPeerViaOrgo(input: {
     input.report ?? (async () => {}),
     {
       startMessage: input.continueThread
-        ? `Continuing ChatGPT thread on ${peer}'s Orgo… usually 15–60s`
+        ? `Continuing ChatGPT thread on ${peer}'s Orgo (hotkeys)… usually 15–60s`
         : mayRunParallel
-          ? `Opening parallel ChatGPT chat on ${peer}'s Orgo… usually 30–120s`
-          : `Opening new ChatGPT chat on ${peer}'s Orgo (Ctrl+Shift+O)… usually 30–120s`,
+          ? `Opening parallel chat on ${peer}'s Orgo (hotkeys)… usually 20–90s`
+          : `Sending via Orgo hotkeys on ${peer}'s computer… usually 20–90s`,
       tickMessage: (t) =>
         input.continueThread
           ? `ChatGPT replying on ${peer}'s Orgo (same thread)… ${formatProgressTiming({
@@ -135,12 +135,13 @@ async function relayPeerViaOrgo(input: {
     httpStatus: 200,
     durationMs: Date.now() - t0,
     summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
-    detail: {
+      detail: {
       computerId: input.computerId,
       orgoMs: relay.durationMs,
       steps: relay.steps,
       replyId: combined.message.id,
       continueThread: relay.continueThread,
+      relayMethod: relay.relayMethod,
     },
     requestId: input.requestId,
   });
@@ -185,7 +186,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.5.0" },
+    { name: "airsup", version: "2.6.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 

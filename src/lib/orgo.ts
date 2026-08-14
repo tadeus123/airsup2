@@ -2,6 +2,8 @@ import {
   buildOrgoAgentPrompt,
   buildPeerChatGptMessage,
 } from "./airsup-relay-prompt";
+import { orgoRelayMode } from "./orgo-actions";
+import { relayViaChatGptDirect } from "./orgo-direct-relay";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -24,6 +26,8 @@ export type OrgoRelayResult = {
   steps?: number;
   costCents?: number;
   continueThread: boolean;
+  /** How the relay ran: direct hotkeys vs full agent loop. */
+  relayMethod?: "direct" | "agent";
 };
 
 function orgoApiKey(): string {
@@ -56,8 +60,8 @@ type ChatCompletionResponse = {
   error?: { message?: string };
 };
 
-/** Send a prompt to an Orgo computer; returns ChatGPT's reply text from the browser. */
-export async function relayViaChatGptBrowser(
+/** Full agent loop (slow, many steps) — fallback when direct hotkeys fail. */
+async function relayViaChatGptAgent(
   computerId: string,
   input: OrgoRelayInput
 ): Promise<OrgoRelayResult> {
@@ -111,6 +115,7 @@ export async function relayViaChatGptBrowser(
       steps: json.orgo?.steps,
       costCents: json.orgo?.cost_cents,
       continueThread,
+      relayMethod: "agent",
     };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
@@ -120,4 +125,28 @@ export async function relayViaChatGptBrowser(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Send a prompt to an Orgo computer; returns ChatGPT's reply text from the browser. */
+export async function relayViaChatGptBrowser(
+  computerId: string,
+  input: OrgoRelayInput
+): Promise<OrgoRelayResult> {
+  const mode = orgoRelayMode();
+
+  if (mode === "agent") {
+    return relayViaChatGptAgent(computerId, input);
+  }
+
+  if (mode === "direct" || mode === "auto") {
+    try {
+      const result = await relayViaChatGptDirect(computerId, input);
+      return { ...result, relayMethod: "direct" };
+    } catch (e) {
+      if (mode === "direct") throw e;
+      console.warn("[orgo] direct relay failed, falling back to agent:", e);
+    }
+  }
+
+  return relayViaChatGptAgent(computerId, input);
 }
