@@ -225,19 +225,46 @@ export function createAirsupMcpServer(me: User): McpServer {
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
-    async ({ from, max_seconds }) => {
+    async ({ from, max_seconds }, extra: McpToolExtra) => {
       const sender = from ? cleanTarget(from) : undefined;
-      const result = await runInboxWatch(
-        me,
+      const maxSec = max_seconds ?? 15;
+      const report = bindProgressReporter(extra, 100);
+      const label = sender ? `@${sender}` : "inbox";
+
+      const result = await withProgressHeartbeat(
+        () =>
+          runInboxWatch(
+            me,
+            {
+              waitSeconds: 5,
+              polls: 3,
+              maxSeconds: maxSec,
+              windowSeconds: 120,
+              fromUsername: sender,
+            },
+            { batch: true, mode: "scanner" }
+          ),
+        report,
         {
-          waitSeconds: 5,
-          polls: 3,
-          maxSeconds: max_seconds ?? 15,
-          windowSeconds: 120,
-          fromUsername: sender,
-        },
-        { batch: true, mode: "scanner" }
+          startMessage: sender
+            ? `Checking airsup for new message from ${sender}…`
+            : "Checking airsup inbox for new messages…",
+          tickMessage: (t) => `Scanning ${label}… ${formatProgressTiming(t)}`,
+          startProgress: 10,
+          endProgress: 88,
+          intervalMs: 3000,
+          typicalMinSec: 2,
+          typicalMaxSec: maxSec,
+        }
       );
+
+      if (result.event_count) {
+        const fromWho = result.events[0]?.fromUsername || sender || "peer";
+        await report(`Found message from @${fromWho} — reading…`, 95);
+      } else {
+        await report(`No new messages in ${label}.`, 95);
+      }
+
       logActivitySafe({
         kind: "check_inbox",
         ok: true,
@@ -252,7 +279,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         ...result,
         next_action: result.event_count ? "reply_to_user" : "check_inbox",
         instructions: result.event_count
-          ? "Read the message(s), respond to the user, then call reply_to_user for each."
+          ? "Read events[].text, respond to the user, then call reply_to_user for each message."
           : "No new messages. Call check_inbox again or wait for another @airsup wake.",
       });
     }

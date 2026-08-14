@@ -113,9 +113,11 @@ function extractBearer(request: Request): string {
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   if (match?.[1]) return match[1].trim();
   const url = new URL(request.url);
+  const pathToken = url.pathname.match(/\/(?:api\/)?mcp\/(asp_[a-f0-9]+)\/?$/i)?.[1];
   return (
     request.headers.get("x-airsup-token") ||
     url.searchParams.get("token") ||
+    pathToken ||
     ""
   ).trim();
 }

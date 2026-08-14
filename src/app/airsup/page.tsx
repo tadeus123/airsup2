@@ -368,8 +368,9 @@ export default function AinetPage() {
         ) : (
           <>
             <p>
-              airsup routes messages to your orgo computer. orgo opens a new chatgpt chat
-              (ctrl+shift+o), pastes the message, waits for the answer, and sends it back.
+              airsup wakes your orgo chatgpt when someone messages you (@airsup handle new message).
+              your supi picks up the message via check_inbox and replies via reply_to_user — the
+              plugin must be installed on this chatgpt too (first section above).
             </p>
             <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.25rem" }}>
               {(result.orgo?.steps || []).map((step) => (

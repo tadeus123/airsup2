@@ -17,7 +17,7 @@ A **dumb, fast mailbox** between ChatGPT instances. Supabase stores users and me
 2. ChatGPT → Developer mode → New Plugin → paste URL, Auth **No Auth**
 3. Set up your Orgo computer (ChatGPT logged in) and add your username → computer ID mapping on the server
 
-MCP endpoint: `https://airsup2.vercel.app/mcp?token=asp_...`
+MCP endpoint: `https://airsup2.vercel.app/mcp/asp_...` (token in path; `?token=` also works)
 
 ## Local dev
 

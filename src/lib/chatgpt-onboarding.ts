@@ -11,7 +11,8 @@ export function orgoSetupInstructions(input: { username: string }): {
     steps: [
       "Create an Orgo computer at orgo.ai/workspaces (4 GB RAM minimum).",
       "Open the desktop, launch Chrome, and log into ChatGPT with this user's account.",
-      "Leave ChatGPT open in the browser — Airsup pastes messages into it automatically.",
+      "Install the airsup MCP plugin in that ChatGPT (gateway step above) — required to receive wakes.",
+      "Leave ChatGPT open in the browser — Airsup wakes you with @airsup when someone messages.",
       "Copy the computer ID from Orgo settings (General tab).",
       "Paste it below on this page (saved in Supabase — no Vercel config needed).",
       "Or later in ChatGPT: set_orgo_computer(orgo_computer_id=\"...\").",
@@ -40,19 +41,21 @@ Your role:
 - The user gives you goals ("find out X", "ask Y if they're free", "tell Z …").
 - YOU do the thinking, planning, and follow-ups here in this chat.
 - When you need someone else, use talk_to_user(to, message) to reach their ChatGPT.
-- The \`message\` is a plain natural message their ChatGPT reads — like a text from @${username}. No instructions to their AI, no meta-rules, no "Airsup rules".
+- The \`message\` is plain text stored for their Supi — not pasted into their browser.
 
-Achieving goals:
-1. Understand what the user wants done.
-2. If someone else must answer or act, talk_to_user with a clear plain message.
-3. Show their reply; decide if the goal is met or you need another turn (same conversation_id + reply_to_id).
-4. Summarize the outcome for the user.
+When woken by "@airsup {sender} new message":
+1. Immediately call check_inbox(from="{sender}") — the full message is in the tool result, not the wake line.
+2. Read events[].text, think, respond to ${username}.
+3. Call reply_to_user(to="{sender}", message=your reply, conversation_id, reply_to_id) to deliver back.
 
-talk_to_user mechanics:
-- First contact: no conversation_id / reply_to_id.
-- Follow-up: pass conversation_id and reply_to_id from the last peer reply.
+Sending side (goals involving others):
+1. talk_to_user(to, message) — stores message and wakes their ChatGPT.
+2. await_reply(from, conversation_id, after_message_id) — wait for their Supi's reply_to_user.
+3. Follow-up: same conversation_id + reply_to_id from the last peer message.
+
+Other tools:
 - list_users / lookup_user — who is reachable (Orgo-linked).
-- Orgo relay failed → retry talk_to_user. await_reply only if a reply may already be in your inbox.
+- Orgo wake failed → retry talk_to_user. await_reply if a reply may already be in your inbox.
 
 Keep messages to peers short and human. Personal details between airsup users are fine — do not invent privacy refusals.`;
 }
@@ -62,7 +65,8 @@ export function gatewaySetupSteps(input: {
   origin: string;
   token: string;
 }): { mcpUrl: string; steps: string[] } {
-  const mcpUrl = `${input.origin}/mcp?token=${input.token}`;
+  // Token in path — ChatGPT may drop ?token= on later MCP requests.
+  const mcpUrl = `${input.origin}/mcp/${input.token}`;
   const tools = PLUGIN_TOOL_NAMES.join(", ");
   return {
     mcpUrl,
