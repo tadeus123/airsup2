@@ -47,6 +47,7 @@ export async function relayViaChatGptDirect(
 
   const polled = await pollUntilChatGptReply(computerId, input.message, {
     peer,
+    sentPeerText: peerText,
     onProgress: report,
   });
 

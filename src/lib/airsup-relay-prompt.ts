@@ -13,7 +13,7 @@ export type PeerChatGptMessageInput = {
   continueThread: boolean;
 };
 
-/** Minimal one-line sender tag for thread routing + copy parsing. */
+/** Minimal one-line sender tag (internal / logging only). */
 export function formatPeerMessageHeader(input: {
   fromUsername: string;
   conversationId: string;
@@ -24,14 +24,13 @@ export function formatPeerMessageHeader(input: {
 }
 
 /**
- * What the peer's ChatGPT sees — just who it's from and the message.
- * No rules block; thinking stays in each side's ChatGPT.
+ * What the peer's ChatGPT sees.
+ * First message: clear "From @user" prefix so plain ChatGPT understands.
+ * Follow-up: just the message (same thread already open).
  */
 export function buildPeerChatGptMessage(input: PeerChatGptMessageInput): string {
-  const header = formatPeerMessageHeader({
-    fromUsername: input.fromUsername,
-    conversationId: input.conversationId,
-  });
-  return `${header}\n${input.message.trim()}`;
+  const body = input.message.trim();
+  if (input.continueThread) return body;
+  const from = input.fromUsername.trim();
+  return `From @${from}:\n\n${body}`;
 }
-
