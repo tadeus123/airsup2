@@ -1,6 +1,10 @@
 import {
   localSleep,
   orgoBash,
+  orgoPressKey,
+  orgoReadClipboard,
+  orgoSetClipboard,
+  orgoWait,
 } from "./orgo-actions";
 import { relayProgressMessage, type RelayStepReporter } from "./orgo-relay-progress";
 
@@ -82,37 +86,71 @@ export function extractLastAssistantReply(
   return looksLikeChatGptReply(after, sentBody) ? after : null;
 }
 
+const ORGO_X11_HELPERS = `
+export DISPLAY="\${DISPLAY:-:0}"
+focus_chat_window() {
+  local W=""
+  for cls in google-chrome Google-chrome chromium Chromium chrome; do
+    W=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null | tail -1)
+    [ -n "$W" ] && break
+  done
+  if [ -z "$W" ]; then
+    W=$(xdotool search --name "ChatGPT" 2>/dev/null | tail -1)
+  fi
+  if [ -z "$W" ]; then
+    W=$(xdotool getactivewindow 2>/dev/null || true)
+  fi
+  [ -n "$W" ] || return 1
+  xdotool windowactivate --sync "$W" 2>/dev/null || true
+  sleep 0.05
+  xdotool mousemove --window "$W" 640 380 click 1 2>/dev/null || \\
+    xdotool mousemove 640 380 click 1 2>/dev/null || true
+}
+`.trim();
+
 function chatWindowScript(body: string): string {
   return `
-set -e
+${ORGO_X11_HELPERS}
 command -v xdotool >/dev/null || exit 1
-W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
-[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
-[ -n "$W" ] || exit 1
-xdotool windowfocus "$W"
+focus_chat_window || true
 ${body}`.trim();
+}
+
+/** Copy via Orgo /key when xdotool X11 focus fails on the VM. */
+async function copyViaOrgoKeys(computerId: string): Promise<string | null> {
+  try {
+    await orgoPressKey(computerId, "End");
+    await orgoWait(computerId, 0.08);
+    await orgoPressKey(computerId, "ctrl+a");
+    await orgoWait(computerId, 0.1);
+    await orgoPressKey(computerId, "ctrl+c");
+    await orgoWait(computerId, 0.08);
+    const out = (await orgoReadClipboard(computerId)).trim();
+    return out.length >= 1 ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Copy entire ChatGPT thread via Ctrl+A (more reliable than partial select). */
 export async function bashCopyWholeChat(computerId: string): Promise<string | null> {
   const script = chatWindowScript(`
 sleep 0.04
-xdotool mousemove --window "$W" 640 380 click 1
-sleep 0.05
 xdotool key End
-sleep 0.06
+sleep 0.05
 xdotool key ctrl+a
-sleep 0.08
+sleep 0.07
 xdotool key ctrl+c
 sleep 0.06
 xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null
 `);
   try {
     const out = (await orgoBash(computerId, script)).trim();
-    return out.length >= 1 ? out : null;
+    if (out.length >= 1) return out;
   } catch {
-    return null;
+    // fall through to Orgo /key copy
   }
+  return copyViaOrgoKeys(computerId);
 }
 
 /** Copy thread and extract the latest assistant reply. */

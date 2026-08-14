@@ -100,6 +100,29 @@ export function localSleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, Math.max(0, ms)));
 }
 
+/** Shared X11 helpers — avoid windowfocus (BadMatch on some Orgo VMs). */
+const ORGO_X11_HELPERS = `
+export DISPLAY="\${DISPLAY:-:0}"
+focus_chat_window() {
+  local W=""
+  for cls in google-chrome Google-chrome chromium Chromium chrome; do
+    W=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null | tail -1)
+    [ -n "$W" ] && break
+  done
+  if [ -z "$W" ]; then
+    W=$(xdotool search --name "ChatGPT" 2>/dev/null | tail -1)
+  fi
+  if [ -z "$W" ]; then
+    W=$(xdotool getactivewindow 2>/dev/null || true)
+  fi
+  [ -n "$W" ] || return 1
+  xdotool windowactivate --sync "$W" 2>/dev/null || true
+  sleep 0.06
+  xdotool mousemove --window "$W" 640 520 click 1 2>/dev/null || \\
+    xdotool mousemove 640 520 click 1 2>/dev/null || true
+}
+`.trim();
+
 /** Focus ChatGPT, optionally open new chat, paste text, send — one VM round-trip. */
 export async function orgoSendPeerMessage(
   computerId: string,
@@ -112,50 +135,67 @@ export async function orgoSendPeerMessage(
       ? "xdotool key ctrl+shift+o\nsleep 0.2\n"
       : "";
   const script = `
-set -e
+${ORGO_X11_HELPERS}
 command -v xdotool >/dev/null || exit 1
-W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
-[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
-[ -n "$W" ] || exit 1
-xdotool windowfocus "$W"
-sleep 0.05
-xdotool mousemove --window "$W" 640 520 click 1
-sleep 0.03
+focus_chat_window || true
+sleep 0.04
 ${newChat}echo '${b64}' | base64 -d | xclip -selection clipboard 2>/dev/null || echo '${b64}' | base64 -d | xsel --clipboard --input
 sleep 0.03
 xdotool key ctrl+v
 sleep 0.04
 xdotool key Return
 `.trim();
-  await orgoBash(computerId, script);
+  try {
+    await orgoBash(computerId, script);
+  } catch {
+    await orgoSendPeerMessageViaKeys(computerId, text, mode);
+  }
+}
+
+/** Fallback when xdotool focus fails — uses Orgo /key API (no windowfocus). */
+async function orgoSendPeerMessageViaKeys(
+  computerId: string,
+  text: string,
+  mode: "ready" | "parallel_new" | "continue"
+): Promise<void> {
+  if (mode === "parallel_new") {
+    await orgoPressKey(computerId, "ctrl+shift+o");
+    await orgoWait(computerId, 0.25);
+  }
+  await orgoSetClipboard(computerId, text);
+  await orgoPressKey(computerId, "ctrl+v");
+  await orgoWait(computerId, 0.08);
+  await orgoPressKey(computerId, "Return");
 }
 
 /** Prep empty ChatGPT chat for the next relay (non-blocking friendly). */
 export async function orgoPrepFreshChatGptChat(computerId: string): Promise<void> {
   const script = `
+${ORGO_X11_HELPERS}
 command -v xdotool >/dev/null || exit 0
-W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
-[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
-[ -n "$W" ] && xdotool windowfocus "$W"
+focus_chat_window || true
 xdotool key ctrl+shift+o
 sleep 0.2
 `.trim();
-  await orgoBash(computerId, script);
+  try {
+    await orgoBash(computerId, script);
+  } catch {
+    await orgoPressKey(computerId, "ctrl+shift+o");
+  }
 }
 
 /** Focus ChatGPT browser window and click the message input. */
 export async function orgoFocusChatGptInput(computerId: string): Promise<void> {
   const script = `
+${ORGO_X11_HELPERS}
 command -v xdotool >/dev/null || exit 0
-W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
-[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
-[ -z "$W" ] && W=$(xdotool getactivewindow 2>/dev/null || true)
-[ -n "$W" ] || exit 0
-xdotool windowfocus "$W"
-sleep 0.08
-xdotool mousemove --window "$W" 640 520 click 1
+focus_chat_window || true
 `.trim();
-  await orgoBash(computerId, script);
+  try {
+    await orgoBash(computerId, script);
+  } catch {
+    // Orgo /key path does not need explicit focus
+  }
 }
 
 /** Open a fresh empty ChatGPT chat for the next relay. */
