@@ -1,20 +1,19 @@
 import {
   localSleep,
-  orgoBashDisplay,
+  orgoClick,
   orgoPressKey,
   orgoReadClipboard,
-  ORGO_DISPLAY_SETUP,
 } from "./orgo-actions";
 import { relayProgressMessage, type RelayStepReporter } from "./orgo-relay-progress";
 
 function pollIntervalMs(): number {
-  const ms = Number(process.env.ORGO_POLL_INTERVAL_MS || 1200);
-  return Math.max(600, Math.min(ms, 5000));
+  const ms = Number(process.env.ORGO_POLL_INTERVAL_MS || 1500);
+  return Math.max(800, Math.min(ms, 5000));
 }
 
 function minWaitBeforeCopyMs(): number {
-  const sec = Number(process.env.ORGO_MIN_WAIT_SEC || 1.2);
-  return Math.max(800, Math.round(sec * 1000));
+  const sec = Number(process.env.ORGO_MIN_WAIT_SEC || 3);
+  return Math.max(1500, Math.round(sec * 1000));
 }
 
 function maxWaitSec(): number {
@@ -24,12 +23,6 @@ function maxWaitSec(): number {
   );
 }
 
-function stablePollsRequired(): number {
-  const n = Number(process.env.ORGO_REPLY_STABLE_POLLS || 1);
-  return Math.max(1, Math.min(Math.floor(n), 3));
-}
-
-/** Copied text looks like a ChatGPT reply, not our outbound paste. */
 export function looksLikeChatGptReply(text: string, sentBody: string): boolean {
   const t = text.trim();
   if (t.length < 1) return false;
@@ -44,10 +37,6 @@ export function looksLikeChatGptReply(text: string, sentBody: string): boolean {
 
 const PEER_HEADER_RE = /^@\S+ · [a-f0-9]{8}\s*$/gm;
 
-/**
- * Parse the last assistant reply from a full ChatGPT thread copy (Ctrl+A).
- * Peer messages use "@user · threadId" header; reply follows the message body.
- */
 export function extractLastAssistantReply(
   fullChat: string,
   sentBody: string
@@ -85,9 +74,9 @@ export function extractLastAssistantReply(
   return looksLikeChatGptReply(after, sentBody) ? after : null;
 }
 
-/** Copy via Orgo /key — no xdotool windowfocus needed. */
-async function copyViaOrgoKeys(computerId: string): Promise<string | null> {
+async function copyWholeChat(computerId: string): Promise<string | null> {
   try {
+    await orgoClick(computerId, 640, 380);
     await orgoPressKey(computerId, "End");
     await localSleep(80);
     await orgoPressKey(computerId, "ctrl+a");
@@ -101,38 +90,11 @@ async function copyViaOrgoKeys(computerId: string): Promise<string | null> {
   }
 }
 
-/** Copy entire ChatGPT thread via Ctrl+A. */
-export async function bashCopyWholeChat(computerId: string): Promise<string | null> {
-  const viaKeys = await copyViaOrgoKeys(computerId);
-  if (viaKeys) return viaKeys;
-
-  const script = `
-${ORGO_DISPLAY_SETUP}
-command -v xdotool >/dev/null || exit 1
-xdotool mousemove 640 380 click 1
-sleep 0.04
-xdotool key End
-sleep 0.05
-xdotool key ctrl+a
-sleep 0.07
-xdotool key ctrl+c
-sleep 0.06
-xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null
-`.trim();
-  try {
-    const out = (await orgoBashDisplay(computerId, script)).trim();
-    return out.length >= 1 ? out : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Copy thread and extract the latest assistant reply. */
 export async function bashCopyChatGptReply(
   computerId: string,
   sentBody: string
 ): Promise<string | null> {
-  const whole = await bashCopyWholeChat(computerId);
+  const whole = await copyWholeChat(computerId);
   if (!whole) return null;
   return extractLastAssistantReply(whole, sentBody);
 }
@@ -143,10 +105,6 @@ export type PollReplyResult = {
   stablePolls: number;
 };
 
-/**
- * Poll until ChatGPT reply is stable.
- * Uses local sleeps between attempts (not Orgo /wait) to avoid extra HTTP latency.
- */
 export async function pollUntilChatGptReply(
   computerId: string,
   sentBody: string,
@@ -158,79 +116,29 @@ export async function pollUntilChatGptReply(
   const maxMs = maxWaitSec() * 1000;
   const pollMs = pollIntervalMs();
   const minMs = minWaitBeforeCopyMs();
-  const stableNeeded = stablePollsRequired();
 
-  let lastCopy = "";
-  let stableCount = 0;
-
-  const progress = async (
-    phase: "thinking" | "writing" | "verify",
-    extra?: Partial<Parameters<typeof relayProgressMessage>[0]>
-  ) => {
+  const progress = async (phase: "thinking" | "writing") => {
     const elapsedSec = Math.round((Date.now() - started) / 1000);
     const base = 52 + Math.min(35, Math.round((elapsedSec / maxWaitSec()) * 35));
-    void report?.(
-      relayProgressMessage({ peer, phase, elapsedSec, ...extra }),
-      base
-    );
+    void report?.(relayProgressMessage({ peer, phase, elapsedSec }), base);
   };
 
   while (Date.now() - started < maxMs) {
     const elapsed = Date.now() - started;
-
     if (elapsed < minMs) {
       await progress("thinking");
-      await localSleep(Math.min(350, minMs - elapsed));
+      await localSleep(Math.min(400, minMs - elapsed));
       continue;
     }
 
     const copy = (await bashCopyChatGptReply(computerId, sentBody))?.trim() ?? "";
     if (copy && looksLikeChatGptReply(copy, sentBody)) {
-      if (copy === lastCopy) {
-        stableCount += 1;
-        await progress("verify", {
-          stable: stableCount,
-          stableNeeded,
-          charCount: copy.length,
-        });
-        if (stableCount >= stableNeeded) {
-          return {
-            replyText: copy,
-            waitedMs: elapsed,
-            stablePolls: stableCount,
-          };
-        }
-      } else {
-        lastCopy = copy;
-        stableCount = 1;
-        await progress("writing", {
-          charCount: copy.length,
-          preview: copy,
-        });
-        if (stableNeeded === 1) {
-          return {
-            replyText: copy,
-            waitedMs: elapsed,
-            stablePolls: 1,
-          };
-        }
-      }
-    } else {
-      lastCopy = "";
-      stableCount = 0;
-      await progress("thinking");
+      await progress("writing");
+      return { replyText: copy, waitedMs: elapsed, stablePolls: 1 };
     }
 
+    await progress("thinking");
     await localSleep(pollMs);
-  }
-
-  const final = (await bashCopyChatGptReply(computerId, sentBody))?.trim() ?? "";
-  if (final && looksLikeChatGptReply(final, sentBody)) {
-    return {
-      replyText: final,
-      waitedMs: Date.now() - started,
-      stablePolls: 0,
-    };
   }
 
   throw new Error(`ChatGPT reply not ready within ${maxWaitSec()}s`);

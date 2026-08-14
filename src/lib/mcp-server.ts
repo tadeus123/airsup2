@@ -20,10 +20,7 @@ import {
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
 import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
-import {
-  orgoComputerActiveRelayCount,
-  runOrgoRelayCoordinated,
-} from "./orgo-relay-coordinator";
+import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
 import { resolveContinueThread } from "./relay-thread";
@@ -86,9 +83,6 @@ async function relayPeerViaOrgo(input: {
         conversationId: input.outbound.conversationId,
         peerUsername: peer,
         continueThread: input.continueThread,
-        parallelWithOthers:
-          !input.continueThread &&
-          orgoComputerActiveRelayCount(input.computerId) > 1,
         onProgress: input.report,
       }),
   });
@@ -167,7 +161,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.9.5" },
+    { name: "airsup", version: "2.10.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
