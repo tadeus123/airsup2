@@ -1,10 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  getUserByUsername,
   listUsers,
   normalizeUsername,
   replyAndAckMessage,
+  resolvePeerUsername,
   sendMessage,
   setOrgoComputerForUsername,
   type User,
@@ -44,6 +44,35 @@ function errorText(message: string) {
 
 function cleanTarget(raw: string): string {
   return normalizeUsername(raw.replace(/^@+/, "").split(/\s+/)[0] || "");
+}
+
+type ResolveTargetResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      user: User;
+      username: string;
+      fuzzy: boolean;
+      resolvedFrom: string;
+    };
+
+async function resolveTarget(raw: string | undefined): Promise<ResolveTargetResult> {
+  const input = raw?.trim();
+  if (!input) return { ok: false, error: "Username is required" };
+  const resolved = await resolvePeerUsername(input);
+  if (!resolved.ok) {
+    const hint = resolved.candidates?.length
+      ? ` Try: ${resolved.candidates.join(", ")}`
+      : "";
+    return { ok: false, error: `${resolved.error}.${hint}` };
+  }
+  return {
+    ok: true,
+    user: resolved.user,
+    username: resolved.user.username,
+    fuzzy: resolved.fuzzy,
+    resolvedFrom: resolved.resolvedFrom,
+  };
 }
 
 async function wakePeerOnOrgo(input: {
@@ -183,28 +212,32 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Lookup user",
       description:
-        "Check whether a username exists and has an Orgo computer linked before messaging them.",
+        "Check whether a username exists and has an Orgo computer linked. Accepts nicknames (tade → tade1, kosti2 → kosti).",
       inputSchema: {
-        username: z.string().describe("Username to look up, e.g. kosti42"),
+        username: z.string().describe("Username or nickname, e.g. tade, tade1, kosti2"),
       },
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async ({ username }) => {
-      const u = cleanTarget(username);
-      const user = await getUserByUsername(u);
-      if (!user || !user.orgoComputerId) {
+      const match = await resolveTarget(username);
+      if (!match.ok) {
+        return jsonText({ found: false, query: username, error: match.error });
+      }
+      const { user, fuzzy, resolvedFrom } = match;
+      if (!user.orgoComputerId) {
         return jsonText({
           found: false,
-          username: u,
-          error: user
-            ? `User "${u}" has not linked an Orgo computer yet`
-            : `No user registered for "${u}"`,
+          query: username,
+          username: user.username,
+          error: `User "${user.username}" has not linked an Orgo computer yet`,
         });
       }
       return jsonText({
         found: true,
+        query: username,
         username: user.username,
+        resolved_from: fuzzy ? resolvedFrom : undefined,
         displayName: user.displayName,
         bio: user.bio,
         talkPhrase: `talk to ${user.username}`,
@@ -226,7 +259,12 @@ export function createAirsupMcpServer(me: User): McpServer {
       _meta: noauthMeta,
     },
     async ({ from, max_seconds }, extra: McpToolExtra) => {
-      const sender = from ? cleanTarget(from) : undefined;
+      let sender: string | undefined;
+      if (from) {
+        const match = await resolveTarget(from);
+        if (!match.ok) return errorText(match.error);
+        sender = match.username;
+      }
       const maxSec = max_seconds ?? 15;
       const report = bindProgressReporter(extra, 100);
       const label = sender ? `@${sender}` : "inbox";
@@ -306,7 +344,9 @@ export function createAirsupMcpServer(me: User): McpServer {
       _meta: noauthMeta,
     },
     async ({ to, message, conversation_id, reply_to_id }) => {
-      const target = cleanTarget(to);
+      const match = await resolveTarget(to);
+      if (!match.ok) return errorText(match.error);
+      const target = match.username;
       const body = message.trim();
       if (!target) return errorText("to is required");
       if (!body) return errorText("message is required");
@@ -360,7 +400,7 @@ export function createAirsupMcpServer(me: User): McpServer {
       description:
         "Initiate contact ONLY when your user asks you to message someone. Do NOT use to reply to inbound messages — use reply_to_user instead.",
       inputSchema: {
-        to: z.string().describe("Target username"),
+        to: z.string().describe("Target username or nickname (tade → tade1, kosti2 → kosti)"),
         message: z
           .string()
           .describe("Plain message — delivered to their Supi via check_inbox"),
@@ -380,9 +420,7 @@ export function createAirsupMcpServer(me: User): McpServer {
       const started = Date.now();
       const requestId = newRequestId();
       const report = bindProgressReporter(extra, 100);
-      const target = cleanTarget(to);
       const text = message.trim();
-      if (!target) return errorText("to is required");
       if (!text) return errorText("message is required");
 
       await report("Starting airsup message…", 1);
@@ -393,12 +431,12 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
-      await report(`Looking up ${target}…`, 5);
-      const peer = await getUserByUsername(target);
-      if (!peer) {
-        return errorText(
-          `No user registered for "${target}". They need to complete airsup onboarding first.`
-        );
+      await report(`Looking up ${to}…`, 5);
+      const match = await resolveTarget(to);
+      if (!match.ok) return errorText(match.error);
+      const peer = match.user;
+      if (match.fuzzy) {
+        await report(`Resolved "${match.resolvedFrom}" → ${peer.username}`, 8);
       }
 
       if (!peer.orgoComputerId) {
@@ -482,7 +520,7 @@ export function createAirsupMcpServer(me: User): McpServer {
       description:
         "Wait for a peer's Supi to reply via reply_to_user after you called talk_to_user.",
       inputSchema: {
-        from: z.string().describe("Peer username you are waiting on"),
+        from: z.string().describe("Peer username or nickname (tade → tade1)"),
         conversation_id: z.string(),
         after_message_id: z
           .number()
@@ -494,7 +532,9 @@ export function createAirsupMcpServer(me: User): McpServer {
       _meta: noauthMeta,
     },
     async (args, extra: McpToolExtra) => {
-      const from = cleanTarget(args.from);
+      const match = await resolveTarget(args.from);
+      if (!match.ok) return errorText(match.error);
+      const from = match.username;
       const report = bindProgressReporter(extra, 100);
       await upsertConversationWait({
         username: me.username,

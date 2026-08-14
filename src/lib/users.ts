@@ -373,6 +373,86 @@ export async function listUsers(input?: {
     }));
 }
 
+/** Parse a human nickname into a lookup hint ("tade's supi" → "tade", "kosti2" → "kosti2"). */
+export function parsePeerHint(raw: string): string {
+  let s = raw.trim().toLowerCase().replace(/^@+/, "");
+  s = s.replace(/['']s\b/g, "");
+  s = s.replace(/\bsupi\b/g, "").replace(/\bassistant\b/g, "").trim();
+  const first = (s.split(/\s+/)[0] || "").trim();
+  return normalizeUsername(first);
+}
+
+function peerMatchStems(hint: string): string[] {
+  const stems = new Set<string>([hint]);
+  if (hint.length >= 4 && hint.endsWith("s")) stems.add(hint.slice(0, -1));
+  const base = hint.replace(/\d+$/, "");
+  if (base && base !== hint) stems.add(base);
+  return [...stems];
+}
+
+function scorePeerMatch(
+  hint: string,
+  user: { username: string; displayName: string }
+): number {
+  const un = user.username.toLowerCase();
+  const dn = user.displayName.toLowerCase().trim();
+  let best = 0;
+  for (const stem of peerMatchStems(hint)) {
+    if (!stem) continue;
+    if (un === stem) best = Math.max(best, 100);
+    else if (dn === stem) best = Math.max(best, 90);
+    else if (un.startsWith(stem)) best = Math.max(best, 80 - (un.length - stem.length));
+    else if (stem.startsWith(un)) best = Math.max(best, 75);
+    else if (dn.startsWith(stem)) best = Math.max(best, 65);
+    else if (un.includes(stem)) best = Math.max(best, 50);
+  }
+  return best;
+}
+
+export type ResolvePeerResult =
+  | { ok: true; user: User; hint: string; resolvedFrom: string; fuzzy: boolean }
+  | { ok: false; error: string; candidates?: string[] };
+
+/** Resolve nicknames to canonical airsup usernames (tade → tade1, kosti2 → kosti). */
+export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResult> {
+  const hint = parsePeerHint(raw);
+  if (!hint) return { ok: false, error: "Empty username" };
+
+  const exact = await getUserByUsername(hint);
+  if (exact) {
+    return { ok: true, user: exact, hint, resolvedFrom: raw.trim(), fuzzy: false };
+  }
+
+  const listed = await listUsers({ limit: 100 });
+  const scored = listed
+    .map((u) => ({ u, score: scorePeerMatch(hint, u) }))
+    .filter((x) => x.score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.u.username.length - b.u.username.length ||
+        a.u.username.localeCompare(b.u.username)
+    );
+
+  if (!scored.length) {
+    return { ok: false, error: `No user matching "${raw.trim()}"` };
+  }
+
+  const topScore = scored[0].score;
+  const ties = scored.filter((x) => x.score === topScore);
+  if (ties.length > 1) {
+    return {
+      ok: false,
+      error: `"${raw.trim()}" matches multiple users — be more specific`,
+      candidates: ties.map((t) => t.u.username),
+    };
+  }
+
+  const user = await getUserByUsername(scored[0].u.username);
+  if (!user) return { ok: false, error: "User not found" };
+  return { ok: true, user, hint, resolvedFrom: raw.trim(), fuzzy: true };
+}
+
 export async function authUserFromRequest(request: Request): Promise<User> {
   const token = extractBearer(request);
   if (!token) throw new Error("Unauthorized");

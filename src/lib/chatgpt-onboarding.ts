@@ -56,7 +56,7 @@ When ${username} asks you to reach someone:
 2. await_reply(from, conversation_id, after_message_id).
 3. Follow-up: same conversation_id + reply_to_id from the peer's reply.
 
-Other: list_users / lookup_user for reachable peers (handle is username, e.g. tade1 not "tade").
+Other: list_users / lookup_user for reachable peers. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
 
 Keep peer messages short and human. Personal details between airsup users are fine.`;
 }

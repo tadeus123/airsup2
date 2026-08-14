@@ -9,9 +9,11 @@ import {
   authUserFromRequest,
   getUserByUsername,
   markDelivered,
+  parsePeerHint,
   readInboxUnacked,
   registerUser,
   replyAndAckMessage,
+  resolvePeerUsername,
   sendMessage,
 } from "../src/lib/users";
 import { filterMessages, runInboxWatch } from "../src/lib/inbox-watch";
@@ -27,7 +29,31 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
 }
 
+async function testNicknameResolve() {
+  __resetUserMemoryForTests();
+  await registerUser({
+    username: "tade1",
+    displayName: "Tade",
+    orgoComputerId: "099c33f0-8459-47bb-8e4d-3b94329e2c85",
+  });
+  await registerUser({
+    username: "kosti",
+    displayName: "Kosti",
+    orgoComputerId: "dca96bed-5904-4e6b-ada3-8be624df291a",
+  });
+  assert(parsePeerHint("tade's supi") === "tade", "parse tade's supi");
+  assert(parsePeerHint("kosti2") === "kosti2", "parse kosti2");
+  const tadeMatch = await resolvePeerUsername("tade");
+  assert(tadeMatch.ok && tadeMatch.user.username === "tade1", "tade → tade1");
+  const kostiMatch = await resolvePeerUsername("kosti2");
+  assert(kostiMatch.ok && kostiMatch.user.username === "kosti", "kosti2 → kosti");
+  const supiMatch = await resolvePeerUsername("tades supi");
+  assert(supiMatch.ok && supiMatch.user.username === "tade1", "tades supi → tade1");
+  __resetUserMemoryForTests();
+}
+
 async function main() {
+  await testNicknameResolve();
   const usingSupabase = Boolean(
     process.env.SUPABASE_URL &&
       process.env.SUPABASE_ANON_KEY &&
