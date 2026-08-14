@@ -209,7 +209,7 @@ export async function pollUntilChatGptReply(
     await orgoWait(computerId, pollSec);
   }
 
-  const final = (await bashCopyChatGptReply(computerId))?.trim() ?? "";
+  const final = (await bashCopyChatGptReply(computerId, sentBody))?.trim() ?? "";
   if (final && looksLikeChatGptReply(final, sentBody)) {
     return {
       replyText: final,
