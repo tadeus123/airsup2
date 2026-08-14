@@ -78,6 +78,23 @@ export async function orgoReadClipboard(computerId: string): Promise<string> {
   );
 }
 
+/** Screenshot as base64 PNG (for stability polling). */
+export async function orgoScreenshotB64(computerId: string): Promise<string> {
+  const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/screenshot`, {
+    headers: authHeaders(),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`Orgo screenshot failed (${res.status}): ${raw.slice(0, 120)}`);
+  }
+  try {
+    const json = JSON.parse(raw) as { image?: string; screenshot?: string; data?: string };
+    return (json.image ?? json.screenshot ?? json.data ?? raw).trim();
+  } catch {
+    return raw.trim();
+  }
+}
+
 export type OrgoRelayMode = "auto" | "direct" | "agent";
 
 export function orgoRelayMode(): OrgoRelayMode {

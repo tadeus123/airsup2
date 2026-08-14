@@ -1,11 +1,11 @@
 import { buildPeerChatGptMessage } from "./airsup-relay-prompt";
 import type { OrgoRelayInput, OrgoRelayResult } from "./orgo";
 import {
-  orgoBash,
   orgoPressKey,
-  orgoWait,
   orgoSetClipboard,
+  orgoWait,
 } from "./orgo-actions";
+import { looksLikeChatGptReply, pollUntilChatGptReply } from "./orgo-reply-poller";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -15,24 +15,24 @@ function orgoApiKey(): string {
   return (process.env.ORGO_API_KEY || "").trim();
 }
 
-/** Minimal agent prompt — copy only, after direct hotkeys already sent the message. */
+/** Minimal agent — copy only, after hotkeys already sent the message. */
 function buildCopyOnlyAgentPrompt(): string {
-  return `The Airsup server already pasted a message into ChatGPT and pressed Enter.
+  return `ChatGPT already received the message and should have replied.
 
 Do ONLY this:
-1. Focus the ChatGPT browser tab if needed.
-2. Wait until ChatGPT has fully finished responding (no stop button, no loading).
-3. Copy the LATEST assistant reply text only.
-4. Return ONLY that text — no prefix, markdown, or explanation.
+1. Focus ChatGPT in the browser.
+2. If still generating, wait until fully done (no stop button).
+3. Copy the LATEST assistant reply only.
+4. Return ONLY that text — no wrapper.
 
-Do NOT type, send, or open new chats. Copy only.`;
+Do NOT send messages or open new chats.`;
 }
 
 async function agentCopyReply(computerId: string): Promise<string> {
   const model = (process.env.ORGO_MODEL || "claude-sonnet-5").trim();
-  const timeoutMs = Math.max(
-    30_000,
-    Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000
+  const timeoutMs = Math.min(
+    60_000,
+    Math.max(20_000, Number(process.env.ORGO_COPY_TIMEOUT_MS || 45_000) || 45_000)
   );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -66,50 +66,9 @@ async function agentCopyReply(computerId: string): Promise<string> {
   }
 }
 
-/** Try to copy last ChatGPT reply via xdotool + clipboard (no LLM). */
-async function bashCopyLastReply(computerId: string): Promise<string | null> {
-  const script = `
-set -e
-command -v xdotool >/dev/null || exit 1
-W=$(xdotool getactivewindow 2>/dev/null || true)
-if [ -z "$W" ]; then exit 1; fi
-xdotool mousemove --window "$W" 640 520 click 1
-sleep 0.2
-xdotool key ctrl+a
-sleep 0.1
-xdotool key ctrl+c
-sleep 0.1
-xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null
-`.trim();
-  try {
-    const out = (await orgoBash(computerId, script)).trim();
-    if (out.length < 2) return null;
-    return out;
-  } catch {
-    return null;
-  }
-}
-
-async function waitForChatGptReply(computerId: string): Promise<void> {
-  const maxSec = Math.min(
-    120,
-    Math.max(15, Math.round((Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000) / 1000))
-  );
-  const chunk = 3;
-  let elapsed = 0;
-  while (elapsed < 12) {
-    await orgoWait(computerId, chunk);
-    elapsed += chunk;
-  }
-  while (elapsed < maxSec) {
-    await orgoWait(computerId, chunk);
-    elapsed += chunk;
-  }
-}
-
 /**
- * Fast relay: deterministic hotkeys + clipboard (no agent for input).
- * Copy reply via bash first, tiny agent fallback if needed.
+ * Fast relay: hotkeys for input, poll-until-ready for output.
+ * No blind 120s wait — returns as soon as ChatGPT reply stabilizes.
  */
 export async function relayViaChatGptDirect(
   computerId: string,
@@ -127,25 +86,25 @@ export async function relayViaChatGptDirect(
 
   if (!continueThread) {
     await orgoPressKey(computerId, "ctrl+shift+o");
-    await orgoWait(computerId, 1.5);
+    await orgoWait(computerId, 1);
   } else {
-    await orgoWait(computerId, 0.3);
+    await orgoWait(computerId, 0.15);
   }
 
   await orgoSetClipboard(computerId, peerText);
   await orgoPressKey(computerId, "ctrl+v");
-  await orgoWait(computerId, 0.2);
+  await orgoWait(computerId, 0.1);
   await orgoPressKey(computerId, "Return");
 
-  await waitForChatGptReply(computerId);
-
-  let replyText = (await bashCopyLastReply(computerId))?.trim() || "";
-  if (!replyText || replyText.includes("[AIRSUP message from")) {
+  let replyText: string;
+  try {
+    const polled = await pollUntilChatGptReply(computerId, input.message);
+    replyText = polled.replyText;
+  } catch {
     replyText = await agentCopyReply(computerId);
-  }
-
-  if (!replyText) {
-    throw new Error("Direct relay could not read ChatGPT reply");
+    if (!looksLikeChatGptReply(replyText, input.message)) {
+      throw new Error("Could not read a valid ChatGPT reply");
+    }
   }
 
   return {
