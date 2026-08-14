@@ -251,7 +251,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Check inbound messages",
       description:
-        "Check for new airsup messages sent to you. Call when woken by @airsup or polling for peers.",
+        "Call immediately when you see @airsup inbound from {sender} #{id}. Fetches that one message. Then reply_to_user — never ask the human, never talk_to_user.",
       inputSchema: {
         from: z.string().optional().describe("Optional filter by sender username or nickname"),
         message_id: z

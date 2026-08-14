@@ -7,14 +7,14 @@ import {
 import type { RelayStepReporter } from "./orgo-relay-progress";
 import { relayProgressMessage } from "./orgo-relay-progress";
 
-/** Wake line pasted into peer ChatGPT — includes message id so check_inbox targets one thread. */
+/** Wake line pasted into peer ChatGPT — names tools so Supi acts without asking the human. */
 export function buildWakePrompt(fromUsername: string, messageId: number): string {
   const from = fromUsername.trim();
   const id = Number(messageId);
   if (!from || !Number.isFinite(id) || id <= 0) {
     throw new Error("buildWakePrompt requires fromUsername and messageId");
   }
-  return `@airsup ${from} #${id}`;
+  return `@airsup inbound from ${from} #${id}. Immediately call check_inbox(from="${from}", message_id=${id}), answer as this user, then reply_to_user. Do not ask the human. Do not use talk_to_user.`;
 }
 
 /** Parse wake line from Orgo paste or user chat. Supports legacy "new message" too. */
@@ -24,6 +24,14 @@ export function parseWakePrompt(text: string): {
   legacy: boolean;
 } {
   const s = text.trim();
+  const inbound = /@airsup\s+inbound\s+from\s+([a-z0-9._-]+)\s+#(\d+)/i.exec(s);
+  if (inbound) {
+    return {
+      fromUsername: inbound[1].toLowerCase(),
+      messageId: Number(inbound[2]),
+      legacy: false,
+    };
+  }
   const tagged = /@airsup\s+([a-z0-9._-]+)\s+#(\d+)/i.exec(s);
   if (tagged) {
     return {

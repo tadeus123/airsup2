@@ -54,8 +54,10 @@ async function testNicknameResolve() {
 }
 
 function testWakePrompt() {
-  assert(buildWakePrompt("tade1", 140) === "@airsup tade1 #140", "wake prompt");
-  const parsed = parseWakePrompt("@airsup tade1 #140");
+  const wake = buildWakePrompt("tade1", 140);
+  assert(wake.includes("check_inbox(from=\"tade1\", message_id=140)"), "wake prompt tools");
+  assert(wake.includes("#140"), "wake prompt id");
+  const parsed = parseWakePrompt(wake);
   assert(parsed.fromUsername === "tade1" && parsed.messageId === 140, "parse tagged wake");
   const legacy = parseWakePrompt("@airsup kosti new message");
   assert(legacy.fromUsername === "kosti" && legacy.legacy, "parse legacy wake");
