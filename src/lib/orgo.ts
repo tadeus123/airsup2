@@ -4,6 +4,8 @@ import {
 } from "./airsup-relay-prompt";
 import { orgoRelayMode } from "./orgo-actions";
 import { relayViaChatGptDirect } from "./orgo-direct-relay";
+import type { RelayStepReporter } from "./orgo-relay-progress";
+import { relayProgressMessage } from "./orgo-relay-progress";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -14,10 +16,12 @@ export type OrgoRelayInput = {
   fromDisplayName?: string;
   message: string;
   conversationId: string;
+  peerUsername?: string;
   /** When true, Orgo continues the open ChatGPT tab instead of Ctrl+Shift+O new chat. */
   continueThread?: boolean;
   /** Hint that other relays may run in parallel on this Orgo VM (separate new chats). */
   parallelWithOthers?: boolean;
+  onProgress?: RelayStepReporter;
 };
 
 export type OrgoRelayResult = {
@@ -67,6 +71,19 @@ async function relayViaChatGptAgent(
 ): Promise<OrgoRelayResult> {
   const started = Date.now();
   const continueThread = Boolean(input.continueThread);
+  const peer = input.peerUsername || input.fromUsername;
+  const report = input.onProgress;
+
+  const tickTimer = report
+    ? setInterval(() => {
+        const elapsedSec = Math.round((Date.now() - started) / 1000);
+        void report(
+          relayProgressMessage({ peer, phase: "agent_loop", elapsedSec }),
+          50 + Math.min(35, elapsedSec)
+        );
+      }, 3000)
+    : null;
+
   const model = (process.env.ORGO_MODEL || "claude-sonnet-5").trim();
   const timeoutMs = Math.max(
     30_000,
@@ -124,6 +141,7 @@ async function relayViaChatGptAgent(
     throw e;
   } finally {
     clearTimeout(timer);
+    if (tickTimer) clearInterval(tickTimer);
   }
 }
 

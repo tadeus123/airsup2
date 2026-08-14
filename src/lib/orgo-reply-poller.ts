@@ -4,6 +4,7 @@ import {
   orgoScreenshotB64,
   orgoWait,
 } from "./orgo-actions";
+import { relayProgressMessage, type RelayStepReporter } from "./orgo-relay-progress";
 
 function pollIntervalSec(): number {
   const ms = Number(process.env.ORGO_POLL_INTERVAL_MS || 2000);
@@ -84,8 +85,11 @@ export type PollReplyResult = {
  */
 export async function pollUntilChatGptReply(
   computerId: string,
-  sentBody: string
+  sentBody: string,
+  opts?: { peer?: string; onProgress?: RelayStepReporter }
 ): Promise<PollReplyResult> {
+  const peer = opts?.peer ?? "peer";
+  const report = opts?.onProgress;
   const started = Date.now();
   const maxMs = maxWaitSec() * 1000;
   const pollSec = pollIntervalSec();
@@ -95,28 +99,40 @@ export async function pollUntilChatGptReply(
   let lastCopy = "";
   let stableCount = 0;
   let lastScreen = "";
-  let screenStable = 0;
+
+  const progress = async (phase: "thinking" | "writing" | "verify", extra?: Partial<Parameters<typeof relayProgressMessage>[0]>) => {
+    const elapsedSec = Math.round((Date.now() - started) / 1000);
+    const base = 52 + Math.min(35, Math.round((elapsedSec / maxWaitSec()) * 35));
+    await report?.(
+      relayProgressMessage({ peer, phase, elapsedSec, ...extra }),
+      base
+    );
+  };
 
   while (Date.now() - started < maxMs) {
     const elapsed = Date.now() - started;
+    const elapsedSec = Math.round(elapsed / 1000);
 
     try {
       const shot = await orgoScreenshotB64(computerId);
       const h = hashScreenshot(shot);
-      if (h === lastScreen) screenStable += 1;
-      else {
-        lastScreen = h;
-        screenStable = 0;
-      }
+      if (h !== lastScreen) lastScreen = h;
     } catch {
-      // Screenshot optional — copy polling still works.
+      // optional
     }
 
-    if (elapsed >= minMs) {
+    if (elapsed < minMs) {
+      await progress("thinking");
+    } else {
       const copy = (await bashCopyChatGptReply(computerId))?.trim() ?? "";
       if (copy && looksLikeChatGptReply(copy, sentBody)) {
         if (copy === lastCopy) {
           stableCount += 1;
+          await progress("verify", {
+            stable: stableCount,
+            stableNeeded,
+            charCount: copy.length,
+          });
           if (stableCount >= stableNeeded) {
             return {
               replyText: copy,
@@ -127,10 +143,15 @@ export async function pollUntilChatGptReply(
         } else {
           lastCopy = copy;
           stableCount = 1;
+          await progress("writing", {
+            charCount: copy.length,
+            preview: copy,
+          });
         }
       } else {
         lastCopy = "";
         stableCount = 0;
+        await progress("thinking");
       }
     }
 

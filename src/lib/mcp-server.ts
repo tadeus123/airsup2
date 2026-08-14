@@ -63,54 +63,35 @@ async function relayPeerViaOrgo(input: {
 }): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
   const peer = input.peerUsername;
   const t0 = Date.now();
-  const mayRunParallel =
-    !input.continueThread && orgoComputerActiveRelayCount(input.computerId) > 0;
 
-  const relay = await withProgressHeartbeat(
-    () =>
-      runOrgoRelayCoordinated({
-        computerId: input.computerId,
+  const relay = await runOrgoRelayCoordinated({
+    computerId: input.computerId,
+    conversationId: input.outbound.conversationId,
+    continueThread: input.continueThread,
+    onWait: input.report
+      ? async (message) => {
+          await input.report!(
+            message.includes("slot")
+              ? message
+              : `Waiting for prior message to ${peer}…`,
+            26
+          );
+        }
+      : undefined,
+    run: () =>
+      relayViaChatGptBrowser(input.computerId, {
+        fromUsername: input.fromUsername,
+        fromDisplayName: input.fromDisplayName,
+        message: input.outbound.body,
         conversationId: input.outbound.conversationId,
+        peerUsername: peer,
         continueThread: input.continueThread,
-        onWait: input.report
-          ? async (message) => {
-              await input.report!(message, 28);
-            }
-          : undefined,
-        run: () =>
-          relayViaChatGptBrowser(input.computerId, {
-            fromUsername: input.fromUsername,
-            fromDisplayName: input.fromDisplayName,
-            message: input.outbound.body,
-            conversationId: input.outbound.conversationId,
-            continueThread: input.continueThread,
-            parallelWithOthers:
-              !input.continueThread &&
-              orgoComputerActiveRelayCount(input.computerId) > 1,
-          }),
+        parallelWithOthers:
+          !input.continueThread &&
+          orgoComputerActiveRelayCount(input.computerId) > 1,
+        onProgress: input.report,
       }),
-    input.report ?? (async () => {}),
-    {
-      startMessage: input.continueThread
-        ? `Continuing ChatGPT thread on ${peer}'s Orgo (hotkeys)… usually 15–60s`
-        : mayRunParallel
-          ? `Opening parallel chat on ${peer}'s Orgo (hotkeys)… usually 20–90s`
-          : `Sending via Orgo hotkeys on ${peer}'s computer… usually 20–90s`,
-      tickMessage: (t) =>
-        input.continueThread
-          ? `ChatGPT replying on ${peer}'s Orgo (same thread)… ${formatProgressTiming({
-              ...t,
-              typicalMinSec: 15,
-              typicalMaxSec: Math.min(t.typicalMaxSec, 90),
-            })}`
-          : `ChatGPT responding on ${peer}'s Orgo computer… ${formatProgressTiming(t)}`,
-      startProgress: 35,
-      endProgress: 92,
-      intervalMs: 5000,
-      typicalMinSec: input.continueThread ? 8 : 12,
-      typicalMaxSec: input.continueThread ? 60 : undefined,
-    }
-  );
+  });
   if (input.report) {
     await input.report(`Saving reply from ${peer}…`, 95);
   }
@@ -186,7 +167,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.7.0" },
+    { name: "airsup", version: "2.8.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -289,7 +270,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Message peer via ChatGPT",
       description:
-        "Send a message to another user and wait for their ChatGPT reply (via Orgo). First message ~30–120s; follow-ups with conversation_id ~15–60s (same ChatGPT thread).",
+        "Send a message to another user and wait for their ChatGPT reply. Shows live step-by-step progress (paste → thinking → writing → verify).",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z.string().describe("Message text"),
@@ -341,7 +322,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         replyToId: reply_to_id,
       });
 
-      await report(`Sending message to ${peer.username}…`, 12);
+      await report(`Recording message for ${peer.username}…`, 10);
       const tSend0 = Date.now();
       const msg = await sendMessage({
         fromUsername: me.username,
@@ -360,11 +341,12 @@ export function createAirsupMcpServer(me: User): McpServer {
         liveAwait: true,
       }).catch(() => {});
 
+      await report(`Connecting to ${peer.username}'s Orgo computer…`, 16);
       await report(
         continueThread
-          ? `Continuing thread with ${peer.username} on Orgo… expect 15–60s`
-          : `Routing to ${peer.username}'s Orgo computer… expect 30–120s`,
-        22
+          ? `Handoff to ${peer.username}'s ChatGPT (same thread)…`
+          : `Handoff to ${peer.username}'s ChatGPT (new chat)…`,
+        24
       );
 
       try {
@@ -378,6 +360,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           requestId,
           report,
         });
+        await report(`Saving ${peer.username}'s reply…`, 96);
         await report(`Reply received from ${peer.username}.`, 100);
         logActivitySafe({
           kind: "talk",

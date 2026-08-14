@@ -5,6 +5,7 @@ import {
   orgoSetClipboard,
   orgoWait,
 } from "./orgo-actions";
+import { relayProgressMessage } from "./orgo-relay-progress";
 import { looksLikeChatGptReply, pollUntilChatGptReply } from "./orgo-reply-poller";
 
 const ORGO_API_BASE = (
@@ -15,7 +16,6 @@ function orgoApiKey(): string {
   return (process.env.ORGO_API_KEY || "").trim();
 }
 
-/** Minimal agent — copy only, after hotkeys already sent the message. */
 function buildCopyOnlyAgentPrompt(): string {
   return `ChatGPT already received the message and should have replied.
 
@@ -66,16 +66,14 @@ async function agentCopyReply(computerId: string): Promise<string> {
   }
 }
 
-/**
- * Fast relay: hotkeys for input, poll-until-ready for output.
- * No blind 120s wait — returns as soon as ChatGPT reply stabilizes.
- */
 export async function relayViaChatGptDirect(
   computerId: string,
   input: OrgoRelayInput
 ): Promise<OrgoRelayResult> {
   const started = Date.now();
   const continueThread = Boolean(input.continueThread);
+  const peer = input.peerUsername || "peer";
+  const report = input.onProgress;
   const peerText = buildPeerChatGptMessage({
     fromUsername: input.fromUsername,
     fromDisplayName: input.fromDisplayName,
@@ -85,26 +83,57 @@ export async function relayViaChatGptDirect(
   });
 
   if (!continueThread) {
+    await report?.(
+      relayProgressMessage({ peer, phase: "new_chat" }),
+      32
+    );
     await orgoPressKey(computerId, "ctrl+shift+o");
     await orgoWait(computerId, 1);
   } else {
+    await report?.(
+      relayProgressMessage({ peer, phase: "continue_thread" }),
+      32
+    );
     await orgoWait(computerId, 0.15);
   }
 
+  await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
   await orgoSetClipboard(computerId, peerText);
   await orgoPressKey(computerId, "ctrl+v");
   await orgoWait(computerId, 0.1);
   await orgoPressKey(computerId, "Return");
 
+  await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
+
   let replyText: string;
   try {
-    const polled = await pollUntilChatGptReply(computerId, input.message);
+    const polled = await pollUntilChatGptReply(computerId, input.message, {
+      peer,
+      onProgress: report,
+    });
     replyText = polled.replyText;
+    await report?.(
+      relayProgressMessage({
+        peer,
+        phase: "done",
+        elapsedSec: Math.round((Date.now() - started) / 1000),
+      }),
+      92
+    );
   } catch {
+    const elapsedSec = Math.round((Date.now() - started) / 1000);
+    await report?.(
+      relayProgressMessage({ peer, phase: "copy_agent", elapsedSec }),
+      85
+    );
     replyText = await agentCopyReply(computerId);
     if (!looksLikeChatGptReply(replyText, input.message)) {
       throw new Error("Could not read a valid ChatGPT reply");
     }
+    await report?.(
+      relayProgressMessage({ peer, phase: "done", elapsedSec }),
+      92
+    );
   }
 
   return {
