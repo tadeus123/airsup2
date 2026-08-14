@@ -78,7 +78,7 @@ export type WatchResult = {
 const MAX_WAIT_SLICE = 28;
 const MAX_WINDOW = 3600;
 const MAX_BATCH_POLLS = 8;
-const ABSOLUTE_BATCH_MAX = 110;
+const ABSOLUTE_BATCH_MAX = 180;
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
@@ -518,7 +518,7 @@ export async function runInboxWatch(
     instructions: continueWatching
       ? continueHint
       : conversationMode
-        ? "Wait window ended without a reply. Tell the user the peer did not answer in time; offer await_reply or cancel_wait."
+        ? "Wait slice ended with no reply yet. Call await_reply again with the same ids — the peer ChatGPT is likely still thinking."
         : liveRepliesWaiting.length
           ? `Monitoring window over, but live replies are waiting.${liveHint}`
           : "Monitoring window over.",

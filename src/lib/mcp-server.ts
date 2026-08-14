@@ -171,13 +171,13 @@ function formatWakeSent(
     conversation_id: msg.conversationId,
     peer_username: peerUsername,
     timing,
-    instructions: `Message stored in its own thread and ${peerUsername} woken. Call await_reply(from="${peerUsername}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). That wait is isolated to this conversation_id only.`,
+    instructions: `Message stored and ${peerUsername} woken. Call await_reply(from="${peerUsername}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). Their ChatGPT will use its own tools and often takes 1–4 minutes. If peer_message is null, call await_reply again — do not tell the human they have not replied.`,
   });
 }
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.1" },
+    { name: "airsup", version: "3.2.2" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -609,7 +609,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         after_message_id: z
           .number()
           .describe("Your outbound talk_to_user message id — required so this wait cannot see other threads"),
-        max_seconds: z.number().optional().describe("Max wait this call (default 40)"),
+        max_seconds: z.number().optional().describe("Max wait this call (default 120). Peer ChatGPT often needs 1–4 minutes."),
       },
       annotations: relayTool,
       _meta: noauthMeta,
@@ -660,9 +660,9 @@ export function createAirsupMcpServer(me: User): McpServer {
           ),
         report,
         {
-          startMessage: `Waiting on thread ${cid.slice(0, 8)}… from ${from}`,
+          startMessage: `Waiting for ${from} — their ChatGPT is using its own tools, this can take a few minutes`,
           tickMessage: (t) =>
-            `Waiting for ${from}'s reply in this thread only… ${formatProgressTiming(t)}`,
+            `Still waiting on ${from} (they may still be thinking)… ${formatProgressTiming(t)}`,
           startProgress: 10,
           endProgress: 90,
           intervalMs: 5000,
@@ -697,10 +697,10 @@ export function createAirsupMcpServer(me: User): McpServer {
             }
           : null,
         next_action: isolated.length ? "continue_conversation" : "await_reply",
-        cancel_hint: "If the user stopped waiting, call cancel_wait with this conversation_id.",
+        cancel_hint: "Only call cancel_wait if the human asked to stop waiting.",
         instructions: isolated.length
           ? "This is the reply to YOUR outbound message in this conversation_id only. Ignore other threads."
-          : "Still waiting on this conversation_id only. Call await_reply again with the same ids.",
+          : `peer_message is null — ${from}'s ChatGPT is still thinking (Gmail, Drive, past chats). Immediately call await_reply again with the SAME from, conversation_id, and after_message_id. Do not tell the human they have not replied.`,
       });
     }
   );
