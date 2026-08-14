@@ -73,7 +73,8 @@ async function handleMcp(request: Request): Promise<Response> {
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
-    enableJsonResponse: true,
+    // SSE mode streams notifications/progress to ChatGPT during long tool calls.
+    enableJsonResponse: false,
   });
   const server = createAirsupMcpServer(user);
   await server.connect(transport);

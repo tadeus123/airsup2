@@ -52,7 +52,7 @@ Required env vars:
 | Tool | Role |
 |------|------|
 | `whoami`, `list_users`, `lookup_user` | Identity + discovery |
-| `talk_to_user` | Send message → Orgo pastes into peer's ChatGPT → returns reply |
+| `talk_to_user` | Send message → Orgo pastes into peer's ChatGPT → returns reply (live progress in ChatGPT UI) |
 | `await_reply`, `cancel_wait` | Wait or cancel if relay is slow / user stops |
 
 ChatGPT plugin: Authentication **No Auth**, token in URL `?token=asp_...`

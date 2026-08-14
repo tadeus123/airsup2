@@ -20,6 +20,11 @@ import { getOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
+import {
+  bindProgressReporter,
+  withProgressHeartbeat,
+  type McpToolExtra,
+} from "./mcp-progress";
 
 function jsonText(data: unknown) {
   return {
@@ -43,6 +48,7 @@ async function relayPeerViaOrgo(input: {
   fromUsername: string;
   outbound: InboxMessage;
   requestId: string;
+  report?: (message: string, progress: number) => Promise<void>;
 }): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
   const computerId = getOrgoComputerId(input.peerUsername);
   if (!computerId) {
@@ -51,11 +57,26 @@ async function relayPeerViaOrgo(input: {
     );
   }
 
+  const peer = input.peerUsername;
   const t0 = Date.now();
-  const relay = await relayViaChatGptBrowser(computerId, {
-    fromUsername: input.fromUsername,
-    message: input.outbound.body,
-  });
+  const relay = await withProgressHeartbeat(
+    () =>
+      relayViaChatGptBrowser(computerId, {
+        fromUsername: input.fromUsername,
+        message: input.outbound.body,
+      }),
+    input.report ?? (async () => {}),
+    {
+      startMessage: `Opening ChatGPT on ${peer}'s Orgo computer (Ctrl+Shift+O)…`,
+      tickMessage: (s) => `ChatGPT is responding on ${peer}'s computer… (${s}s)`,
+      startProgress: 35,
+      endProgress: 92,
+      intervalMs: 8000,
+    }
+  );
+  if (input.report) {
+    await input.report(`Saving reply from ${peer}…`, 95);
+  }
   const combined = await replyAndAckMessage({
     fromUsername: input.peerUsername,
     toUsername: input.fromUsername,
@@ -119,14 +140,22 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.1.0" },
-    { instructions: pluginMcpInstructions(me.username) }
+    { name: "airsup", version: "2.2.0" },
+    { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
-  const chatgptPlusSafe = {
+  const readOnlyTool = {
     readOnlyHint: true,
     destructiveHint: false,
     openWorldHint: false,
+    idempotentHint: true,
+  } as const;
+
+  const relayTool = {
+    readOnlyHint: false,
+    destructiveHint: false,
+    openWorldHint: true,
+    idempotentHint: true,
   } as const;
 
   const noauthMeta = { securitySchemes: [{ type: "noauth" as const }] };
@@ -136,7 +165,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Who am I",
       description: "Return your airsup username and display name.",
-      annotations: chatgptPlusSafe,
+      annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async () =>
@@ -158,7 +187,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         query: z.string().optional().describe("Optional search filter"),
         limit: z.number().optional().describe("Max results (default 50)"),
       },
-      annotations: chatgptPlusSafe,
+      annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async ({ query, limit }) => {
@@ -183,7 +212,7 @@ export function createAirsupMcpServer(me: User): McpServer {
       inputSchema: {
         username: z.string().describe("Username to look up, e.g. kosti42"),
       },
-      annotations: chatgptPlusSafe,
+      annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async ({ username }) => {
@@ -209,25 +238,28 @@ export function createAirsupMcpServer(me: User): McpServer {
   server.registerTool(
     "talk_to_user",
     {
-      title: "Talk to user",
+      title: "Message peer via ChatGPT",
       description:
-        "Send a message to another user and wait for their ChatGPT reply (via Orgo browser relay). Can take 30–120 seconds.",
+        "Send a message to another user and wait for their ChatGPT reply (via Orgo browser relay). Shows live progress. Can take 30–120 seconds.",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z.string().describe("Message text"),
         conversation_id: z.string().optional(),
         reply_to_id: z.number().optional(),
       },
-      annotations: chatgptPlusSafe,
+      annotations: relayTool,
       _meta: noauthMeta,
     },
-    async ({ to, message, conversation_id, reply_to_id }) => {
+    async ({ to, message, conversation_id, reply_to_id }, extra: McpToolExtra) => {
       const started = Date.now();
       const requestId = newRequestId();
+      const report = bindProgressReporter(extra, 100);
       const target = cleanTarget(to);
       const text = message.trim();
       if (!target) return errorText("to is required");
       if (!text) return errorText("message is required");
+
+      await report("Starting airsup message…", 1);
 
       if (!orgoRelayEnabled()) {
         return errorText(
@@ -235,6 +267,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
+      await report(`Looking up ${target}…`, 5);
       const peer = await getUserByUsername(target);
       if (!peer) {
         return errorText(
@@ -248,6 +281,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
+      await report(`Sending message to ${peer.username}…`, 12);
       const tSend0 = Date.now();
       const msg = await sendMessage({
         fromUsername: me.username,
@@ -266,13 +300,17 @@ export function createAirsupMcpServer(me: User): McpServer {
         liveAwait: true,
       });
 
+      await report(`Routing to ${peer.username}'s Orgo computer…`, 22);
+
       try {
         const orgoResult = await relayPeerViaOrgo({
           peerUsername: peer.username,
           fromUsername: me.username,
           outbound: msg,
           requestId,
+          report,
         });
+        await report(`Reply received from ${peer.username}.`, 100);
         logActivitySafe({
           kind: "talk",
           ok: true,
@@ -312,9 +350,9 @@ export function createAirsupMcpServer(me: User): McpServer {
   server.registerTool(
     "await_reply",
     {
-      title: "Await reply",
+      title: "Wait for peer reply",
       description:
-        "Wait for a peer reply after talk_to_user failed or timed out. Pass after_message_id from the outbound message id.",
+        "Wait for a peer reply after talk_to_user failed or timed out. Shows live progress while waiting.",
       inputSchema: {
         from: z.string().describe("Peer username you are waiting on"),
         conversation_id: z.string(),
@@ -324,11 +362,12 @@ export function createAirsupMcpServer(me: User): McpServer {
           .describe("Outbound talk_to_user message id"),
         max_seconds: z.number().optional().describe("Max wait this call (default 40)"),
       },
-      annotations: chatgptPlusSafe,
+      annotations: relayTool,
       _meta: noauthMeta,
     },
-    async (args) => {
+    async (args, extra: McpToolExtra) => {
       const from = cleanTarget(args.from);
+      const report = bindProgressReporter(extra, 100);
       await upsertConversationWait({
         username: me.username,
         conversationId: args.conversation_id,
@@ -337,20 +376,34 @@ export function createAirsupMcpServer(me: User): McpServer {
         liveAwait: true,
       });
       const afterId = Number(args.after_message_id);
-      const result = await runInboxWatch(
-        me,
+      const result = await withProgressHeartbeat(
+        () =>
+          runInboxWatch(
+            me,
+            {
+              waitSeconds: 20,
+              polls: 2,
+              maxSeconds: args.max_seconds ?? DEFAULT_AWAIT_MAX_SECONDS,
+              windowSeconds: 900,
+              fromUsername: from,
+              conversationId: args.conversation_id,
+              afterMessageId:
+                Number.isFinite(afterId) && afterId > 0 ? afterId : undefined,
+            },
+            { batch: true, mode: "conversation" }
+          ),
+        report,
         {
-          waitSeconds: 20,
-          polls: 2,
-          maxSeconds: args.max_seconds ?? DEFAULT_AWAIT_MAX_SECONDS,
-          windowSeconds: 900,
-          fromUsername: from,
-          conversationId: args.conversation_id,
-          afterMessageId:
-            Number.isFinite(afterId) && afterId > 0 ? afterId : undefined,
-        },
-        { batch: true, mode: "conversation" }
+          startMessage: `Waiting for reply from ${from}…`,
+          tickMessage: (s) => `Still waiting for ${from}… (${s}s)`,
+          startProgress: 10,
+          endProgress: 90,
+          intervalMs: 6000,
+        }
       );
+      if (result.event_count) {
+        await report(`Reply received from ${from}.`, 100);
+      }
       return jsonText({
         ...result,
         next_action: result.event_count ? "continue_conversation" : "await_reply",
@@ -370,7 +423,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         conversation_id: z.string(),
         peer_username: z.string().optional(),
       },
-      annotations: chatgptPlusSafe,
+      annotations: readOnlyTool,
       _meta: noauthMeta,
     },
     async ({ conversation_id, peer_username }) => {
