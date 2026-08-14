@@ -95,10 +95,31 @@ export async function orgoScreenshotB64(computerId: string): Promise<string> {
   }
 }
 
+/** Focus ChatGPT browser window and click the message input. */
+export async function orgoFocusChatGptInput(computerId: string): Promise<void> {
+  const script = `
+command -v xdotool >/dev/null || exit 0
+W=$(xdotool search --class "chrome" 2>/dev/null | head -1)
+[ -z "$W" ] && W=$(xdotool search --class "Chromium" 2>/dev/null | head -1)
+[ -z "$W" ] && W=$(xdotool getactivewindow 2>/dev/null || true)
+[ -n "$W" ] || exit 0
+xdotool windowfocus "$W"
+sleep 0.08
+xdotool mousemove --window "$W" 640 520 click 1
+`.trim();
+  await orgoBash(computerId, script);
+}
+
+/** Open a fresh empty ChatGPT chat for the next relay. */
+export async function orgoOpenFreshChatGptChat(computerId: string): Promise<void> {
+  await orgoPressKey(computerId, "ctrl+shift+o");
+  await orgoWait(computerId, 0.35);
+}
+
 export type OrgoRelayMode = "auto" | "direct" | "agent";
 
 export function orgoRelayMode(): OrgoRelayMode {
-  const m = (process.env.ORGO_RELAY_MODE || "auto").trim().toLowerCase();
-  if (m === "direct" || m === "agent") return m;
-  return "auto";
+  const m = (process.env.ORGO_RELAY_MODE || "direct").trim().toLowerCase();
+  if (m === "direct" || m === "agent" || m === "auto") return m;
+  return "direct";
 }

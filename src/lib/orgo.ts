@@ -3,7 +3,7 @@ import {
   buildPeerChatGptMessage,
 } from "./airsup-relay-prompt";
 import { orgoRelayMode } from "./orgo-actions";
-import { relayViaChatGptDirect } from "./orgo-direct-relay";
+import { agentCopyReply, relayViaChatGptDirect } from "./orgo-direct-relay";
 import type { RelayStepReporter } from "./orgo-relay-progress";
 import { relayProgressMessage } from "./orgo-relay-progress";
 
@@ -64,31 +64,54 @@ type ChatCompletionResponse = {
   error?: { message?: string };
 };
 
-/** Full agent loop (slow, many steps) — fallback when direct hotkeys fail. */
+/** Full agent loop — only when ORGO_RELAY_MODE=agent. */
 async function relayViaChatGptAgent(
   computerId: string,
-  input: OrgoRelayInput
+  input: OrgoRelayInput,
+  opts?: { alreadyPasted?: boolean }
 ): Promise<OrgoRelayResult> {
   const started = Date.now();
   const continueThread = Boolean(input.continueThread);
   const peer = input.peerUsername || input.fromUsername;
   const report = input.onProgress;
+  const alreadyPasted = Boolean(opts?.alreadyPasted);
 
   const tickTimer = report
     ? setInterval(() => {
         const elapsedSec = Math.round((Date.now() - started) / 1000);
         void report(
-          relayProgressMessage({ peer, phase: "agent_loop", elapsedSec }),
+          relayProgressMessage({
+            peer,
+            phase: alreadyPasted ? "copy_agent" : "agent_loop",
+            elapsedSec,
+          }),
           50 + Math.min(35, elapsedSec)
         );
       }, 3000)
     : null;
 
   const model = (process.env.ORGO_MODEL || "claude-sonnet-5").trim();
-  const timeoutMs = Math.max(
-    30_000,
-    Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000
-  );
+  const timeoutMs = alreadyPasted
+    ? Math.min(
+        45_000,
+        Math.max(15_000, Number(process.env.ORGO_COPY_TIMEOUT_MS || 30_000) || 30_000)
+      )
+    : Math.max(30_000, Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000);
+
+  const peerChatGptMessage = buildPeerChatGptMessage({
+    fromUsername: input.fromUsername,
+    fromDisplayName: input.fromDisplayName,
+    message: input.message,
+    conversationId: input.conversationId,
+    continueThread,
+  });
+  const prompt = buildOrgoAgentPrompt({
+    peerChatGptMessage,
+    conversationId: input.conversationId,
+    continueThread,
+    parallelWithOthers: Boolean(input.parallelWithOthers),
+    alreadyPasted,
+  });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -103,7 +126,7 @@ async function relayViaChatGptAgent(
       body: JSON.stringify({
         model,
         computer_id: computerId,
-        messages: [{ role: "user", content: buildChatGptRelayPrompt(input) }],
+        messages: [{ role: "user", content: prompt }],
       }),
       signal: controller.signal,
     });
@@ -145,6 +168,15 @@ async function relayViaChatGptAgent(
   }
 }
 
+function pasteWasSent(err: unknown): boolean {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      "pasteSent" in err &&
+      (err as { pasteSent?: boolean }).pasteSent
+  );
+}
+
 /** Send a prompt to an Orgo computer; returns ChatGPT's reply text from the browser. */
 export async function relayViaChatGptBrowser(
   computerId: string,
@@ -156,15 +188,28 @@ export async function relayViaChatGptBrowser(
     return relayViaChatGptAgent(computerId, input);
   }
 
-  if (mode === "direct" || mode === "auto") {
-    try {
-      const result = await relayViaChatGptDirect(computerId, input);
-      return { ...result, relayMethod: "direct" };
-    } catch (e) {
-      if (mode === "direct") throw e;
-      console.warn("[orgo] direct relay failed, falling back to agent:", e);
-    }
-  }
+  try {
+    const result = await relayViaChatGptDirect(computerId, input);
+    return { ...result, relayMethod: "direct" };
+  } catch (e) {
+    if (mode === "direct") throw e;
 
-  return relayViaChatGptAgent(computerId, input);
+    if (pasteWasSent(e)) {
+      console.warn("[orgo] direct copy failed after paste — copy-only agent retry");
+      try {
+        const replyText = await agentCopyReply(computerId);
+        return {
+          replyText,
+          durationMs: 0,
+          continueThread: Boolean(input.continueThread),
+          relayMethod: "direct",
+        };
+      } catch {
+        return relayViaChatGptAgent(computerId, input, { alreadyPasted: true });
+      }
+    }
+
+    console.warn("[orgo] direct relay failed before paste — agent fallback:", e);
+    return relayViaChatGptAgent(computerId, input);
+  }
 }

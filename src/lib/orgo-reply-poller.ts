@@ -7,12 +7,12 @@ import {
 import { relayProgressMessage, type RelayStepReporter } from "./orgo-relay-progress";
 
 function pollIntervalSec(): number {
-  const ms = Number(process.env.ORGO_POLL_INTERVAL_MS || 2000);
-  return Math.max(1, Math.min(ms / 1000, 5));
+  const ms = Number(process.env.ORGO_POLL_INTERVAL_MS || 1500);
+  return Math.max(0.8, Math.min(ms / 1000, 5));
 }
 
 function minWaitBeforeCopySec(): number {
-  return Math.max(2, Number(process.env.ORGO_MIN_WAIT_SEC || 3));
+  return Math.max(1.5, Number(process.env.ORGO_MIN_WAIT_SEC || 2));
 }
 
 function maxWaitSec(): number {

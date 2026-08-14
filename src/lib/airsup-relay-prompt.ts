@@ -35,33 +35,36 @@ export function buildPeerChatGptMessage(input: PeerChatGptMessageInput): string 
   return `${header}\n${input.message.trim()}`;
 }
 
-/** Instructions for Orgo's computer-use agent (browser automation only — no LLM enrichment). */
+/** Instructions for Orgo's computer-use agent — movement only, no reasoning. */
 export function buildOrgoAgentPrompt(input: {
   peerChatGptMessage: string;
   conversationId: string;
   continueThread: boolean;
   parallelWithOthers: boolean;
+  /** Direct hotkeys already pasted — agent must only wait + copy. */
+  alreadyPasted?: boolean;
 }): string {
   const paste = input.peerChatGptMessage;
   const thread = shortConversationRef(input.conversationId);
 
-  if (input.continueThread) {
-    return `Continue ChatGPT thread ${thread}. Focus browser. Do NOT open new chat.
-Find chat containing "@ · ${thread}". Click input. Paste (Ctrl+V):
-
-${paste}
-
-Enter. Wait for full reply. Copy latest assistant text only. Return ONLY that text.`;
+  if (input.alreadyPasted) {
+    return `FAST. Max 3 steps. Message already sent in ChatGPT.
+Wait until reply finished. Copy latest assistant text only. Return ONLY that text.
+Do NOT open chats or paste again.`;
   }
 
-  const parallelNote = input.parallelWithOthers
-    ? " Other relays may be parallel — separate new chat for this thread."
-    : "";
+  if (input.continueThread) {
+    return `FAST. Max 5 steps. Thread ${thread}. Do NOT open new chat.
+Find chat with "@ · ${thread}". Paste Ctrl+V, Enter. Wait. Copy latest assistant reply. Return ONLY that text.
 
-  return `New ChatGPT chat for thread ${thread}.${parallelNote}
-Ctrl+Shift+O. Paste (Ctrl+V):
+${paste}`;
+  }
 
-${paste}
+  const chatStep = input.parallelWithOthers
+    ? `Ctrl+Shift+O new chat for thread ${thread}.`
+    : "Use current empty ChatGPT chat — do NOT open new chat unless input is not empty.";
 
-Enter. Wait for full reply. Copy latest assistant text only. Return ONLY that text.`;
+  return `FAST. Max 6 steps. ${chatStep} Paste Ctrl+V, Enter. Wait. Copy latest assistant reply. Return ONLY that text.
+
+${paste}`;
 }

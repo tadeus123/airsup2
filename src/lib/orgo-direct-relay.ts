@@ -1,6 +1,8 @@
 import { buildPeerChatGptMessage } from "./airsup-relay-prompt";
 import type { OrgoRelayInput, OrgoRelayResult } from "./orgo";
 import {
+  orgoFocusChatGptInput,
+  orgoOpenFreshChatGptChat,
   orgoPressKey,
   orgoSetClipboard,
   orgoWait,
@@ -17,22 +19,17 @@ function orgoApiKey(): string {
 }
 
 function buildCopyOnlyAgentPrompt(): string {
-  return `ChatGPT already received the message and should have replied.
-
-Do ONLY this:
-1. Focus ChatGPT in the browser.
-2. If still generating, wait until fully done (no stop button).
-3. Copy the LATEST assistant reply only.
-4. Return ONLY that text — no wrapper.
-
-Do NOT send messages or open new chats.`;
+  return `FAST. Max 3 steps. ChatGPT already has the message.
+Wait if still generating. Copy LATEST assistant reply only. Return ONLY that text.
+Do NOT send, paste, or open chats.`;
 }
 
-async function agentCopyReply(computerId: string): Promise<string> {
+/** Copy-only Orgo agent — used when hotkeys already pasted the message. */
+export async function agentCopyReply(computerId: string): Promise<string> {
   const model = (process.env.ORGO_MODEL || "claude-sonnet-5").trim();
   const timeoutMs = Math.min(
     60_000,
-    Math.max(20_000, Number(process.env.ORGO_COPY_TIMEOUT_MS || 45_000) || 45_000)
+    Math.max(15_000, Number(process.env.ORGO_COPY_TIMEOUT_MS || 30_000) || 30_000)
   );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -66,12 +63,18 @@ async function agentCopyReply(computerId: string): Promise<string> {
   }
 }
 
+export type DirectRelayResult = OrgoRelayResult & {
+  /** Message was pasted; a copy-only retry is safe (no duplicate send). */
+  pasteSent: boolean;
+};
+
 export async function relayViaChatGptDirect(
   computerId: string,
   input: OrgoRelayInput
-): Promise<OrgoRelayResult> {
+): Promise<DirectRelayResult> {
   const started = Date.now();
   const continueThread = Boolean(input.continueThread);
+  const parallel = Boolean(input.parallelWithOthers);
   const peer = input.peerUsername || "peer";
   const report = input.onProgress;
   const peerText = buildPeerChatGptMessage({
@@ -82,25 +85,30 @@ export async function relayViaChatGptDirect(
     continueThread,
   });
 
-  if (!continueThread) {
-    await report?.(
-      relayProgressMessage({ peer, phase: "new_chat" }),
-      32
-    );
-    await orgoPressKey(computerId, "ctrl+shift+o");
-    await orgoWait(computerId, 1);
-  } else {
+  if (continueThread) {
     await report?.(
       relayProgressMessage({ peer, phase: "continue_thread" }),
       32
     );
-    await orgoWait(computerId, 0.15);
+    await orgoFocusChatGptInput(computerId);
+    await orgoWait(computerId, 0.1);
+  } else if (parallel) {
+    await report?.(
+      relayProgressMessage({ peer, phase: "new_chat" }),
+      32
+    );
+    await orgoOpenFreshChatGptChat(computerId);
+  } else {
+    await report?.(relayProgressMessage({ peer, phase: "paste" }), 36);
+    await orgoFocusChatGptInput(computerId);
+    await orgoWait(computerId, 0.08);
   }
 
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
+
   await orgoSetClipboard(computerId, peerText);
   await orgoPressKey(computerId, "ctrl+v");
-  await orgoWait(computerId, 0.1);
+  await orgoWait(computerId, 0.08);
   await orgoPressKey(computerId, "Return");
 
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
@@ -128,7 +136,9 @@ export async function relayViaChatGptDirect(
     );
     replyText = await agentCopyReply(computerId);
     if (!looksLikeChatGptReply(replyText, input.message)) {
-      throw new Error("Could not read a valid ChatGPT reply");
+      const err = new Error("Could not read a valid ChatGPT reply");
+      (err as Error & { pasteSent?: boolean }).pasteSent = true;
+      throw err;
     }
     await report?.(
       relayProgressMessage({ peer, phase: "done", elapsedSec }),
@@ -136,9 +146,14 @@ export async function relayViaChatGptDirect(
     );
   }
 
+  if (!continueThread && !parallel) {
+    void orgoOpenFreshChatGptChat(computerId).catch(() => {});
+  }
+
   return {
     replyText,
     durationMs: Date.now() - started,
     continueThread,
+    pasteSent: true,
   };
 }
