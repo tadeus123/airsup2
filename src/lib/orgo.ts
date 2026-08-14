@@ -1,10 +1,18 @@
+import {
+  buildOrgoAgentPrompt,
+  buildPeerChatGptMessage,
+} from "./airsup-relay-prompt";
+
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
 
 export type OrgoRelayInput = {
   fromUsername: string;
+  fromDisplayName?: string;
   message: string;
+  /** When true, Orgo continues the open ChatGPT tab instead of Ctrl+Shift+O new chat. */
+  continueThread?: boolean;
 };
 
 export type OrgoRelayResult = {
@@ -12,6 +20,7 @@ export type OrgoRelayResult = {
   durationMs: number;
   steps?: number;
   costCents?: number;
+  continueThread: boolean;
 };
 
 function orgoApiKey(): string {
@@ -22,27 +31,14 @@ function orgoApiKey(): string {
 
 /** Prompt Orgo's computer-use agent to relay a message through the open ChatGPT browser tab. */
 export function buildChatGptRelayPrompt(input: OrgoRelayInput): string {
-  const from = input.fromUsername.trim();
-  const message = input.message.trim();
-  return `You are an Airsup relay. ChatGPT is already open and logged in in the browser.
-
-Do ONLY these steps, in order:
-
-1. Click the browser window with ChatGPT so it is focused.
-2. Press Ctrl+Shift+O (Strg+Shift+O) to open a NEW ChatGPT chat. Do NOT click menus — use this keyboard shortcut.
-3. Click the message input box if it is not focused.
-4. Paste this FULL prompt into the input (Ctrl+V). If paste fails, type it exactly as written:
-
-${message}
-
-5. Press Enter.
-6. Wait until ChatGPT has FULLY finished responding (no stop button, no loading spinner).
-7. Select and copy ChatGPT's complete answer text.
-8. Return ONLY that copied answer to Airsup — no prefix, no explanation, no markdown.
-
-Do NOT open terminal, other apps, or other websites. Do NOT add "from ${from}" or any wrapper to the pasted prompt.
-
-If ChatGPT shows an error, return that error text as-is.`;
+  const continueThread = Boolean(input.continueThread);
+  const peerChatGptMessage = buildPeerChatGptMessage({
+    fromUsername: input.fromUsername,
+    fromDisplayName: input.fromDisplayName,
+    message: input.message,
+    continueThread,
+  });
+  return buildOrgoAgentPrompt({ peerChatGptMessage, continueThread });
 }
 
 type ChatCompletionResponse = {
@@ -57,6 +53,7 @@ export async function relayViaChatGptBrowser(
   input: OrgoRelayInput
 ): Promise<OrgoRelayResult> {
   const started = Date.now();
+  const continueThread = Boolean(input.continueThread);
   const model = (process.env.ORGO_MODEL || "claude-sonnet-5").trim();
   const timeoutMs = Math.max(
     30_000,
@@ -76,9 +73,7 @@ export async function relayViaChatGptBrowser(
       body: JSON.stringify({
         model,
         computer_id: computerId,
-        messages: [
-          { role: "user", content: buildChatGptRelayPrompt(input) },
-        ],
+        messages: [{ role: "user", content: buildChatGptRelayPrompt(input) }],
       }),
       signal: controller.signal,
     });
@@ -106,6 +101,7 @@ export async function relayViaChatGptBrowser(
       durationMs: Date.now() - started,
       steps: json.orgo?.steps,
       costCents: json.orgo?.cost_cents,
+      continueThread,
     };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {

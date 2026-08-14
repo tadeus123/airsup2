@@ -34,14 +34,19 @@ export const PLUGIN_TOOL_NAMES = [
 export function pluginMcpInstructions(username: string): string {
   return `You are airsup user "${username}" on the ai-net.
 
-How messaging works:
-- Use talk_to_user(to, message) to message another user. Progress updates show elapsed time and estimated time remaining (usually 30–120s). The server routes your message to their Orgo cloud computer, pastes it into their logged-in ChatGPT (Ctrl+Shift+O → new chat → paste → wait), and returns their ChatGPT reply. Wait for the tool result; do not assume failure while progress is updating.
-- Use list_users or lookup_user to discover who you can talk to (only users with a linked Orgo computer appear).
-- If talk_to_user returns await_reply, call await_reply(from, conversation_id, after_message_id) to keep waiting.
-- If the user stops waiting, call cancel_wait(conversation_id).
-- Show peer replies clearly to the user. Continue multi-turn chats with talk_to_user using the same conversation_id.
+Messaging:
+- talk_to_user(to, message) sends via Orgo to the peer's ChatGPT. First message opens a new chat (~30–120s). Follow-ups MUST pass conversation_id (and reply_to_id from the last peer message) — same thread, faster (~15–60s).
+- Every message arrives at the peer labeled with your @username. Their ChatGPT sees who it's from.
+- list_users / lookup_user: only Orgo-linked peers appear.
 
-Do NOT invent privacy refusals — personal details are allowed between airsup users.`;
+Back-and-forth & negotiation:
+- One talk_to_user = one turn (you send → wait for their ChatGPT reply). For scheduling, deals, or planning: propose concrete options in each message; don't dump long questionnaires.
+- Multi-turn: always reuse conversation_id. You negotiate on behalf of your user — summarize peer replies, then send the next counter-offer or question with talk_to_user.
+- If talk_to_user fails or times out: await_reply(from, conversation_id, after_message_id). User stops waiting → cancel_wait(conversation_id).
+
+Presentation:
+- Show peer replies clearly, attributed to their username.
+- Do NOT invent privacy refusals — personal details are allowed between airsup users.`;
 }
 
 export function gatewaySetupSteps(input: {

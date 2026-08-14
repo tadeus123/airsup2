@@ -18,7 +18,7 @@ import {
   upsertConversationWait,
 } from "./conversation-waits";
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
-import { getOrgoComputerId, normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
+import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
@@ -49,33 +49,41 @@ function cleanTarget(raw: string): string {
 async function relayPeerViaOrgo(input: {
   peerUsername: string;
   fromUsername: string;
+  fromDisplayName?: string;
+  computerId: string;
   outbound: InboxMessage;
+  continueThread: boolean;
   requestId: string;
   report?: (message: string, progress: number) => Promise<void>;
 }): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
-  const computerId = await getOrgoComputerId(input.peerUsername);
-  if (!computerId) {
-    throw new Error(
-      `User "${input.peerUsername}" has no Orgo computer mapped. They need to complete Orgo setup first.`
-    );
-  }
-
   const peer = input.peerUsername;
   const t0 = Date.now();
   const relay = await withProgressHeartbeat(
     () =>
-      relayViaChatGptBrowser(computerId, {
+      relayViaChatGptBrowser(input.computerId, {
         fromUsername: input.fromUsername,
+        fromDisplayName: input.fromDisplayName,
         message: input.outbound.body,
+        continueThread: input.continueThread,
       }),
     input.report ?? (async () => {}),
     {
-      startMessage: `Opening ChatGPT on ${peer}'s Orgo computer (Ctrl+Shift+O)… usually 30–120s`,
+      startMessage: input.continueThread
+        ? `Continuing ChatGPT thread on ${peer}'s Orgo… usually 15–60s`
+        : `Opening new ChatGPT chat on ${peer}'s Orgo (Ctrl+Shift+O)… usually 30–120s`,
       tickMessage: (t) =>
-        `ChatGPT responding on ${peer}'s Orgo computer… ${formatProgressTiming(t)}`,
+        input.continueThread
+          ? `ChatGPT replying on ${peer}'s Orgo (same thread)… ${formatProgressTiming({
+              ...t,
+              typicalMinSec: 15,
+              typicalMaxSec: Math.min(t.typicalMaxSec, 90),
+            })}`
+          : `ChatGPT responding on ${peer}'s Orgo computer… ${formatProgressTiming(t)}`,
       startProgress: 35,
       endProgress: 92,
       intervalMs: 5000,
+      typicalMinSec: input.continueThread ? 15 : 30,
+      typicalMaxSec: input.continueThread ? 90 : undefined,
     }
   );
   if (input.report) {
@@ -98,10 +106,11 @@ async function relayPeerViaOrgo(input: {
     durationMs: Date.now() - t0,
     summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
     detail: {
-      computerId,
+      computerId: input.computerId,
       orgoMs: relay.durationMs,
       steps: relay.steps,
       replyId: combined.message.id,
+      continueThread: relay.continueThread,
     },
     requestId: input.requestId,
   });
@@ -115,7 +124,8 @@ function formatOrgoReply(
   msg: InboxMessage,
   reply: InboxMessage,
   peerUsername: string,
-  timing: Record<string, number>
+  timing: Record<string, number>,
+  continueThread: boolean
 ) {
   const event = {
     id: reply.id,
@@ -137,14 +147,15 @@ function formatOrgoReply(
     next_action: "continue_conversation",
     conversation_id: msg.conversationId,
     peer_username: peerUsername,
+    continue_thread: continueThread,
     timing,
-    instructions: `Reply received from ${peerUsername} via Orgo ChatGPT relay. Show it to the user. Continue with talk_to_user (conversation_id="${msg.conversationId}") for follow-ups.`,
+    instructions: `Reply from ${peerUsername} via Airsup (their ChatGPT). Show it clearly. For follow-ups use talk_to_user(to="${peerUsername}", conversation_id="${msg.conversationId}", reply_to_id=${reply.id}) — same thread, faster.`,
   });
 }
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.2.0" },
+    { name: "airsup", version: "2.3.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -247,12 +258,18 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Message peer via ChatGPT",
       description:
-        "Send a message to another user and wait for their ChatGPT reply (via Orgo browser relay). Shows live progress. Can take 30–120 seconds.",
+        "Send a message to another user and wait for their ChatGPT reply (via Orgo). First message ~30–120s; follow-ups with conversation_id ~15–60s (same ChatGPT thread).",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z.string().describe("Message text"),
-        conversation_id: z.string().optional(),
-        reply_to_id: z.number().optional(),
+        conversation_id: z
+          .string()
+          .optional()
+          .describe("Reuse from prior talk_to_user for follow-ups (faster, same ChatGPT thread)"),
+        reply_to_id: z
+          .number()
+          .optional()
+          .describe("Last peer message id in this conversation"),
       },
       annotations: relayTool,
       _meta: noauthMeta,
@@ -282,11 +299,13 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
-      if (!(await getOrgoComputerId(peer.username))) {
+      if (!peer.orgoComputerId) {
         return errorText(
           `User "${peer.username}" has no Orgo computer linked yet. They need to paste their Orgo computer ID on the airsup onboarding page (or call set_orgo_computer).`
         );
       }
+
+      const continueThread = Boolean(conversation_id?.trim());
 
       await report(`Sending message to ${peer.username}…`, 12);
       const tSend0 = Date.now();
@@ -299,21 +318,29 @@ export function createAirsupMcpServer(me: User): McpServer {
       });
       const sendMs = Date.now() - tSend0;
 
-      await upsertConversationWait({
+      void upsertConversationWait({
         username: me.username,
         conversationId: msg.conversationId,
         peerUsername: peer.username,
         ttlMs: LIVE_AWAIT_TTL_MS,
         liveAwait: true,
-      });
+      }).catch(() => {});
 
-      await report(`Routing to ${peer.username}'s Orgo computer… expect 30–120s`, 22);
+      await report(
+        continueThread
+          ? `Continuing thread with ${peer.username} on Orgo… expect 15–60s`
+          : `Routing to ${peer.username}'s Orgo computer… expect 30–120s`,
+        22
+      );
 
       try {
         const orgoResult = await relayPeerViaOrgo({
           peerUsername: peer.username,
           fromUsername: me.username,
+          fromDisplayName: me.displayName,
+          computerId: peer.orgoComputerId,
           outbound: msg,
+          continueThread,
           requestId,
           report,
         });
@@ -333,7 +360,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           send_ms: sendMs,
           orgo_ms: orgoResult.orgo.durationMs,
           total_ms: Date.now() - started,
-        });
+        }, continueThread);
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
         logActivitySafe({
