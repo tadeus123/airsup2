@@ -20,6 +20,18 @@ export type InboxMessage = {
   status: "pending" | "delivered" | "acked";
   replyToId: number | null;
   createdAt: string;
+  deliveredAt?: string | null;
+  wakeSentAt?: string | null;
+  wakeError?: string | null;
+};
+
+export type OutboundWaitRow = {
+  id: number;
+  status: string;
+  createdAt: string;
+  deliveredAt: string | null;
+  wakeSentAt: string | null;
+  wakeError: string | null;
 };
 
 type MemoryUser = User & { tokenHash: string };
@@ -153,6 +165,21 @@ function mapMessage(row: Record<string, unknown>): InboxMessage {
           ? Number(row.reply_to_id)
           : null,
     createdAt: String(row.createdAt ?? row.created_at ?? new Date().toISOString()),
+    deliveredAt: row.deliveredAt
+      ? String(row.deliveredAt)
+      : row.delivered_at
+        ? String(row.delivered_at)
+        : null,
+    wakeSentAt: row.wakeSentAt
+      ? String(row.wakeSentAt)
+      : row.wake_sent_at
+        ? String(row.wake_sent_at)
+        : null,
+    wakeError: row.wakeError
+      ? String(row.wakeError)
+      : row.wake_error
+        ? String(row.wake_error)
+        : null,
   };
 }
 
@@ -530,6 +557,9 @@ export async function sendMessage(input: {
     status: "pending",
     replyToId: input.replyToId ?? null,
     createdAt: new Date().toISOString(),
+    deliveredAt: null,
+    wakeSentAt: null,
+    wakeError: null,
   };
   memory.messages.push(msg);
   return msg;
@@ -655,6 +685,7 @@ export async function markDelivered(username: string, ids: number[]): Promise<vo
   for (const msg of memory.messages) {
     if (msg.toUsername === u && ids.includes(msg.id) && msg.status === "pending") {
       msg.status = "delivered";
+      msg.deliveredAt = msg.deliveredAt || new Date().toISOString();
     }
   }
 }
@@ -758,6 +789,89 @@ export async function replyAndAckMessage(input: {
   });
   const ack = await ackMessage(fromUsername, ackId);
   return { message, ack };
+}
+
+export async function markWakeSent(input: {
+  fromUsername: string;
+  messageId: number;
+  error?: string;
+}): Promise<void> {
+  const from = normalizeUsername(input.fromUsername);
+  const id = Number(input.messageId);
+  if (!from || !Number.isFinite(id) || id <= 0) return;
+  const cfg = supabaseConfig();
+  if (cfg) {
+    await supabaseRpc("message_mark_wake", {
+      p_token: cfg.token,
+      p_from: from,
+      p_message_id: id,
+      p_error: input.error || null,
+    }).catch(() => {});
+    return;
+  }
+  const msg = memory.messages.find((m) => m.id === id && m.fromUsername === from);
+  if (!msg) return;
+  if (input.error) {
+    msg.wakeError = input.error.slice(0, 240);
+  } else {
+    msg.wakeSentAt = msg.wakeSentAt || new Date().toISOString();
+    msg.wakeError = null;
+  }
+}
+
+export async function getOutboundWait(input: {
+  fromUsername: string;
+  messageId: number;
+}): Promise<OutboundWaitRow | null> {
+  const from = normalizeUsername(input.fromUsername);
+  const id = Number(input.messageId);
+  if (!from || !Number.isFinite(id) || id <= 0) return null;
+  const cfg = supabaseConfig();
+  if (cfg) {
+    try {
+      const row = await supabaseRpc<Record<string, unknown> | null>(
+        "message_outbound_status",
+        {
+          p_token: cfg.token,
+          p_from: from,
+          p_message_id: id,
+        }
+      );
+      if (!row?.id) return null;
+      return {
+        id: Number(row.id),
+        status: String(row.status ?? ""),
+        createdAt: String(row.createdAt ?? row.created_at ?? ""),
+        deliveredAt: row.deliveredAt
+          ? String(row.deliveredAt)
+          : row.delivered_at
+            ? String(row.delivered_at)
+            : null,
+        wakeSentAt: row.wakeSentAt
+          ? String(row.wakeSentAt)
+          : row.wake_sent_at
+            ? String(row.wake_sent_at)
+            : null,
+        wakeError: row.wakeError
+          ? String(row.wakeError)
+          : row.wake_error
+            ? String(row.wake_error)
+            : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+  const msg = memory.messages.find((m) => m.id === id && m.fromUsername === from);
+  if (!msg) return null;
+  return {
+    id: msg.id,
+    status: msg.status,
+    createdAt: msg.createdAt,
+    deliveredAt: msg.deliveredAt ?? null,
+    wakeSentAt: msg.wakeSentAt ?? null,
+    wakeError: msg.wakeError ?? null,
+  };
 }
 
 export function __resetUserMemoryForTests(): void {

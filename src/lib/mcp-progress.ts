@@ -85,7 +85,9 @@ export async function withProgressHeartbeat<T>(
   report: ProgressReporter,
   input: {
     startMessage: string;
-    tickMessage: (timing: ProgressTiming) => string;
+    tickMessage: (
+      timing: ProgressTiming
+    ) => string | Promise<string>;
     startProgress?: number;
     endProgress?: number;
     intervalMs?: number;
@@ -105,10 +107,9 @@ export async function withProgressHeartbeat<T>(
     const elapsedSec = Math.round((Date.now() - start) / 1000);
     const ratio = Math.min(1, elapsedSec / typicalMaxSec);
     const p = startP + (endP - startP) * ratio;
-    void report(
-      input.tickMessage({ elapsedSec, typicalMinSec, typicalMaxSec }),
-      p
-    );
+    void Promise.resolve(
+      input.tickMessage({ elapsedSec, typicalMinSec, typicalMaxSec })
+    ).then((message) => report(message, p));
   };
 
   const timer = setInterval(tick, intervalMs);

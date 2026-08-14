@@ -3,8 +3,10 @@ import { z } from "zod";
 import {
   inboundFirstContactBlocksTalk,
   getInboundMessage,
+  getOutboundWait,
   listUsers,
   markDelivered,
+  markWakeSent,
   normalizeUsername,
   replyAndAckMessage,
   resolvePeerUsername,
@@ -25,6 +27,10 @@ import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
 import { wakePeerViaOrgo, parseInboxRef } from "./orgo-wake-relay";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
+import {
+  awaitInstructionsForPeerStatus,
+  describePeerWait,
+} from "./peer-wait-status";
 import {
   bindProgressReporter,
   formatProgressTiming,
@@ -177,7 +183,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.2" },
+    { name: "airsup", version: "3.2.3" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -560,6 +566,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           requestId,
           report,
         });
+        await markWakeSent({ fromUsername: me.username, messageId: msg.id });
         await report(`${peer.username} woken — waiting for their Supi to reply…`, 90);
         logActivitySafe({
           kind: "talk",
@@ -579,6 +586,11 @@ export function createAirsupMcpServer(me: User): McpServer {
         });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
+        await markWakeSent({
+          fromUsername: me.username,
+          messageId: msg.id,
+          error: err,
+        });
         logActivitySafe({
           kind: "orgo_wake",
           ok: false,
@@ -602,7 +614,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Wait for peer reply",
       description:
-        "Wait for a peer's Supi to reply via reply_to_user after you called talk_to_user.",
+        "Wait for a peer reply. Returns peer_status: thinking (they opened it and are working), waking, or offline.",
       inputSchema: {
         from: z.string().describe("Peer username or nickname (tade → tade1)"),
         conversation_id: z.string(),
@@ -661,8 +673,17 @@ export function createAirsupMcpServer(me: User): McpServer {
         report,
         {
           startMessage: `Waiting for ${from} — their ChatGPT is using its own tools, this can take a few minutes`,
-          tickMessage: (t) =>
-            `Still waiting on ${from} (they may still be thinking)… ${formatProgressTiming(t)}`,
+          tickMessage: async (t) => {
+            const outbound = await getOutboundWait({
+              fromUsername: me.username,
+              messageId: afterId,
+            });
+            const peerStatus = describePeerWait({
+              ...outbound,
+              peerUsername: from,
+            });
+            return `${peerStatus.detail} ${formatProgressTiming(t)}`;
+          },
           startProgress: 10,
           endProgress: 90,
           intervalMs: 5000,
@@ -681,6 +702,15 @@ export function createAirsupMcpServer(me: User): McpServer {
             e.id > afterId
         )
         .slice(0, 1);
+      const outbound = isolated.length
+        ? null
+        : await getOutboundWait({
+            fromUsername: me.username,
+            messageId: afterId,
+          });
+      const peerStatus = outbound
+        ? describePeerWait({ ...outbound, peerUsername: from })
+        : null;
       return jsonText({
         ok: true,
         isolation: "strict",
@@ -696,11 +726,14 @@ export function createAirsupMcpServer(me: User): McpServer {
               reply_to_id: isolated[0].replyToId,
             }
           : null,
+        peer_status: peerStatus,
         next_action: isolated.length ? "continue_conversation" : "await_reply",
         cancel_hint: "Only call cancel_wait if the human asked to stop waiting.",
         instructions: isolated.length
           ? "This is the reply to YOUR outbound message in this conversation_id only. Ignore other threads."
-          : `peer_message is null — ${from}'s ChatGPT is still thinking (Gmail, Drive, past chats). Immediately call await_reply again with the SAME from, conversation_id, and after_message_id. Do not tell the human they have not replied.`,
+          : peerStatus
+            ? awaitInstructionsForPeerStatus(peerStatus, from)
+            : `peer_message is null. Call await_reply again with the SAME ids.`,
       });
     }
   );

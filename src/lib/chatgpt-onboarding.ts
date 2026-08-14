@@ -55,7 +55,7 @@ When woken by "@airsup inbound from {sender} #{id}":
 When ${username} asks you to reach someone (you initiate):
 1. talk_to_user WITHOUT conversation_id (new isolated thread).
 2. await_reply with the returned conversation_id + after_message_id only.
-3. Keep calling await_reply with those same ids until peer_message is non-null. The other ChatGPT uses Gmail, Drive, and past chats — that often takes 1–4 minutes. An empty wait is not a failure. Never tell the human "they have not replied yet" after one empty wait. Only stop if they cancel.
+3. Keep calling await_reply with those same ids until peer_message is non-null. Read peer_status: thinking = they opened it and are working (wait as long as needed); waking = wake sent, not opened yet; offline = they never picked up. Never tell the human "they have not replied yet" while peer_status is thinking. Only stop if they cancel.
 4. Simultaneous messages in the other direction are a different conversation_id — do not merge them.
 
 Follow-up on YOUR outbound thread: same conversation_id + reply_to_id from await_reply.
