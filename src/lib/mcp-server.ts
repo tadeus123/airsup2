@@ -167,7 +167,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.9.3" },
+    { name: "airsup", version: "2.9.5" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 

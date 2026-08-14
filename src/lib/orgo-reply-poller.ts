@@ -1,10 +1,9 @@
 import {
   localSleep,
-  orgoBash,
+  orgoBashDisplay,
   orgoPressKey,
   orgoReadClipboard,
-  orgoSetClipboard,
-  orgoWait,
+  ORGO_DISPLAY_SETUP,
 } from "./orgo-actions";
 import { relayProgressMessage, type RelayStepReporter } from "./orgo-relay-progress";
 
@@ -86,45 +85,15 @@ export function extractLastAssistantReply(
   return looksLikeChatGptReply(after, sentBody) ? after : null;
 }
 
-const ORGO_X11_HELPERS = `
-export DISPLAY="\${DISPLAY:-:0}"
-focus_chat_window() {
-  local W=""
-  for cls in google-chrome Google-chrome chromium Chromium chrome; do
-    W=$(xdotool search --onlyvisible --class "$cls" 2>/dev/null | tail -1)
-    [ -n "$W" ] && break
-  done
-  if [ -z "$W" ]; then
-    W=$(xdotool search --name "ChatGPT" 2>/dev/null | tail -1)
-  fi
-  if [ -z "$W" ]; then
-    W=$(xdotool getactivewindow 2>/dev/null || true)
-  fi
-  [ -n "$W" ] || return 1
-  xdotool windowactivate --sync "$W" 2>/dev/null || true
-  sleep 0.05
-  xdotool mousemove --window "$W" 640 380 click 1 2>/dev/null || \\
-    xdotool mousemove 640 380 click 1 2>/dev/null || true
-}
-`.trim();
-
-function chatWindowScript(body: string): string {
-  return `
-${ORGO_X11_HELPERS}
-command -v xdotool >/dev/null || exit 1
-focus_chat_window || true
-${body}`.trim();
-}
-
-/** Copy via Orgo /key when xdotool X11 focus fails on the VM. */
+/** Copy via Orgo /key — no xdotool windowfocus needed. */
 async function copyViaOrgoKeys(computerId: string): Promise<string | null> {
   try {
     await orgoPressKey(computerId, "End");
-    await orgoWait(computerId, 0.08);
+    await localSleep(80);
     await orgoPressKey(computerId, "ctrl+a");
-    await orgoWait(computerId, 0.1);
+    await localSleep(100);
     await orgoPressKey(computerId, "ctrl+c");
-    await orgoWait(computerId, 0.08);
+    await localSleep(80);
     const out = (await orgoReadClipboard(computerId)).trim();
     return out.length >= 1 ? out : null;
   } catch {
@@ -132,9 +101,15 @@ async function copyViaOrgoKeys(computerId: string): Promise<string | null> {
   }
 }
 
-/** Copy entire ChatGPT thread via Ctrl+A (more reliable than partial select). */
+/** Copy entire ChatGPT thread via Ctrl+A. */
 export async function bashCopyWholeChat(computerId: string): Promise<string | null> {
-  const script = chatWindowScript(`
+  const viaKeys = await copyViaOrgoKeys(computerId);
+  if (viaKeys) return viaKeys;
+
+  const script = `
+${ORGO_DISPLAY_SETUP}
+command -v xdotool >/dev/null || exit 1
+xdotool mousemove 640 380 click 1
 sleep 0.04
 xdotool key End
 sleep 0.05
@@ -143,14 +118,13 @@ sleep 0.07
 xdotool key ctrl+c
 sleep 0.06
 xclip -selection clipboard -o 2>/dev/null || xsel --clipboard --output 2>/dev/null
-`);
+`.trim();
   try {
-    const out = (await orgoBash(computerId, script)).trim();
-    if (out.length >= 1) return out;
+    const out = (await orgoBashDisplay(computerId, script)).trim();
+    return out.length >= 1 ? out : null;
   } catch {
-    // fall through to Orgo /key copy
+    return null;
   }
-  return copyViaOrgoKeys(computerId);
 }
 
 /** Copy thread and extract the latest assistant reply. */
