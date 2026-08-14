@@ -1,3 +1,5 @@
+import { decodePngRgba, findChatGptSendButton } from "./orgo-send-button";
+
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -111,12 +113,57 @@ echo ok`
 /** ChatGPT’s own shortcut — focuses the composer from anywhere on the page. */
 export async function orgoFocusComposer(computerId: string): Promise<void> {
   await orgoPressKey(computerId, "shift+Escape");
-  // Drop leftover Shift so the next key is not Shift+Enter (newline, no send).
-  await localSleep(80);
+  await localSleep(120);
+  // Tap unmodified keys so leftover Shift does not turn Enter into a newline.
+  await orgoPressKey(computerId, "Escape");
+  await localSleep(60);
   await orgoPressKey(computerId, "End");
 }
 
-/** New chat (optional) → Shift+Esc → Ctrl+V → Enter. No mouse, no pixel targets. */
+async function orgoScreenshotPng(computerId: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/screenshot`, {
+      headers: authHeaders(),
+    });
+    const json = (await res.json()) as { image?: string };
+    const image = json.image;
+    if (!image) return null;
+    const url = image.startsWith("http")
+      ? image
+      : `${ORGO_API_BASE}${image.startsWith("/") ? "" : "/"}${image}`;
+    const img = await fetch(url, { headers: authHeaders() });
+    if (!img.ok) return null;
+    return Buffer.from(await img.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/** If Enter did not send, the blue/white send control is still on screen — click it. */
+async function orgoClickSendIfStillArmed(computerId: string): Promise<boolean> {
+  const buf = await orgoScreenshotPng(computerId);
+  if (!buf) return false;
+  const img = decodePngRgba(buf);
+  if (!img) return false;
+  const btn = findChatGptSendButton(img);
+  if (!btn) return false;
+  await orgoClick(computerId, btn.x, btn.y);
+  return true;
+}
+
+async function orgoSubmitComposer(computerId: string): Promise<void> {
+  await orgoPressKey(computerId, "End");
+  await localSleep(80);
+  await orgoPressKey(computerId, "Enter");
+  await localSleep(450);
+  // Empty composer: extra Enter is a no-op. Unsent paste: this actually sends.
+  await orgoPressKey(computerId, "Enter");
+  await localSleep(280);
+  const clicked = await orgoClickSendIfStillArmed(computerId).catch(() => false);
+  if (clicked) await localSleep(200);
+}
+
+/** New chat (optional) → paste → Enter, with a screenshot click if Enter no-ops. */
 export async function orgoSendChat(
   computerId: string,
   text: string,
@@ -127,21 +174,26 @@ export async function orgoSendChat(
     if (newChat) {
       await orgoPressKey(computerId, "Escape");
       await orgoPressKey(computerId, "ctrl+shift+o");
-      await localSleep(500);
+      await localSleep(650);
     }
     await clip;
-    await orgoFocusComposer(computerId);
+    if (newChat) {
+      // New chat already focuses the composer. Skip Shift+Esc (it leaves Shift down).
+      await orgoPressKey(computerId, "Escape");
+      await localSleep(80);
+      await orgoPressKey(computerId, "End");
+    } else {
+      await orgoFocusComposer(computerId);
+    }
     await orgoPressKey(computerId, "ctrl+v");
-    // ChatGPT’s composer is React/ProseMirror — Enter before it hydrates is a no-op.
-    await localSleep(350);
+    await localSleep(500);
   } catch (err) {
     console.warn("[orgo] clipboard send failed, typing with delay 0", err);
     await orgoFocusComposer(computerId);
     await orgoTypeText(computerId, text);
-    await localSleep(200);
+    await localSleep(250);
   }
-  // Orgo documents `Enter`. `Return` was a no-op / newline here.
-  await orgoPressKey(computerId, "Enter");
+  await orgoSubmitComposer(computerId);
 }
 
 export function localSleep(ms: number): Promise<void> {
