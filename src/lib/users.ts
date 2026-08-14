@@ -419,7 +419,6 @@ export async function sendMessage(input: {
   const toUsername = normalizeUsername(input.toUsername);
   const body = input.body.trim();
   if (!body) throw new Error("Message body is required");
-  if (fromUsername === toUsername) throw new Error("Cannot message yourself");
 
   const cfg = supabaseConfig();
   if (cfg) {
@@ -527,7 +526,6 @@ export async function replyAndAckMessage(input: {
   const replyToId = Number(input.replyToId);
   const ackId = Number(input.ackId);
   if (!body) throw new Error("Message body is required");
-  if (fromUsername === toUsername) throw new Error("Cannot message yourself");
   if (!conversationId) throw new Error("conversation_id required");
   if (!Number.isFinite(replyToId) || replyToId <= 0) {
     throw new Error("reply_to_id required");
