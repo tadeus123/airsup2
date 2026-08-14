@@ -24,6 +24,7 @@ import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
 import {
   bindProgressReporter,
+  formatProgressTiming,
   withProgressHeartbeat,
   type McpToolExtra,
 } from "./mcp-progress";
@@ -69,11 +70,12 @@ async function relayPeerViaOrgo(input: {
       }),
     input.report ?? (async () => {}),
     {
-      startMessage: `Opening ChatGPT on ${peer}'s Orgo computer (Ctrl+Shift+O)…`,
-      tickMessage: (s) => `ChatGPT is responding on ${peer}'s computer… (${s}s)`,
+      startMessage: `Opening ChatGPT on ${peer}'s Orgo computer (Ctrl+Shift+O)… usually 30–120s`,
+      tickMessage: (t) =>
+        `ChatGPT responding on ${peer}'s Orgo computer… ${formatProgressTiming(t)}`,
       startProgress: 35,
       endProgress: 92,
-      intervalMs: 8000,
+      intervalMs: 5000,
     }
   );
   if (input.report) {
@@ -305,7 +307,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         liveAwait: true,
       });
 
-      await report(`Routing to ${peer.username}'s Orgo computer…`, 22);
+      await report(`Routing to ${peer.username}'s Orgo computer… expect 30–120s`, 22);
 
       try {
         const orgoResult = await relayPeerViaOrgo({
@@ -400,10 +402,13 @@ export function createAirsupMcpServer(me: User): McpServer {
         report,
         {
           startMessage: `Waiting for reply from ${from}…`,
-          tickMessage: (s) => `Still waiting for ${from}… (${s}s)`,
+          tickMessage: (t) =>
+            `Waiting for ${from}'s reply… ${formatProgressTiming(t)}`,
           startProgress: 10,
           endProgress: 90,
-          intervalMs: 6000,
+          intervalMs: 5000,
+          typicalMinSec: 5,
+          typicalMaxSec: args.max_seconds ?? DEFAULT_AWAIT_MAX_SECONDS,
         }
       );
       if (result.event_count) {

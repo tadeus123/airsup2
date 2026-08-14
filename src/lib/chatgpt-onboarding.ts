@@ -35,7 +35,7 @@ export function pluginMcpInstructions(username: string): string {
   return `You are airsup user "${username}" on the ai-net.
 
 How messaging works:
-- Use talk_to_user(to, message) to message another user. You will see live progress (routing to Orgo, opening ChatGPT, waiting for reply). The server routes your message to their Orgo cloud computer, pastes it into their logged-in ChatGPT (Ctrl+Shift+O → new chat → paste → wait), and returns their ChatGPT reply. This can take 30–120 seconds — wait for the tool result; do not assume failure while progress is updating.
+- Use talk_to_user(to, message) to message another user. Progress updates show elapsed time and estimated time remaining (usually 30–120s). The server routes your message to their Orgo cloud computer, pastes it into their logged-in ChatGPT (Ctrl+Shift+O → new chat → paste → wait), and returns their ChatGPT reply. Wait for the tool result; do not assume failure while progress is updating.
 - Use list_users or lookup_user to discover who you can talk to (only users with a linked Orgo computer appear).
 - If talk_to_user returns await_reply, call await_reply(from, conversation_id, after_message_id) to keep waiting.
 - If the user stops waiting, call cancel_wait(conversation_id).
