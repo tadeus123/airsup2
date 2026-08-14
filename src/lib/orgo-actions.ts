@@ -154,13 +154,12 @@ async function orgoClickSendIfStillArmed(computerId: string): Promise<boolean> {
 async function orgoSubmitComposer(computerId: string): Promise<void> {
   await orgoPressKey(computerId, "End");
   await localSleep(80);
-  await orgoPressKey(computerId, "Enter");
-  await localSleep(450);
-  // Empty composer: extra Enter is a no-op. Unsent paste: this actually sends.
-  await orgoPressKey(computerId, "Enter");
-  await localSleep(280);
-  const clicked = await orgoClickSendIfStillArmed(computerId).catch(() => false);
-  if (clicked) await localSleep(200);
+  // Extra Enters after send are a no-op on an empty ChatGPT box.
+  for (let i = 0; i < 10; i += 1) {
+    await orgoPressKey(computerId, "Enter");
+    await localSleep(160);
+  }
+  await orgoClickSendIfStillArmed(computerId).catch(() => false);
 }
 
 /** New chat (optional) → paste → Enter, with a screenshot click if Enter no-ops. */
