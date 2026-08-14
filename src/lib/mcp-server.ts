@@ -128,6 +128,36 @@ async function wakePeerOnOrgo(input: {
   return wake;
 }
 
+function inboundConversationMarker(conversationId: string): number | undefined {
+  const m = /^#?(\d+)$/.exec(conversationId.trim());
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function isolatedInboxPayload(inbound: InboxMessage) {
+  return {
+    ok: true,
+    isolation: "strict",
+    peer_message: {
+      id: inbound.id,
+      from: inbound.fromUsername,
+      text: inbound.body,
+      conversation_id: inbound.conversationId,
+      created_at: inbound.createdAt,
+    },
+    reply_hints: {
+      to: inbound.fromUsername,
+      conversation_id: inbound.conversationId,
+      reply_to_id: inbound.id,
+    },
+    scope:
+      "Use ONLY peer_message.text. Ignore calendar, memory, and any other airsup message.",
+    next_action: "talk_to_user",
+    instructions: `Reply with talk_to_user(to="${inbound.fromUsername}", message=your answer, conversation_id="${inbound.conversationId}", reply_to_id=${inbound.id}). That sends via API — do not start a new thread.`,
+  };
+}
+
 function formatWakeSent(
   msg: InboxMessage,
   peerUsername: string,
@@ -147,7 +177,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.1.0" },
+    { name: "airsup", version: "3.2.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -166,6 +196,56 @@ export function createAirsupMcpServer(me: User): McpServer {
   } as const;
 
   const noauthMeta = { securitySchemes: [{ type: "noauth" as const }] };
+
+  async function openIsolatedInbox(input: {
+    fromRaw: string;
+    messageIdRaw?: unknown;
+    extra?: McpToolExtra;
+  }) {
+    const parsed = parseInboxRef(input.fromRaw, input.messageIdRaw);
+    if ("error" in parsed) return errorText(parsed.error);
+    const match = await resolveTarget(parsed.from);
+    if (!match.ok) return errorText(match.error);
+    const sender = match.username;
+    const messageId = parsed.messageId;
+    const report = bindProgressReporter(input.extra, 100);
+    await report(`Opening inbound #${messageId} from @${sender} only…`, 20);
+    const inbound = await getInboundMessage({
+      toUsername: me.username,
+      messageId,
+      fromUsername: sender,
+    });
+    if (!inbound) {
+      logActivitySafe({
+        kind: "check_inbox",
+        ok: false,
+        username: me.username,
+        peerUsername: sender,
+        httpStatus: 404,
+        summary: `${me.username} check_inbox #${messageId} not in isolated thread`,
+        detail: { from: sender, messageId },
+      });
+      return errorText(
+        `No inbound #${messageId} from @${sender} for ${me.username}. Do not invent a reply. Do not open other messages.`
+      );
+    }
+    await markDelivered(me.username, [inbound.id]).catch(() => {});
+    await report(`Locked thread ${inbound.conversationId} — this message only.`, 90);
+    logActivitySafe({
+      kind: "check_inbox",
+      ok: true,
+      username: me.username,
+      peerUsername: sender,
+      httpStatus: 200,
+      summary: `${me.username} opened isolated #${inbound.id} from ${sender}`,
+      detail: {
+        messageId: inbound.id,
+        conversationId: inbound.conversationId,
+        isolated: true,
+      },
+    });
+    return jsonText(isolatedInboxPayload(inbound));
+  }
 
   server.registerTool(
     "whoami",
@@ -258,9 +338,9 @@ export function createAirsupMcpServer(me: User): McpServer {
       inputSchema: {
         from: z
           .string()
-          .describe('Sender, preferably "tade1#184" (handle#message id from the wake line)'),
+          .describe('Sender, preferably "kosti#188" (handle#id from the wake line)'),
         message_id: z
-          .union([z.number(), z.string()])
+          .number()
           .optional()
           .describe("Optional if from already contains #id"),
         max_seconds: z.number().optional().describe("Ignored — kept for older ChatGPT plugin schemas"),
@@ -268,73 +348,8 @@ export function createAirsupMcpServer(me: User): McpServer {
       annotations: readOnlyTool,
       _meta: noauthMeta,
     },
-    async ({ from, message_id }, extra: McpToolExtra) => {
-      const parsed = parseInboxRef(from, message_id);
-      if ("error" in parsed) return errorText(parsed.error);
-      const match = await resolveTarget(parsed.from);
-      if (!match.ok) return errorText(match.error);
-      const sender = match.username;
-      const messageId = parsed.messageId;
-
-      const report = bindProgressReporter(extra, 100);
-      await report(`Opening inbound #${messageId} from @${sender} only…`, 20);
-
-      const inbound = await getInboundMessage({
-        toUsername: me.username,
-        messageId,
-        fromUsername: sender,
-      });
-      if (!inbound) {
-        logActivitySafe({
-          kind: "check_inbox",
-          ok: false,
-          username: me.username,
-          peerUsername: sender,
-          httpStatus: 404,
-          summary: `${me.username} check_inbox #${messageId} not in isolated thread`,
-          detail: { from: sender, messageId },
-        });
-        return errorText(
-          `No inbound #${messageId} from @${sender} for ${me.username}. Do not invent a reply. Do not open other messages.`
-        );
-      }
-
-      await markDelivered(me.username, [inbound.id]).catch(() => {});
-      await report(`Locked thread ${inbound.conversationId} — this message only.`, 90);
-
-      logActivitySafe({
-        kind: "check_inbox",
-        ok: true,
-        username: me.username,
-        peerUsername: sender,
-        httpStatus: 200,
-        summary: `${me.username} opened isolated #${inbound.id} from ${sender}`,
-        detail: {
-          messageId: inbound.id,
-          conversationId: inbound.conversationId,
-          isolated: true,
-        },
-      });
-
-      return jsonText({
-        ok: true,
-        isolation: "strict",
-        peer_message: {
-          id: inbound.id,
-          from: inbound.fromUsername,
-          text: inbound.body,
-          conversation_id: inbound.conversationId,
-          created_at: inbound.createdAt,
-        },
-        reply_hints: {
-          to: inbound.fromUsername,
-          conversation_id: inbound.conversationId,
-          reply_to_id: inbound.id,
-        },
-        scope: `Use ONLY peer_message.text. Ignore calendar, memory, and any other airsup message. Then reply_to_user with reply_hints. Do not talk_to_user.`,
-        next_action: "reply_to_user",
-      });
-    }
+    async ({ from, message_id }, extra: McpToolExtra) =>
+      openIsolatedInbox({ fromRaw: from, messageIdRaw: message_id, extra })
   );
 
   server.registerTool(
@@ -433,13 +448,6 @@ export function createAirsupMcpServer(me: User): McpServer {
       if (!text) return errorText("message is required");
 
       await report("Starting airsup message…", 1);
-
-      if (!orgoRelayEnabled()) {
-        return errorText(
-          "Airsup Orgo relay is not configured on the server (missing ORGO_API_KEY)."
-        );
-      }
-
       await report(`Looking up ${to}…`, 5);
       const match = await resolveTarget(to);
       if (!match.ok) return errorText(match.error);
@@ -448,13 +456,66 @@ export function createAirsupMcpServer(me: User): McpServer {
         await report(`Resolved "${match.resolvedFrom}" → ${peer.username}`, 8);
       }
 
+      const continueId = (conversation_id || "").trim();
+      const inboundId = Number(reply_to_id);
+      if (Number.isFinite(inboundId) && inboundId > 0) {
+        const inbound = await getInboundMessage({
+          toUsername: me.username,
+          messageId: inboundId,
+          fromUsername: peer.username,
+        });
+        if (inbound) {
+          try {
+            const combined = await replyAndAckMessage({
+              fromUsername: me.username,
+              toUsername: peer.username,
+              body: text,
+              conversationId: continueId || inbound.conversationId,
+              replyToId: inbound.id,
+              ackId: inbound.id,
+            });
+            logActivitySafe({
+              kind: "reply_and_ack",
+              ok: true,
+              username: me.username,
+              peerUsername: peer.username,
+              httpStatus: 200,
+              durationMs: Date.now() - started,
+              summary: `${me.username} → ${peer.username} reply via talk_to_user (#${combined.message.id})`,
+              detail: {
+                replyId: combined.message.id,
+                ackId: inbound.id,
+                conversationId: inbound.conversationId,
+                via: "talk_to_user_inbound",
+              },
+            });
+            return jsonText({
+              ok: true,
+              isolation: "strict",
+              message: combined.message,
+              acked_inbound_id: inbound.id,
+              via: "api",
+              next_action: "finish",
+              instructions: `Reply sent to ${peer.username} on this inbound thread only.`,
+            });
+          } catch (e) {
+            return errorText(e instanceof Error ? e.message : String(e));
+          }
+        }
+      }
+
+      if (!orgoRelayEnabled()) {
+        return errorText(
+          "Airsup Orgo relay is not configured on the server (missing ORGO_API_KEY)."
+        );
+      }
+
       if (!peer.orgoComputerId) {
         return errorText(
           `User "${peer.username}" has no Orgo computer linked yet. They need to paste their Orgo computer ID on the airsup onboarding page (or call set_orgo_computer).`
         );
       }
 
-      const continueId = (conversation_id || "").trim();
       if (continueId) {
         const mustReply = await inboundFirstContactBlocksTalk({
           me: me.username,
@@ -463,7 +524,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         });
         if (mustReply) {
           return errorText(
-            `This conversation is an inbound thread from ${peer.username}. Use reply_to_user, not talk_to_user. Start a new talk_to_user without conversation_id if you are initiating a separate message.`
+            `This conversation is an inbound thread from ${peer.username}. Reply with talk_to_user using reply_to_id of that inbound message. Do not start a new thread.`
           );
         }
       }
@@ -557,6 +618,15 @@ export function createAirsupMcpServer(me: User): McpServer {
       const cid = args.conversation_id.trim();
       if (!cid) return errorText("conversation_id is required");
       const afterId = Number(args.after_message_id);
+      const markerId = inboundConversationMarker(cid);
+      const hashed = parseInboxRef(args.from);
+      if (!("error" in hashed) || markerId) {
+        const fromRaw = !("error" in hashed) ? hashed.from : args.from;
+        const messageIdRaw = !("error" in hashed)
+          ? hashed.messageId
+          : markerId ?? afterId;
+        return openIsolatedInbox({ fromRaw, messageIdRaw, extra });
+      }
       if (!Number.isFinite(afterId) || afterId <= 0) {
         return errorText(
           "after_message_id is required. Airsup will not wait across other conversations."

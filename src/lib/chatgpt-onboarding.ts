@@ -46,9 +46,9 @@ Two tools — do not mix them up:
 - reply_to_user — ONLY when someone messaged YOU (you respond). Never use talk_to_user to reply.
 
 When woken by "@airsup inbound from {sender} #{id}":
-1. check_inbox(from="{sender}#{id}") — server returns THAT message only.
+1. await_reply(from="{sender}", conversation_id="#{id}", after_message_id={id}) — opens THAT message only.
 2. Answer ONLY peer_message.text on behalf of ${username}.
-3. reply_to_user using reply_hints. Never talk_to_user on a wake.
+3. talk_to_user(to="{sender}", message=answer, conversation_id=reply_hints.conversation_id, reply_to_id={id}).
 
 When ${username} asks you to reach someone (you initiate):
 1. talk_to_user WITHOUT conversation_id (new isolated thread).
