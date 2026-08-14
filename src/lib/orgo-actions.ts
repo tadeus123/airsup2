@@ -103,7 +103,19 @@ echo ok`
   );
 }
 
-/** Ctrl+Shift+O → Ctrl+V → Enter. Clipboard is set first so Ctrl+V has the wake. */
+/** Drop leftover Ctrl/Shift from the previous combo (else Enter becomes Shift+Enter = newline). */
+async function orgoReleaseModifiers(computerId: string): Promise<void> {
+  await orgoBash(
+    computerId,
+    `${DISPLAY_SETUP}
+xdotool keyup Shift_L Shift_R Control_L Control_R 2>/dev/null || true`
+  );
+}
+
+/**
+ * Ctrl+Shift+O → Ctrl+V → Enter.
+ * Must release Shift after new-chat or ChatGPT treats Enter as a newline.
+ */
 export async function orgoSendChat(
   computerId: string,
   text: string,
@@ -113,10 +125,15 @@ export async function orgoSendChat(
   if (newChat) {
     await orgoPressKey(computerId, "ctrl+shift+o");
     await localSleep(600);
+    await orgoReleaseModifiers(computerId);
   }
   await orgoPressKey(computerId, "ctrl+v");
   await localSleep(300);
+  await orgoReleaseModifiers(computerId);
   await orgoPressKey(computerId, "Enter");
+  await localSleep(150);
+  // Some ChatGPT accounts bind send to Ctrl+Enter (Enter = newline). Empty box is a no-op.
+  await orgoPressKey(computerId, "ctrl+Enter");
 }
 
 export function localSleep(ms: number): Promise<void> {
