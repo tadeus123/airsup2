@@ -34,13 +34,14 @@ export async function relayViaChatGptDirect(
     await report?.(relayProgressMessage({ peer, phase: "new_chat" }), 32);
     await orgoClickChatInput(computerId);
     await orgoPressKey(computerId, "ctrl+shift+o");
-    await localSleep(400);
+    await localSleep(600);
   } else {
     await report?.(relayProgressMessage({ peer, phase: "continue_thread" }), 32);
   }
 
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
   await orgoClickChatInput(computerId);
+  await localSleep(120);
   await orgoPasteText(computerId, peerText);
   await orgoPressKey(computerId, "Return");
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);

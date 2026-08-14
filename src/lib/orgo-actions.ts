@@ -120,7 +120,8 @@ export async function orgoPasteText(computerId: string, text: string): Promise<v
     if (!clipEqual(got, text)) {
       throw new Error("clipboard roundtrip mismatch");
     }
-    await orgoPressKey(computerId, "ctrl+a");
+    // Do not Ctrl+A first: if the composer is not focused, that selects
+    // the page heading / suggestion chips instead of the input.
     await orgoPressKey(computerId, "ctrl+v");
     await localSleep(80);
   } catch (err) {
@@ -133,7 +134,13 @@ export function localSleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, Math.max(0, ms)));
 }
 
-/** ChatGPT composer on a 1280×720 Orgo desktop. */
+/**
+ * ChatGPT composer on a 1280×720 Orgo desktop (empty "Where should we begin?" state).
+ * Measured: heading ~y=320, composer bar y=376–416, suggestion chips y=464–480.
+ * (640, 520) lands in empty space / chips, not the input.
+ */
+const CHAT_COMPOSER = { x: 770, y: 396 };
+
 export async function orgoClickChatInput(computerId: string): Promise<void> {
-  await orgoClick(computerId, 640, 520);
+  await orgoClick(computerId, CHAT_COMPOSER.x, CHAT_COMPOSER.y);
 }
