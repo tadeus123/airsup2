@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { orgoSetupInstructions, pluginSetupInstructions } from "@/lib/chatgpt-onboarding";
 import { logActivitySafe, newRequestId } from "@/lib/activity";
+import { normalizeOrgoComputerId } from "@/lib/orgo-routing";
 import {
   claimMemberNumber,
   getMemberCount,
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
       handle?: string;
       displayName?: string;
       bio?: string;
+      orgoComputerId?: string;
+      orgo_computer_id?: string;
     };
     const handle = normalizeUsername(body.handle || body.username || "");
     if (!handle) {
@@ -49,11 +52,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid handle" }, { status: 400 });
     }
 
+    let orgoComputerId: string | null = null;
+    const orgoRaw = (body.orgoComputerId || body.orgo_computer_id || "").trim();
+    if (orgoRaw) {
+      orgoComputerId = normalizeOrgoComputerId(orgoRaw);
+    }
+
     const { user, token } = await registerUser({
       username,
       displayName: body.displayName,
       bio: body.bio,
       memberNumber,
+      orgoComputerId,
     });
     const origin = new URL(request.url).origin;
     const plugin = pluginSetupInstructions({
@@ -84,6 +94,7 @@ export async function POST(request: Request) {
       mcpUrl: plugin.mcpUrl,
       plugin,
       orgo,
+      orgoComputerId: user.orgoComputerId ?? null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "onboard_failed";

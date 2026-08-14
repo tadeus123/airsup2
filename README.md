@@ -43,7 +43,8 @@ Required env vars:
 - `SUPABASE_ANON_KEY`
 - `AIRSUP_DB_TOKEN`
 - `ORGO_API_KEY`
-- `ORGO_COMPUTER_MAP` — JSON map of username → Orgo computer UUID, e.g. `{"tade1":"099c33f0-..."}`
+- Per-user Orgo computer IDs are stored in Supabase (`users.orgo_computer_id`), set at onboarding or via `set_orgo_computer` MCP tool
+- Optional legacy env fallback: `ORGO_COMPUTER_MAP` / `ORGO_DEFAULT_COMPUTER_ID`
 
 `maxDuration=300` on the MCP route for Orgo relay calls (30–120s typical).
 

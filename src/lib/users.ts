@@ -6,6 +6,7 @@ export type User = {
   displayName: string;
   bio: string;
   tokenPrefix: string;
+  orgoComputerId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -120,11 +121,16 @@ function extractBearer(request: Request): string {
 }
 
 function mapUser(row: Record<string, unknown>): User {
+  const orgoRaw = row.orgoComputerId ?? row.orgo_computer_id;
   return {
     username: String(row.username ?? ""),
     displayName: String(row.displayName ?? row.display_name ?? ""),
     bio: String(row.bio ?? ""),
     tokenPrefix: String(row.tokenPrefix ?? row.token_prefix ?? ""),
+    orgoComputerId:
+      orgoRaw != null && String(orgoRaw).trim() !== ""
+        ? String(orgoRaw).trim()
+        : null,
     createdAt: row.createdAt ? String(row.createdAt) : undefined,
     updatedAt: row.updatedAt ? String(row.updatedAt) : undefined,
   };
@@ -177,6 +183,7 @@ export async function registerUser(input: {
   displayName?: string;
   bio?: string;
   memberNumber?: number;
+  orgoComputerId?: string | null;
 }): Promise<{ user: User; token: string; memberNumber?: number }> {
   const username = normalizeUsername(input.username || "");
   if (!username) throw new Error("Username is required");
@@ -196,6 +203,7 @@ export async function registerUser(input: {
       p_token_prefix: minted.prefix,
       p_bio: bio,
       p_member_number: memberNumber ?? null,
+      p_orgo_computer_id: input.orgoComputerId ?? null,
     });
     if (!row?.username) throw new Error("Failed to register user");
     return {
@@ -214,6 +222,7 @@ export async function registerUser(input: {
     displayName,
     bio,
     tokenPrefix: minted.prefix,
+    orgoComputerId: input.orgoComputerId ?? null,
     tokenHash: minted.hash,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
@@ -226,6 +235,7 @@ export async function registerUser(input: {
       displayName: user.displayName,
       bio: user.bio,
       tokenPrefix: user.tokenPrefix,
+      orgoComputerId: user.orgoComputerId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     },
@@ -252,8 +262,75 @@ export async function getUserByUsername(username: string): Promise<User | null> 
     displayName: user.displayName,
     bio: user.bio,
     tokenPrefix: user.tokenPrefix,
+    orgoComputerId: user.orgoComputerId,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+  };
+}
+
+export async function setOrgoComputerForUsername(input: {
+  username: string;
+  orgoComputerId: string | null;
+}): Promise<User> {
+  const uname = normalizeUsername(input.username);
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const row = await supabaseRpc<Record<string, unknown>>(
+      "user_set_orgo_computer_admin",
+      {
+        p_token: cfg.token,
+        p_username: uname,
+        p_orgo_computer_id: input.orgoComputerId ?? "",
+      }
+    );
+    if (!row?.username) throw new Error("Failed to save Orgo computer ID");
+    return mapUser(row);
+  }
+  const mem = memory.users.get(uname);
+  if (!mem) throw new Error("unknown username");
+  mem.orgoComputerId = input.orgoComputerId;
+  mem.updatedAt = new Date().toISOString();
+  return {
+    username: mem.username,
+    displayName: mem.displayName,
+    bio: mem.bio,
+    tokenPrefix: mem.tokenPrefix,
+    orgoComputerId: mem.orgoComputerId,
+    createdAt: mem.createdAt,
+    updatedAt: mem.updatedAt,
+  };
+}
+
+export async function setOrgoComputerForToken(input: {
+  token: string;
+  orgoComputerId: string | null;
+}): Promise<User> {
+  const hash = hashUserToken(input.token);
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const row = await supabaseRpc<Record<string, unknown>>("user_set_orgo_computer", {
+      p_token: cfg.token,
+      p_token_hash: hash,
+      p_orgo_computer_id: input.orgoComputerId ?? "",
+    });
+    if (!row?.username) throw new Error("Failed to save Orgo computer ID");
+    authCache.delete(hash);
+    return mapUser(row);
+  }
+  const username = memory.byHash.get(hash);
+  if (!username) throw new Error("Unauthorized");
+  const mem = memory.users.get(username);
+  if (!mem) throw new Error("Unauthorized");
+  mem.orgoComputerId = input.orgoComputerId;
+  mem.updatedAt = new Date().toISOString();
+  return {
+    username: mem.username,
+    displayName: mem.displayName,
+    bio: mem.bio,
+    tokenPrefix: mem.tokenPrefix,
+    orgoComputerId: mem.orgoComputerId,
+    createdAt: mem.createdAt,
+    updatedAt: mem.updatedAt,
   };
 }
 

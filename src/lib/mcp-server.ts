@@ -6,6 +6,8 @@ import {
   normalizeUsername,
   replyAndAckMessage,
   sendMessage,
+  setOrgoComputerForUsername,
+  setOrgoComputerForToken,
   type User,
 } from "./users";
 import { logActivitySafe, newRequestId } from "./activity";
@@ -16,7 +18,7 @@ import {
   upsertConversationWait,
 } from "./conversation-waits";
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
-import { getOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
+import { getOrgoComputerId, normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
@@ -50,7 +52,7 @@ async function relayPeerViaOrgo(input: {
   requestId: string;
   report?: (message: string, progress: number) => Promise<void>;
 }): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
-  const computerId = getOrgoComputerId(input.peerUsername);
+  const computerId = await getOrgoComputerId(input.peerUsername);
   if (!computerId) {
     throw new Error(
       `User "${input.peerUsername}" has no Orgo computer mapped. They need to complete Orgo setup first.`
@@ -275,9 +277,9 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
-      if (!getOrgoComputerId(peer.username)) {
+      if (!(await getOrgoComputerId(peer.username))) {
         return errorText(
-          `User "${peer.username}" has no Orgo computer mapped yet. They need to set up Orgo first.`
+          `User "${peer.username}" has no Orgo computer linked yet. They need to paste their Orgo computer ID on the airsup onboarding page (or call set_orgo_computer).`
         );
       }
 
@@ -449,6 +451,47 @@ export function createAirsupMcpServer(me: User): McpServer {
         wait,
         instructions: "Wait cancelled.",
       });
+    }
+  );
+
+  server.registerTool(
+    "set_orgo_computer",
+    {
+      title: "Link Orgo computer",
+      description:
+        "Save your Orgo computer UUID so others can message your ChatGPT via airsup. Find it in Orgo → your computer → General.",
+      inputSchema: {
+        orgo_computer_id: z
+          .string()
+          .describe("Orgo computer UUID from General settings, e.g. 099c33f0-..."),
+      },
+      annotations: relayTool,
+      _meta: noauthMeta,
+    },
+    async ({ orgo_computer_id }) => {
+      let id: string | null;
+      try {
+        id = normalizeOrgoComputerId(orgo_computer_id);
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        return errorText(err);
+      }
+      if (!id) return errorText("orgo_computer_id is required");
+      try {
+        const user = await setOrgoComputerForUsername({
+          username: me.username,
+          orgoComputerId: id,
+        });
+        return jsonText({
+          ok: true,
+          username: user.username,
+          orgoComputerId: user.orgoComputerId,
+          instructions:
+            "Orgo computer linked. Leave ChatGPT open on that Orgo desktop — others can now talk_to_user you.",
+        });
+      } catch (e) {
+        return errorText(e instanceof Error ? e.message : String(e));
+      }
     }
   );
 

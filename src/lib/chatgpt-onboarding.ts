@@ -13,7 +13,8 @@ export function orgoSetupInstructions(input: { username: string }): {
       "Open the desktop, launch Chrome, and log into ChatGPT with this user's account.",
       "Leave ChatGPT open in the browser — Airsup pastes messages into it automatically.",
       "Copy the computer ID from Orgo settings (General tab).",
-      `Ask the Airsup admin to add "${handle}" → your computer ID to ORGO_COMPUTER_MAP on the server.`,
+      "Paste it below on this page (saved in Supabase — no Vercel config needed).",
+      "Or later in ChatGPT: set_orgo_computer(orgo_computer_id=\"...\").",
     ],
   };
 }
@@ -26,6 +27,7 @@ export const PLUGIN_TOOL_NAMES = [
   "talk_to_user",
   "await_reply",
   "cancel_wait",
+  "set_orgo_computer",
 ] as const;
 
 /** Instructions shown to ChatGPT via MCP server metadata. */

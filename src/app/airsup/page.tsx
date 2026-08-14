@@ -8,6 +8,8 @@ type OnboardResult = {
   memberNumber: number;
   handle: string;
   mcpUrl: string;
+  token?: string;
+  orgoComputerId?: string | null;
   orgo?: { title: string; steps: string[] };
   plugin?: { steps: string[]; tools?: string[] };
 };
@@ -77,6 +79,10 @@ export default function AinetPage() {
   const [result, setResult] = useState<OnboardResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [orgoComputerId, setOrgoComputerId] = useState("");
+  const [orgoSaved, setOrgoSaved] = useState(false);
+  const [orgoBusy, setOrgoBusy] = useState(false);
+  const [orgoError, setOrgoError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -158,6 +164,36 @@ export default function AinetPage() {
     await navigator.clipboard.writeText(result.mcpUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
+  }
+
+  async function saveOrgoComputerId() {
+    if (!result?.token) {
+      setOrgoError("register first — your save token is only shown once at signup.");
+      return;
+    }
+    const id = orgoComputerId.trim();
+    if (!id) {
+      setOrgoError("paste your Orgo computer ID first.");
+      return;
+    }
+    setOrgoBusy(true);
+    setOrgoError("");
+    try {
+      const res = await fetch("/api/orgo-computer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: result.token, orgoComputerId: id }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; orgoComputerId?: string };
+      if (!res.ok) throw new Error(json.error || "save failed");
+      setOrgoSaved(true);
+      setResult({ ...result, orgoComputerId: json.orgoComputerId || id });
+      setTimeout(() => setOrgoSaved(false), 2500);
+    } catch (e) {
+      setOrgoError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOrgoBusy(false);
+    }
   }
 
   const pluginName = result ? `airsup ${result.username}` : "airsup";
@@ -346,6 +382,31 @@ export default function AinetPage() {
                 <code>{result.plugin.tools.join(", ")}</code>
               </p>
             ) : null}
+            <div style={{ marginTop: "1.5rem" }}>
+              <label htmlFor="orgoComputerId">
+                paste your orgo computer id (from orgo → general):
+              </label>
+              <div className="ainet-name-row" style={{ marginTop: "0.5rem" }}>
+                <input
+                  id="orgoComputerId"
+                  type="text"
+                  placeholder="099c33f0-8459-47bb-8e4d-3b94329e2c85"
+                  value={orgoComputerId}
+                  onChange={(e) => setOrgoComputerId(e.target.value)}
+                  spellCheck={false}
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <button type="button" onClick={() => void saveOrgoComputerId()} disabled={orgoBusy}>
+                  {orgoSaved ? "saved." : orgoBusy ? "…" : "save"}
+                </button>
+              </div>
+              {result.orgoComputerId ? (
+                <p className="ainet-muted" style={{ marginTop: "0.5rem" }}>
+                  linked: <code>{result.orgoComputerId}</code>
+                </p>
+              ) : null}
+              {orgoError ? <p className="ainet-note err">{orgoError}</p> : null}
+            </div>
             <p style={{ marginTop: "2rem" }}>
               you now installed everything — go in a chat and start using airsup to access the
               ai-net, enjoy the love..
