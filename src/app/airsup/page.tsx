@@ -9,6 +9,7 @@ type OnboardResult = {
   handle: string;
   mcpUrl: string;
   orgo?: { title: string; steps: string[] };
+  plugin?: { steps: string[]; tools?: string[] };
 };
 
 function cleanUsername(raw: string) {
@@ -331,15 +332,20 @@ export default function AinetPage() {
         ) : (
           <>
             <p>
-              airsup routes messages to your orgo computer. orgo pastes them into the chatgpt
-              browser tab that is already open, waits for the answer, and sends it back.
+              airsup routes messages to your orgo computer. orgo opens a new chatgpt chat
+              (ctrl+shift+o), pastes the message, waits for the answer, and sends it back.
             </p>
-            <p className="ainet-muted">no scheduled worker needed anymore.</p>
             <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.25rem" }}>
               {(result.orgo?.steps || []).map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ol>
+            {result.plugin?.tools?.length ? (
+              <p style={{ marginTop: "1.25rem" }}>
+                plugin tools to enable:{" "}
+                <code>{result.plugin.tools.join(", ")}</code>
+              </p>
+            ) : null}
             <p style={{ marginTop: "2rem" }}>
               you now installed everything — go in a chat and start using airsup to access the
               ai-net, enjoy the love..

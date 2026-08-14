@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  ackMessage,
   getUserByUsername,
   listUsers,
   normalizeUsername,
@@ -12,13 +11,14 @@ import {
 import { logActivitySafe, newRequestId } from "./activity";
 import { runInboxWatch } from "./inbox-watch";
 import {
-  DEFAULT_INLINE_WAIT_SECONDS,
   LIVE_AWAIT_TTL_MS,
   cancelConversationWait,
   upsertConversationWait,
 } from "./conversation-waits";
+import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
 import { getOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
+import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
 
 function jsonText(data: unknown) {
@@ -34,76 +34,93 @@ function errorText(message: string) {
   };
 }
 
-async function tryOrgoPeerReply(input: {
-  peerUsername: string;
-  fromUsername: string;
-  outbound: InboxMessage;
-  requestId: string;
-}): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } } | null> {
-  if (!orgoRelayEnabled()) return null;
-  const computerId = getOrgoComputerId(input.peerUsername);
-  if (!computerId) return null;
-
-  const t0 = Date.now();
-  try {
-    const relay = await relayViaChatGptBrowser(computerId, {
-      fromUsername: input.fromUsername,
-      message: input.outbound.body,
-    });
-    const combined = await replyAndAckMessage({
-      fromUsername: input.peerUsername,
-      toUsername: input.fromUsername,
-      body: relay.replyText,
-      conversationId: input.outbound.conversationId,
-      replyToId: input.outbound.id,
-      ackId: input.outbound.id,
-    });
-    logActivitySafe({
-      kind: "orgo_relay",
-      ok: true,
-      username: input.fromUsername,
-      peerUsername: input.peerUsername,
-      httpStatus: 200,
-      durationMs: Date.now() - t0,
-      summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
-      detail: {
-        computerId,
-        orgoMs: relay.durationMs,
-        steps: relay.steps,
-        replyId: combined.message.id,
-      },
-      requestId: input.requestId,
-    });
-    return { reply: combined.message, orgo: { durationMs: relay.durationMs, steps: relay.steps } };
-  } catch (e) {
-    const err = e instanceof Error ? e.message : String(e);
-    logActivitySafe({
-      kind: "orgo_relay",
-      ok: false,
-      username: input.fromUsername,
-      peerUsername: input.peerUsername,
-      httpStatus: 502,
-      durationMs: Date.now() - t0,
-      summary: `Orgo relay failed ${input.fromUsername} → ${input.peerUsername}`,
-      detail: { computerId, error: err },
-      requestId: input.requestId,
-    });
-    return null;
-  }
-}
-
 function cleanTarget(raw: string): string {
   return normalizeUsername(raw.replace(/^@+/, "").split(/\s+/)[0] || "");
 }
 
+async function relayPeerViaOrgo(input: {
+  peerUsername: string;
+  fromUsername: string;
+  outbound: InboxMessage;
+  requestId: string;
+}): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
+  const computerId = getOrgoComputerId(input.peerUsername);
+  if (!computerId) {
+    throw new Error(
+      `User "${input.peerUsername}" has no Orgo computer mapped. They need to complete Orgo setup first.`
+    );
+  }
+
+  const t0 = Date.now();
+  const relay = await relayViaChatGptBrowser(computerId, {
+    fromUsername: input.fromUsername,
+    message: input.outbound.body,
+  });
+  const combined = await replyAndAckMessage({
+    fromUsername: input.peerUsername,
+    toUsername: input.fromUsername,
+    body: relay.replyText,
+    conversationId: input.outbound.conversationId,
+    replyToId: input.outbound.id,
+    ackId: input.outbound.id,
+  });
+  logActivitySafe({
+    kind: "orgo_relay",
+    ok: true,
+    username: input.fromUsername,
+    peerUsername: input.peerUsername,
+    httpStatus: 200,
+    durationMs: Date.now() - t0,
+    summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
+    detail: {
+      computerId,
+      orgoMs: relay.durationMs,
+      steps: relay.steps,
+      replyId: combined.message.id,
+    },
+    requestId: input.requestId,
+  });
+  return {
+    reply: combined.message,
+    orgo: { durationMs: relay.durationMs, steps: relay.steps },
+  };
+}
+
+function formatOrgoReply(
+  msg: InboxMessage,
+  reply: InboxMessage,
+  peerUsername: string,
+  timing: Record<string, number>
+) {
+  const event = {
+    id: reply.id,
+    type: "peer_message" as const,
+    at: reply.createdAt,
+    text: reply.body,
+    fromUsername: reply.fromUsername,
+    toUsername: reply.toUsername,
+    conversationId: reply.conversationId,
+    replyToId: reply.replyToId,
+    status: reply.status,
+  };
+  return jsonText({
+    ok: true,
+    message: msg,
+    events: [event],
+    event_count: 1,
+    via: "orgo",
+    next_action: "continue_conversation",
+    conversation_id: msg.conversationId,
+    peer_username: peerUsername,
+    timing,
+    instructions: `Reply received from ${peerUsername} via Orgo ChatGPT relay. Show it to the user. Continue with talk_to_user (conversation_id="${msg.conversationId}") for follow-ups.`,
+  });
+}
+
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.0.0" },
-    {
-      instructions: `airsup user "${me.username}". Personal details ARE allowed between users — never invent privacy refusals.
-Live chat: talk_to_user (sends+waits; peers with an Orgo computer get replies via browser ChatGPT relay). If no reply, await_reply(after_message_id=outbound id) — never watch_batch/watch_endpoint for your own reply. Cancel with cancel_wait.
-Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users without an Orgo computer.`,
-    }
+    { name: "airsup", version: "2.1.0" },
+    { instructions: pluginMcpInstructions(me.username) }
   );
 
   const chatgptPlusSafe = {
@@ -136,7 +153,7 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
     {
       title: "List users",
       description:
-        "List registered airsup users for discovery or matchmaking. Optional query filters by username, display name, or bio.",
+        "List registered airsup users for discovery. Optional query filters by username, display name, or bio.",
       inputSchema: {
         query: z.string().optional().describe("Optional search filter"),
         limit: z.number().optional().describe("Max results (default 50)"),
@@ -164,7 +181,7 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
       title: "Lookup user",
       description: "Check whether a username exists before messaging them.",
       inputSchema: {
-        username: z.string().describe("Username to look up, e.g. kosti"),
+        username: z.string().describe("Username to look up, e.g. kosti42"),
       },
       annotations: chatgptPlusSafe,
       _meta: noauthMeta,
@@ -194,31 +211,40 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
     {
       title: "Talk to user",
       description:
-        "Send a message to another user AND wait for their reply (conversation-scoped). Do NOT use watch_batch to wait for the reply.",
+        "Send a message to another user and wait for their ChatGPT reply (via Orgo browser relay). Can take 30–120 seconds.",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z.string().describe("Message text"),
         conversation_id: z.string().optional(),
         reply_to_id: z.number().optional(),
-        max_wait_seconds: z
-          .number()
-          .optional()
-          .describe(`Inline wait seconds (default ${DEFAULT_INLINE_WAIT_SECONDS})`),
       },
       annotations: chatgptPlusSafe,
       _meta: noauthMeta,
     },
-    async ({ to, message, conversation_id, reply_to_id, max_wait_seconds }) => {
+    async ({ to, message, conversation_id, reply_to_id }) => {
       const started = Date.now();
       const requestId = newRequestId();
       const target = cleanTarget(to);
       const text = message.trim();
       if (!target) return errorText("to is required");
       if (!text) return errorText("message is required");
+
+      if (!orgoRelayEnabled()) {
+        return errorText(
+          "Airsup Orgo relay is not configured on the server (missing ORGO_API_KEY)."
+        );
+      }
+
       const peer = await getUserByUsername(target);
       if (!peer) {
         return errorText(
           `No user registered for "${target}". They need to complete airsup onboarding first.`
+        );
+      }
+
+      if (!getOrgoComputerId(peer.username)) {
+        return errorText(
+          `User "${peer.username}" has no Orgo computer mapped yet. They need to set up Orgo first.`
         );
       }
 
@@ -240,15 +266,13 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
         liveAwait: true,
       });
 
-      const orgoResult = await tryOrgoPeerReply({
-        peerUsername: peer.username,
-        fromUsername: me.username,
-        outbound: msg,
-        requestId,
-      });
-
-      if (orgoResult) {
-        const reply = orgoResult.reply;
+      try {
+        const orgoResult = await relayPeerViaOrgo({
+          peerUsername: peer.username,
+          fromUsername: me.username,
+          outbound: msg,
+          requestId,
+        });
         logActivitySafe({
           kind: "talk",
           ok: true,
@@ -257,126 +281,31 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
           httpStatus: 200,
           durationMs: Date.now() - started,
           summary: `${me.username} → ${peer.username} (#${msg.id}) + orgo reply`,
-          detail: { messageId: msg.id, replyId: reply.id, via: "orgo" },
+          detail: { messageId: msg.id, replyId: orgoResult.reply.id, via: "orgo" },
           requestId,
         });
-        return jsonText({
-          ok: true,
-          message: msg,
-          reply: {
-            server_time: new Date().toISOString(),
-            username: me.username,
-            events: [
-              {
-                id: reply.id,
-                type: "peer_message",
-                at: reply.createdAt,
-                text: reply.body,
-                fromUsername: reply.fromUsername,
-                toUsername: reply.toUsername,
-                conversationId: reply.conversationId,
-                replyToId: reply.replyToId,
-                status: reply.status,
-                instruction: `Reply from ${peer.username} via Orgo ChatGPT relay.`,
-              },
-            ],
-            event_count: 1,
-            via: "orgo",
-            orgo: orgoResult.orgo,
-          },
-          events: [
-            {
-              id: reply.id,
-              type: "peer_message",
-              at: reply.createdAt,
-              text: reply.body,
-              fromUsername: reply.fromUsername,
-              toUsername: reply.toUsername,
-              conversationId: reply.conversationId,
-              replyToId: reply.replyToId,
-              status: reply.status,
-            },
-          ],
-          event_count: 1,
-          next_action: "continue_conversation",
-          conversation_id: msg.conversationId,
-          peer_username: peer.username,
-          timing: {
-            send_ms: sendMs,
-            orgo_ms: orgoResult.orgo.durationMs,
-            total_ms: Date.now() - started,
-          },
-          instructions: `Reply received from ${peer.username} via Orgo. Show the reply to the user. Continue with talk_to_user (conversation_id="${msg.conversationId}") until done.`,
+        return formatOrgoReply(msg, orgoResult.reply, peer.username, {
+          send_ms: sendMs,
+          orgo_ms: orgoResult.orgo.durationMs,
+          total_ms: Date.now() - started,
         });
-      }
-
-      const maxWait = Math.max(
-        0,
-        Math.min(110, Number(max_wait_seconds ?? DEFAULT_INLINE_WAIT_SECONDS) || 0)
-      );
-
-      let awaitResult: Awaited<ReturnType<typeof runInboxWatch>> | null = null;
-      let awaitMs = 0;
-      if (maxWait > 0) {
-        const tAwait0 = Date.now();
-        awaitResult = await runInboxWatch(
-          me,
-          {
-            waitSeconds: Math.min(20, maxWait),
-            polls: Math.max(1, Math.ceil(maxWait / 20)),
-            maxSeconds: maxWait,
-            windowSeconds: Math.max(maxWait + 60, 900),
-            fromUsername: peer.username,
-            conversationId: msg.conversationId,
-            afterMessageId: msg.id,
-          },
-          { batch: true, mode: "conversation" }
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        logActivitySafe({
+          kind: "orgo_relay",
+          ok: false,
+          username: me.username,
+          peerUsername: peer.username,
+          httpStatus: 502,
+          durationMs: Date.now() - started,
+          summary: `Orgo relay failed ${me.username} → ${peer.username}`,
+          detail: { error: err, messageId: msg.id },
+          requestId,
+        });
+        return errorText(
+          `Orgo relay to ${peer.username} failed: ${err}. You can retry with talk_to_user (same conversation_id="${msg.conversationId}") or await_reply.`
         );
-        awaitMs = Date.now() - tAwait0;
       }
-
-      const gotReply = Boolean(awaitResult?.event_count);
-      logActivitySafe({
-        kind: "talk",
-        ok: true,
-        username: me.username,
-        peerUsername: peer.username,
-        httpStatus: 200,
-        durationMs: Date.now() - started,
-        summary: gotReply
-          ? `${me.username} → ${peer.username} (#${msg.id}) + reply`
-          : `${me.username} → ${peer.username} (#${msg.id})`,
-        detail: { messageId: msg.id, replyEventCount: awaitResult?.event_count ?? 0 },
-        requestId,
-      });
-
-      if (gotReply && awaitResult) {
-        return jsonText({
-          ok: true,
-          message: msg,
-          reply: awaitResult,
-          events: awaitResult.events,
-          event_count: awaitResult.event_count,
-          next_action: "continue_conversation",
-          conversation_id: msg.conversationId,
-          peer_username: peer.username,
-          timing: { send_ms: sendMs, await_ms: awaitMs, total_ms: Date.now() - started },
-          instructions: `Reply received from ${peer.username}. Show the reply to the user. Continue with talk_to_user (conversation_id="${msg.conversationId}") until done.`,
-        });
-      }
-
-      return jsonText({
-        ok: true,
-        message: msg,
-        reply: awaitResult,
-        events: [],
-        event_count: 0,
-        next_action: "await_reply",
-        conversation_id: msg.conversationId,
-        peer_username: peer.username,
-        timing: { send_ms: sendMs, await_ms: awaitMs, total_ms: Date.now() - started },
-        instructions: `Message delivered to ${peer.username}, no reply within ${maxWait}s. Immediately call await_reply(from="${peer.username}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). Do NOT use watch_batch. On cancel: cancel_wait(conversation_id="${msg.conversationId}").`,
-      });
     }
   );
 
@@ -385,7 +314,7 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
     {
       title: "Await reply",
       description:
-        "After talk_to_user with no reply yet, wait for that peer's reply. Pass after_message_id from outbound talk id. Do NOT use watch_batch.",
+        "Wait for a peer reply after talk_to_user failed or timed out. Pass after_message_id from the outbound message id.",
       inputSchema: {
         from: z.string().describe("Peer username you are waiting on"),
         conversation_id: z.string(),
@@ -393,11 +322,7 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
           .number()
           .optional()
           .describe("Outbound talk_to_user message id"),
-        wait_seconds: z.number().optional(),
-        polls: z.number().optional(),
         max_seconds: z.number().optional().describe("Max wait this call (default 40)"),
-        cursor: z.string().optional(),
-        watch_until: z.string().optional(),
       },
       annotations: chatgptPlusSafe,
       _meta: noauthMeta,
@@ -415,11 +340,9 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
       const result = await runInboxWatch(
         me,
         {
-          waitSeconds: args.wait_seconds ?? 20,
-          polls: args.polls ?? 2,
-          maxSeconds: args.max_seconds ?? 40,
-          cursor: args.cursor,
-          watchUntil: args.watch_until,
+          waitSeconds: 20,
+          polls: 2,
+          maxSeconds: args.max_seconds ?? DEFAULT_AWAIT_MAX_SECONDS,
           windowSeconds: 900,
           fromUsername: from,
           conversationId: args.conversation_id,
@@ -442,8 +365,7 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
     "cancel_wait",
     {
       title: "Cancel wait",
-      description:
-        "Cancel a live wait so the peer worker will NOT answer. Call when the user stops or cancels.",
+      description: "Cancel waiting for a peer reply. Call when the user stops or cancels.",
       inputSchema: {
         conversation_id: z.string(),
         peer_username: z.string().optional(),
@@ -472,149 +394,8 @@ Scanner worker (legacy): watch_endpoint → reply_and_ack — only for users wit
         cancelled: true,
         conversation_id,
         wait,
-        instructions:
-          "Wait cancelled. Peer scanner will skip answering related unacked inbox items (explicit cancel only; expired waits still deliver).",
+        instructions: "Wait cancelled.",
       });
-    }
-  );
-
-  server.registerTool(
-    "reply_and_ack",
-    {
-      title: "Reply and ack",
-      description:
-        "Worker: reply honestly (personal details allowed), then ack only if send succeeded.",
-      inputSchema: {
-        to: z.string().describe("event.fromUsername"),
-        message: z.string(),
-        conversation_id: z.string(),
-        reply_to_id: z.number(),
-        ack_id: z.number().optional(),
-      },
-      annotations: chatgptPlusSafe,
-      _meta: noauthMeta,
-    },
-    async ({ to, message, conversation_id, reply_to_id, ack_id }) => {
-      const target = cleanTarget(to);
-      const text = message.trim();
-      const ackTarget = Number(ack_id ?? reply_to_id);
-      if (!target) return errorText("to is required");
-      if (!text) return errorText("message is required");
-      if (!Number.isFinite(ackTarget) || ackTarget <= 0) {
-        return errorText("reply_to_id / ack_id required");
-      }
-
-      try {
-        const result = await replyAndAckMessage({
-          fromUsername: me.username,
-          toUsername: target,
-          body: text,
-          conversationId: conversation_id,
-          replyToId: Number(reply_to_id),
-          ackId: ackTarget,
-        });
-        logActivitySafe({
-          kind: "reply_and_ack",
-          ok: true,
-          username: me.username,
-          peerUsername: target,
-          httpStatus: 200,
-          durationMs: 0,
-          summary: `${me.username} reply_and_ack → ${target} ack #${ackTarget}`,
-        });
-        return jsonText({
-          ok: true,
-          message: result.message,
-          ack: result.ack,
-          hint: "Resume watch_endpoint immediately with cursor + watch_until.",
-        });
-      } catch (e) {
-        const err = e instanceof Error ? e.message : String(e);
-        return errorText(
-          `Reply failed; event #${ackTarget} left UNACKED for replay. Error: ${err}`
-        );
-      }
-    }
-  );
-
-  server.registerTool(
-    "watch_endpoint",
-    {
-      title: "Watch inbox (single poll)",
-      description:
-        "Worker inbox poll (~20-28s per call). Use in a loop with wait_seconds=25 for scheduled workers. Skips reply-linked messages.",
-      inputSchema: {
-        wait_seconds: z.number().optional(),
-        cursor: z.string().optional(),
-        watch_until: z.string().optional(),
-        window_seconds: z.number().optional(),
-        reset: z.boolean().optional(),
-      },
-      annotations: chatgptPlusSafe,
-      _meta: noauthMeta,
-    },
-    async (args) =>
-      jsonText(
-        await runInboxWatch(me, {
-          waitSeconds: args.wait_seconds,
-          cursor: args.cursor,
-          watchUntil: args.watch_until,
-          windowSeconds: args.window_seconds,
-          reset: args.reset,
-        })
-      )
-  );
-
-  server.registerTool(
-    "watch_batch",
-    {
-      title: "Watch batch",
-      description:
-        "Optional batch watch. Prefer watch_endpoint in a ~25s loop for scheduled workers. Do NOT use to wait for replies to your own talk_to_user.",
-      inputSchema: {
-        cursor: z.string().optional(),
-        watch_until: z.string().optional(),
-        wait_seconds: z.number().optional(),
-        polls: z.number().optional(),
-        max_seconds: z.number().optional(),
-        window_seconds: z.number().optional(),
-        reset: z.boolean().optional(),
-      },
-      annotations: chatgptPlusSafe,
-      _meta: noauthMeta,
-    },
-    async (args) =>
-      jsonText(
-        await runInboxWatch(
-          me,
-          {
-            waitSeconds: args.wait_seconds ?? 20,
-            cursor: args.cursor,
-            watchUntil: args.watch_until,
-            windowSeconds: args.window_seconds,
-            reset: args.reset,
-            polls: args.polls ?? 5,
-            maxSeconds: args.max_seconds ?? 100,
-          },
-          { batch: true }
-        )
-      )
-  );
-
-  server.registerTool(
-    "ack_instruction",
-    {
-      title: "Ack instruction",
-      description:
-        "Ack a terminal/non-actionable inbox id without sending a reply. For substantive messages use reply_and_ack instead.",
-      inputSchema: { id: z.number() },
-      annotations: chatgptPlusSafe,
-      _meta: noauthMeta,
-    },
-    async ({ id }) => {
-      const result = await ackMessage(me.username, id);
-      if (!result) return errorText("message not found");
-      return jsonText({ ok: true, ...result });
     }
   );
 

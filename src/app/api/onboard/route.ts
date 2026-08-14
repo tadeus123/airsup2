@@ -1,13 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-  chatgptPrefillUrl,
-  orgoSetupInstructions,
-  pluginSetupInstructions,
-  scheduledTaskDescription,
-  scheduledTaskName,
-  scheduledWorkerBody,
-  workerSetupChatgptPrompt,
-} from "@/lib/chatgpt-onboarding";
+import { orgoSetupInstructions, pluginSetupInstructions } from "@/lib/chatgpt-onboarding";
 import { logActivitySafe, newRequestId } from "@/lib/activity";
 import {
   claimMemberNumber,
@@ -64,18 +56,6 @@ export async function POST(request: Request) {
       memberNumber,
     });
     const origin = new URL(request.url).origin;
-    const workerPrompt = workerSetupChatgptPrompt({
-      origin,
-      username: user.username,
-      token,
-      displayName: user.displayName,
-    });
-    const workerTaskInstructions = scheduledWorkerBody({
-      origin,
-      username: user.username,
-      token,
-      displayName: user.displayName,
-    });
     const plugin = pluginSetupInstructions({
       origin,
       username: user.username,
@@ -101,12 +81,6 @@ export async function POST(request: Request) {
       memberNumber,
       handle,
       token,
-      workerPrompt,
-      workerTaskInstructions,
-      workerSetupPrompt: workerPrompt,
-      workerChatgptUrl: chatgptPrefillUrl(workerPrompt),
-      scheduleDescription: scheduledTaskDescription(user.username),
-      scheduleName: scheduledTaskName(user.username),
       mcpUrl: plugin.mcpUrl,
       plugin,
       orgo,
