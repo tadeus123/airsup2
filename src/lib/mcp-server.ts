@@ -20,6 +20,10 @@ import {
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
 import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { relayViaChatGptBrowser } from "./orgo";
+import {
+  orgoComputerActiveRelayCount,
+  runOrgoRelayCoordinated,
+} from "./orgo-relay-coordinator";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
 import {
@@ -58,19 +62,39 @@ async function relayPeerViaOrgo(input: {
 }): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
   const peer = input.peerUsername;
   const t0 = Date.now();
+  const mayRunParallel =
+    !input.continueThread && orgoComputerActiveRelayCount(input.computerId) > 0;
+
   const relay = await withProgressHeartbeat(
     () =>
-      relayViaChatGptBrowser(input.computerId, {
-        fromUsername: input.fromUsername,
-        fromDisplayName: input.fromDisplayName,
-        message: input.outbound.body,
+      runOrgoRelayCoordinated({
+        computerId: input.computerId,
+        conversationId: input.outbound.conversationId,
         continueThread: input.continueThread,
+        onWait: input.report
+          ? async (message) => {
+              await input.report!(message, 28);
+            }
+          : undefined,
+        run: () =>
+          relayViaChatGptBrowser(input.computerId, {
+            fromUsername: input.fromUsername,
+            fromDisplayName: input.fromDisplayName,
+            message: input.outbound.body,
+            conversationId: input.outbound.conversationId,
+            continueThread: input.continueThread,
+            parallelWithOthers:
+              !input.continueThread &&
+              orgoComputerActiveRelayCount(input.computerId) > 1,
+          }),
       }),
     input.report ?? (async () => {}),
     {
       startMessage: input.continueThread
         ? `Continuing ChatGPT thread on ${peer}'s Orgo… usually 15–60s`
-        : `Opening new ChatGPT chat on ${peer}'s Orgo (Ctrl+Shift+O)… usually 30–120s`,
+        : mayRunParallel
+          ? `Opening parallel ChatGPT chat on ${peer}'s Orgo… usually 30–120s`
+          : `Opening new ChatGPT chat on ${peer}'s Orgo (Ctrl+Shift+O)… usually 30–120s`,
       tickMessage: (t) =>
         input.continueThread
           ? `ChatGPT replying on ${peer}'s Orgo (same thread)… ${formatProgressTiming({
@@ -155,7 +179,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.3.0" },
+    { name: "airsup", version: "2.4.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 

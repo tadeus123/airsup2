@@ -1,8 +1,15 @@
+export function shortConversationRef(conversationId: string): string {
+  const id = conversationId.trim();
+  if (!id) return "new";
+  return id.replace(/-/g, "").slice(0, 8);
+}
+
 /** What gets pasted into the peer's ChatGPT input. */
 export type PeerChatGptMessageInput = {
   fromUsername: string;
   fromDisplayName?: string;
   message: string;
+  conversationId: string;
   /** Same airsup conversation_id — stay in the open ChatGPT tab. */
   continueThread: boolean;
 };
@@ -20,9 +27,10 @@ export function formatAirsupSender(input: {
 /** Message body pasted into the recipient's ChatGPT (with sender + relay rules). */
 export function buildPeerChatGptMessage(input: PeerChatGptMessageInput): string {
   const sender = formatAirsupSender(input);
+  const thread = shortConversationRef(input.conversationId);
   const header = input.continueThread
-    ? `[AIRSUP follow-up from ${sender}]`
-    : `[AIRSUP message from ${sender}]`;
+    ? `[AIRSUP follow-up from ${sender} · thread ${thread}]`
+    : `[AIRSUP message from ${sender} · thread ${thread}]`;
 
   return `${header}
 
@@ -40,14 +48,18 @@ Airsup rules (recipient's ChatGPT):
 /** Instructions for Orgo's computer-use agent (browser automation). */
 export function buildOrgoAgentPrompt(input: {
   peerChatGptMessage: string;
+  conversationId: string;
   continueThread: boolean;
+  /** Other Airsup relays may be running on this VM at the same time. */
+  parallelWithOthers: boolean;
 }): string {
   const paste = input.peerChatGptMessage;
+  const thread = shortConversationRef(input.conversationId);
 
   if (input.continueThread) {
-    return `Airsup relay — continue the OPEN ChatGPT chat (faster path).
+    return `Airsup relay — CONTINUE thread ${thread} (back-and-forth, same chat tab).
 
-1. Focus the ChatGPT browser tab (Airsup thread already open).
+1. Focus the ChatGPT tab for thread ${thread} (look for header "thread ${thread}" in the chat).
 2. Click the message input. Do NOT open a new chat — do NOT press Ctrl+Shift+O.
 3. Paste exactly (Ctrl+V):
 
@@ -60,10 +72,14 @@ ${paste}
 Do NOT open terminal, other apps, or other websites.`;
   }
 
-  return `Airsup relay — start a NEW ChatGPT chat.
+  const parallelNote = input.parallelWithOthers
+    ? `\nNOTE: Other Airsup relays may be running IN PARALLEL on this computer. Open a SEPARATE new chat for thread ${thread} only — do not reuse another Airsup chat tab.\n`
+    : "";
 
-1. Focus the ChatGPT browser tab.
-2. Press Ctrl+Shift+O (Strg+Shift+O) for a new chat. Do NOT use menus.
+  return `Airsup relay — NEW chat for thread ${thread}.${parallelNote}
+
+1. Focus the ChatGPT browser window.
+2. Press Ctrl+Shift+O (Strg+Shift+O) for a brand-new chat. Do NOT use menus.
 3. Click the message input. Paste exactly (Ctrl+V):
 
 ${paste}

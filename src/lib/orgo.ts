@@ -11,8 +11,11 @@ export type OrgoRelayInput = {
   fromUsername: string;
   fromDisplayName?: string;
   message: string;
+  conversationId: string;
   /** When true, Orgo continues the open ChatGPT tab instead of Ctrl+Shift+O new chat. */
   continueThread?: boolean;
+  /** Hint that other relays may run in parallel on this Orgo VM (separate new chats). */
+  parallelWithOthers?: boolean;
 };
 
 export type OrgoRelayResult = {
@@ -36,9 +39,15 @@ export function buildChatGptRelayPrompt(input: OrgoRelayInput): string {
     fromUsername: input.fromUsername,
     fromDisplayName: input.fromDisplayName,
     message: input.message,
+    conversationId: input.conversationId,
     continueThread,
   });
-  return buildOrgoAgentPrompt({ peerChatGptMessage, continueThread });
+  return buildOrgoAgentPrompt({
+    peerChatGptMessage,
+    conversationId: input.conversationId,
+    continueThread,
+    parallelWithOthers: Boolean(input.parallelWithOthers),
+  });
 }
 
 type ChatCompletionResponse = {
