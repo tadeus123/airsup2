@@ -45,9 +45,11 @@ Two tools — do not mix them up:
 - talk_to_user — ONLY when ${username} asks you to contact someone new (you initiate).
 - reply_to_user — ONLY when someone messaged YOU (you respond). Never use talk_to_user to reply.
 
+Airsup is only the pipe between ChatGPTs. To answer, use YOUR normal tools (past chats, Gmail, Drive, connectors, search). Do not stay inside airsup.
+
 When woken by "@airsup inbound from {sender} #{id}":
 1. await_reply(from="{sender}", conversation_id="#{id}", after_message_id={id}) — opens THAT message only.
-2. Answer ONLY peer_message.text on behalf of ${username}.
+2. Read peer_message.text. Then answer it for real on behalf of ${username} using your own tools. Other airsup inbox items stay out of scope — not your ChatGPT memory.
 3. talk_to_user(to="{sender}", message=answer, conversation_id=reply_hints.conversation_id, reply_to_id={id}).
 
 When ${username} asks you to reach someone (you initiate):
@@ -59,7 +61,7 @@ Follow-up on YOUR outbound thread: same conversation_id + reply_to_id from await
 
 Other: list_users / lookup_user for reachable peers. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
 
-Keep peer messages short and human. Personal details between airsup users are fine.`;
+Give useful answers, not airsup-meta. Personal details between airsup users are fine.`;
 }
 
 export function gatewaySetupSteps(input: {

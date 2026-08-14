@@ -152,9 +152,9 @@ function isolatedInboxPayload(inbound: InboxMessage) {
       reply_to_id: inbound.id,
     },
     scope:
-      "Use ONLY peer_message.text. Ignore calendar, memory, and any other airsup message.",
+      "Answer peer_message.text only (ignore other airsup inbox items). Use your own ChatGPT tools — past chats, Gmail, Drive, connectors — to actually answer. Airsup is just the send/receive pipe.",
     next_action: "talk_to_user",
-    instructions: `Reply with talk_to_user(to="${inbound.fromUsername}", message=your answer, conversation_id="${inbound.conversationId}", reply_to_id=${inbound.id}). That sends via API — do not start a new thread.`,
+    instructions: `Use your own tools to answer, then talk_to_user(to="${inbound.fromUsername}", message=your answer, conversation_id="${inbound.conversationId}", reply_to_id=${inbound.id}). Do not start a new airsup thread.`,
   };
 }
 
@@ -177,7 +177,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.0" },
+    { name: "airsup", version: "3.2.1" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
