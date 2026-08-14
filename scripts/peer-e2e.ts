@@ -34,17 +34,24 @@ function assert(cond: unknown, msg: string): asserts cond {
 }
 
 async function testNicknameResolve() {
-  __resetUserMemoryForTests();
-  await registerUser({
-    username: "tade1",
-    displayName: "Tade",
-    orgoComputerId: "099c33f0-8459-47bb-8e4d-3b94329e2c85",
-  });
-  await registerUser({
-    username: "kosti",
-    displayName: "Kosti",
-    orgoComputerId: "dca96bed-5904-4e6b-ada3-8be624df291a",
-  });
+  const usingSupabase = Boolean(
+    process.env.SUPABASE_URL &&
+      process.env.SUPABASE_ANON_KEY &&
+      process.env.AIRSUP_DB_TOKEN
+  );
+  if (!usingSupabase) {
+    __resetUserMemoryForTests();
+    await registerUser({
+      username: "tade1",
+      displayName: "Tade",
+      orgoComputerId: "099c33f0-8459-47bb-8e4d-3b94329e2c85",
+    });
+    await registerUser({
+      username: "kosti",
+      displayName: "Kosti",
+      orgoComputerId: "dca96bed-5904-4e6b-ada3-8be624df291a",
+    });
+  }
   assert(parsePeerHint("tade's supi") === "tade", "parse tade's supi");
   assert(parsePeerHint("kosti2") === "kosti2", "parse kosti2");
   const tadeMatch = await resolvePeerUsername("tade");
