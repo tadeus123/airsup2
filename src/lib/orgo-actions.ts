@@ -111,6 +111,9 @@ echo ok`
 /** ChatGPT’s own shortcut — focuses the composer from anywhere on the page. */
 export async function orgoFocusComposer(computerId: string): Promise<void> {
   await orgoPressKey(computerId, "shift+Escape");
+  // Drop leftover Shift so the next key is not Shift+Enter (newline, no send).
+  await localSleep(80);
+  await orgoPressKey(computerId, "End");
 }
 
 /** New chat (optional) → Shift+Esc → Ctrl+V → Enter. No mouse, no pixel targets. */
@@ -124,18 +127,21 @@ export async function orgoSendChat(
     if (newChat) {
       await orgoPressKey(computerId, "Escape");
       await orgoPressKey(computerId, "ctrl+shift+o");
-      await localSleep(450);
+      await localSleep(500);
     }
     await clip;
     await orgoFocusComposer(computerId);
     await orgoPressKey(computerId, "ctrl+v");
-    await localSleep(50);
+    // ChatGPT’s composer is React/ProseMirror — Enter before it hydrates is a no-op.
+    await localSleep(350);
   } catch (err) {
     console.warn("[orgo] clipboard send failed, typing with delay 0", err);
     await orgoFocusComposer(computerId);
     await orgoTypeText(computerId, text);
+    await localSleep(200);
   }
-  await orgoPressKey(computerId, "Return");
+  // Orgo documents `Enter`. `Return` was a no-op / newline here.
+  await orgoPressKey(computerId, "Enter");
 }
 
 export function localSleep(ms: number): Promise<void> {
