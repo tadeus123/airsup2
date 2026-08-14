@@ -95,11 +95,3 @@ export function localSleep(ms: number): Promise<void> {
 export async function orgoClickChatInput(computerId: string): Promise<void> {
   await orgoClick(computerId, 640, 520);
 }
-
-export type OrgoRelayMode = "auto" | "direct" | "agent";
-
-export function orgoRelayMode(): OrgoRelayMode {
-  const m = (process.env.ORGO_RELAY_MODE || "direct").trim().toLowerCase();
-  if (m === "direct" || m === "agent" || m === "auto") return m;
-  return "direct";
-}

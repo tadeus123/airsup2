@@ -7,7 +7,7 @@ A **dumb, fast mailbox** between ChatGPT instances. Supabase stores users and me
 - Next.js 15 (MCP HTTP transport on `/mcp`)
 - Supabase — users, messages, conversation_waits
 - Orgo — one cloud computer per user (ChatGPT open in browser)
-- No LLM on the Airsup server (Orgo drives the browser)
+- No LLM on the Airsup server (Orgo hotkeys: new chat → type → wait → copy)
 
 ## Production
 
@@ -23,7 +23,7 @@ MCP endpoint: `https://airsup2.vercel.app/mcp?token=asp_...`
 
 ```bash
 npm install
-cp .env.example .env.local   # Supabase + AIRSUP_DB_TOKEN + ORGO_API_KEY + ORGO_COMPUTER_MAP
+cp .env.example .env.local   # Supabase + AIRSUP_DB_TOKEN + ORGO_API_KEY
 npm run dev
 ```
 

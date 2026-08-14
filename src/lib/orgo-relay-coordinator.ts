@@ -86,10 +86,6 @@ function releaseInMemoryComputerSlot(computerId: string): void {
   if (!q?.length) computerWaiters.delete(computerId);
 }
 
-export function orgoComputerActiveRelayCount(computerId: string): number {
-  return computerActive.get(computerId) ?? 0;
-}
-
 async function runInMemoryCoordinated<T>(
   input: OrgoRelayCoordination & { run: () => Promise<T> }
 ): Promise<T> {

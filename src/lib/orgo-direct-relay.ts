@@ -63,6 +63,5 @@ export async function relayViaChatGptDirect(
     replyText: polled.replyText,
     durationMs: Date.now() - started,
     continueThread,
-    relayMethod: "direct",
   };
 }

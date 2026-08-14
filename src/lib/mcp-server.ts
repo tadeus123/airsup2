@@ -116,7 +116,6 @@ async function relayPeerViaOrgo(input: {
       steps: relay.steps,
       replyId: combined.message.id,
       continueThread: relay.continueThread,
-      relayMethod: relay.relayMethod,
     },
     requestId: input.requestId,
   });
@@ -161,7 +160,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.10.0" },
+    { name: "airsup", version: "2.10.1" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
