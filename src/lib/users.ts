@@ -355,6 +355,7 @@ export async function listUsers(input?: {
   const q = (input?.query || "").trim().toLowerCase();
   const limit = Math.min(Math.max(input?.limit ?? 50, 1), 100);
   return [...memory.users.values()]
+    .filter((u) => !!u.orgoComputerId)
     .filter(
       (u) =>
         !q ||

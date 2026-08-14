@@ -184,7 +184,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "List users",
       description:
-        "List registered airsup users for discovery. Optional query filters by username, display name, or bio.",
+        "List airsup users who have linked an Orgo computer (reachable peers). Optional query filters by username, display name, or bio.",
       inputSchema: {
         query: z.string().optional().describe("Optional search filter"),
         limit: z.number().optional().describe("Max results (default 50)"),
@@ -210,7 +210,8 @@ export function createAirsupMcpServer(me: User): McpServer {
     "lookup_user",
     {
       title: "Lookup user",
-      description: "Check whether a username exists before messaging them.",
+      description:
+        "Check whether a username exists and has an Orgo computer linked before messaging them.",
       inputSchema: {
         username: z.string().describe("Username to look up, e.g. kosti42"),
       },
@@ -220,11 +221,13 @@ export function createAirsupMcpServer(me: User): McpServer {
     async ({ username }) => {
       const u = cleanTarget(username);
       const user = await getUserByUsername(u);
-      if (!user) {
+      if (!user || !user.orgoComputerId) {
         return jsonText({
           found: false,
           username: u,
-          error: `No user registered for "${u}"`,
+          error: user
+            ? `User "${u}" has not linked an Orgo computer yet`
+            : `No user registered for "${u}"`,
         });
       }
       return jsonText({
