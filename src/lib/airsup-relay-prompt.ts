@@ -59,21 +59,24 @@ export function buildOrgoAgentPrompt(input: {
   if (input.continueThread) {
     return `Airsup relay — CONTINUE thread ${thread} (back-and-forth, same chat tab).
 
-1. Focus the ChatGPT tab for thread ${thread} (look for header "thread ${thread}" in the chat).
-2. Click the message input. Do NOT open a new chat — do NOT press Ctrl+Shift+O.
-3. Paste exactly (Ctrl+V):
+1. Focus the ChatGPT browser window.
+2. In the chat sidebar, open the Airsup chat for thread ${thread}:
+   find a chat whose messages contain "thread ${thread}" or "[AIRSUP message from".
+   (Scroll recent chats — pick the matching Airsup thread, not a random chat.)
+3. Click the message input. Do NOT press Ctrl+Shift+O — do NOT open a new chat.
+4. Paste exactly (Ctrl+V):
 
 ${paste}
 
-4. Press Enter.
-5. Wait until ChatGPT fully finishes (no stop button, no spinner).
-6. Copy ChatGPT's complete answer. Return ONLY that text — no prefix or markdown.
+5. Press Enter.
+6. Wait until ChatGPT fully finishes (no stop button, no spinner).
+7. Copy ChatGPT's complete answer. Return ONLY that text — no prefix or markdown.
 
 Do NOT open terminal, other apps, or other websites.`;
   }
 
   const parallelNote = input.parallelWithOthers
-    ? `\nNOTE: Other Airsup relays may be running IN PARALLEL on this computer. Open a SEPARATE new chat for thread ${thread} only — do not reuse another Airsup chat tab.\n`
+    ? `\nNOTE: Other Airsup relays may be running IN PARALLEL. Open a SEPARATE new chat for thread ${thread} only.\n`
     : "";
 
   return `Airsup relay — NEW chat for thread ${thread}.${parallelNote}
@@ -87,6 +90,7 @@ ${paste}
 4. Press Enter.
 5. Wait until ChatGPT fully finishes (no stop button, no spinner).
 6. Copy ChatGPT's complete answer. Return ONLY that text — no prefix or markdown.
+7. Optional but helpful: if ChatGPT lets you rename the chat, set the title to "AIRSUP ${thread}".
 
 Do NOT open terminal, other apps, or other websites.`;
 }

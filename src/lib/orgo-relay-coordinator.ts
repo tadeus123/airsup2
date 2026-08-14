@@ -1,5 +1,7 @@
 /** Routes concurrent Orgo relays: parallel separate threads, serial back-and-forth. */
 
+import { acquireOrgoRelayLease, orgoLeaseBackend } from "./orgo-relay-lease";
+
 type WaitReason = "conversation" | "computer_capacity";
 
 export type OrgoRelayCoordination = {
@@ -19,14 +21,12 @@ function maxConcurrentRelaysPerComputer(): number {
   return Math.max(1, Math.min(Math.floor(n), 4));
 }
 
-/** Per-conversation chain — one relay at a time per thread (back-and-forth). */
+/** In-memory fallback for local dev without Supabase leases. */
 const conversationTail = new Map<string, Promise<void>>();
-
-/** Parallel new-chat relays currently active per Orgo computer. */
 const computerActive = new Map<string, number>();
 const computerWaiters = new Map<string, Array<() => void>>();
 
-async function withConversationLock<T>(
+async function withInMemoryConversationLock<T>(
   key: string,
   onWait: OrgoRelayCoordination["onWait"],
   run: () => Promise<T>
@@ -53,7 +53,7 @@ async function withConversationLock<T>(
   }
 }
 
-async function acquireComputerSlot(
+async function acquireInMemoryComputerSlot(
   computerId: string,
   onWait: OrgoRelayCoordination["onWait"]
 ): Promise<void> {
@@ -77,7 +77,7 @@ async function acquireComputerSlot(
   computerActive.set(computerId, (computerActive.get(computerId) ?? 0) + 1);
 }
 
-function releaseComputerSlot(computerId: string): void {
+function releaseInMemoryComputerSlot(computerId: string): void {
   const active = Math.max(0, (computerActive.get(computerId) ?? 1) - 1);
   computerActive.set(computerId, active);
   const q = computerWaiters.get(computerId);
@@ -86,33 +86,53 @@ function releaseComputerSlot(computerId: string): void {
   if (!q?.length) computerWaiters.delete(computerId);
 }
 
-/** Active parallel relays on this Orgo computer (for prompt hints). */
 export function orgoComputerActiveRelayCount(computerId: string): number {
   return computerActive.get(computerId) ?? 0;
 }
 
-/**
- * Route Orgo browser relays:
- * - Same conversation_id → same ChatGPT tab, serialized (back-and-forth).
- * - Different conversations → up to ORGO_MAX_CONCURRENT_RELAYS parallel new chats.
- */
-export async function runOrgoRelayCoordinated<T>(
+async function runInMemoryCoordinated<T>(
   input: OrgoRelayCoordination & { run: () => Promise<T> }
 ): Promise<T> {
   const key = convKey(input.computerId, input.conversationId);
   const needsParallelSlot = !input.continueThread;
 
-  return withConversationLock(key, input.onWait, async () => {
+  return withInMemoryConversationLock(key, input.onWait, async () => {
     if (needsParallelSlot) {
-      await acquireComputerSlot(input.computerId, input.onWait);
+      await acquireInMemoryComputerSlot(input.computerId, input.onWait);
       try {
         return await input.run();
       } finally {
-        releaseComputerSlot(input.computerId);
+        releaseInMemoryComputerSlot(input.computerId);
       }
     }
     return input.run();
   });
+}
+
+/**
+ * Route Orgo browser relays:
+ * - Supabase leases when configured (Vercel multi-instance safe).
+ * - In-memory fallback for local dev.
+ * - Same conversation_id → serialized; different conversations → parallel up to N.
+ */
+export async function runOrgoRelayCoordinated<T>(
+  input: OrgoRelayCoordination & { run: () => Promise<T> }
+): Promise<T> {
+  if (orgoLeaseBackend() === "supabase") {
+    const lease = await acquireOrgoRelayLease({
+      computerId: input.computerId,
+      conversationId: input.conversationId,
+      onWait: input.onWait
+        ? async (message) => input.onWait!(message, "computer_capacity")
+        : undefined,
+    });
+    try {
+      return await input.run();
+    } finally {
+      await lease.release();
+    }
+  }
+  return runInMemoryCoordinated(input);
 }
 
 export function __resetOrgoRelayCoordinatorForTests(): void {
@@ -120,3 +140,5 @@ export function __resetOrgoRelayCoordinatorForTests(): void {
   computerActive.clear();
   computerWaiters.clear();
 }
+
+export { orgoLeaseBackend };

@@ -26,6 +26,7 @@ import {
 } from "./orgo-relay-coordinator";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
+import { resolveContinueThread } from "./relay-thread";
 import {
   bindProgressReporter,
   formatProgressTiming,
@@ -121,6 +122,11 @@ async function relayPeerViaOrgo(input: {
     replyToId: input.outbound.id,
     ackId: input.outbound.id,
   });
+  if (!combined.ack) {
+    console.warn(
+      `[orgo] ack missed for outbound #${input.outbound.id} (${input.fromUsername}→${input.peerUsername})`
+    );
+  }
   logActivitySafe({
     kind: "orgo_relay",
     ok: true,
@@ -179,7 +185,7 @@ function formatOrgoReply(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.4.0" },
+    { name: "airsup", version: "2.5.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -329,7 +335,10 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
-      const continueThread = Boolean(conversation_id?.trim());
+      const continueThread = resolveContinueThread({
+        conversationId: conversation_id,
+        replyToId: reply_to_id,
+      });
 
       await report(`Sending message to ${peer.username}…`, 12);
       const tSend0 = Date.now();
@@ -399,7 +408,9 @@ export function createAirsupMcpServer(me: User): McpServer {
           requestId,
         });
         return errorText(
-          `Orgo relay to ${peer.username} failed: ${err}. You can retry with talk_to_user (same conversation_id="${msg.conversationId}") or await_reply.`
+          continueThread
+            ? `Orgo relay to ${peer.username} failed: ${err}. Retry talk_to_user with the same conversation_id="${msg.conversationId}" and reply_to_id=${reply_to_id ?? "?"}.`
+            : `Orgo relay to ${peer.username} failed: ${err}. Retry talk_to_user(to="${peer.username}", conversation_id="${msg.conversationId}", message="...") — do NOT pass reply_to_id until you received a peer reply. await_reply will not help until a reply exists.`
         );
       }
     }
@@ -410,7 +421,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Wait for peer reply",
       description:
-        "Wait for a peer reply after talk_to_user failed or timed out. Shows live progress while waiting.",
+        "Wait for a peer reply that was already sent to your inbox (e.g. delayed delivery). Not useful after Orgo relay failure — retry talk_to_user instead.",
       inputSchema: {
         from: z.string().describe("Peer username you are waiting on"),
         conversation_id: z.string(),
