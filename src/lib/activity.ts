@@ -13,6 +13,8 @@ export type ActivityKind =
   | "ack"
   | "reply_and_ack"
   | "orgo_relay"
+  | "orgo_wake"
+  | "check_inbox"
   | "error";
 
 export function newRequestId(): string {

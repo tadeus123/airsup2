@@ -7,7 +7,6 @@ import {
   replyAndAckMessage,
   sendMessage,
   setOrgoComputerForUsername,
-  setOrgoComputerForToken,
   type User,
 } from "./users";
 import { logActivitySafe, newRequestId } from "./activity";
@@ -19,11 +18,10 @@ import {
 } from "./conversation-waits";
 import { DEFAULT_AWAIT_MAX_SECONDS } from "./constants";
 import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
-import { relayViaChatGptBrowser } from "./orgo";
 import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
+import { wakePeerViaOrgo } from "./orgo-wake-relay";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
 import type { InboxMessage } from "./users";
-import { resolveContinueThread } from "./relay-thread";
 import {
   bindProgressReporter,
   formatProgressTiming,
@@ -48,119 +46,75 @@ function cleanTarget(raw: string): string {
   return normalizeUsername(raw.replace(/^@+/, "").split(/\s+/)[0] || "");
 }
 
-async function relayPeerViaOrgo(input: {
+async function wakePeerOnOrgo(input: {
   peerUsername: string;
   fromUsername: string;
-  fromDisplayName?: string;
   computerId: string;
-  outbound: InboxMessage;
-  continueThread: boolean;
+  conversationId: string;
+  outboundId: number;
   requestId: string;
   report?: (message: string, progress: number) => Promise<void>;
-}): Promise<{ reply: InboxMessage; orgo: { durationMs: number; steps?: number } }> {
-  const peer = input.peerUsername;
+}): Promise<{ durationMs: number }> {
   const t0 = Date.now();
-
-  const relay = await runOrgoRelayCoordinated({
+  const wake = await runOrgoRelayCoordinated({
     computerId: input.computerId,
-    conversationId: input.outbound.conversationId,
-    continueThread: input.continueThread,
+    conversationId: input.conversationId,
+    continueThread: false,
     onWait: input.report
       ? async (message) => {
           await input.report!(
             message.includes("slot")
               ? message
-              : `Waiting for prior message to ${peer}…`,
+              : `Waiting for prior wake on ${input.peerUsername}'s Orgo…`,
             26
           );
         }
       : undefined,
     run: () =>
-      relayViaChatGptBrowser(input.computerId, {
+      wakePeerViaOrgo(input.computerId, {
         fromUsername: input.fromUsername,
-        fromDisplayName: input.fromDisplayName,
-        message: input.outbound.body,
-        conversationId: input.outbound.conversationId,
-        peerUsername: peer,
-        continueThread: input.continueThread,
+        peerUsername: input.peerUsername,
         onProgress: input.report,
       }),
   });
-  if (input.report) {
-    await input.report(`Saving reply from ${peer}…`, 95);
-  }
-  const combined = await replyAndAckMessage({
-    fromUsername: input.peerUsername,
-    toUsername: input.fromUsername,
-    body: relay.replyText,
-    conversationId: input.outbound.conversationId,
-    replyToId: input.outbound.id,
-    ackId: input.outbound.id,
-  });
-  if (!combined.ack) {
-    console.warn(
-      `[orgo] ack missed for outbound #${input.outbound.id} (${input.fromUsername}→${input.peerUsername})`
-    );
-  }
   logActivitySafe({
-    kind: "orgo_relay",
+    kind: "orgo_wake",
     ok: true,
     username: input.fromUsername,
     peerUsername: input.peerUsername,
     httpStatus: 200,
     durationMs: Date.now() - t0,
-    summary: `${input.fromUsername} → ${input.peerUsername} via Orgo (#${input.outbound.id})`,
-      detail: {
+    summary: `${input.fromUsername} woke ${input.peerUsername} (#${input.outboundId})`,
+    detail: {
       computerId: input.computerId,
-      orgoMs: relay.durationMs,
-      steps: relay.steps,
-      replyId: combined.message.id,
-      continueThread: relay.continueThread,
+      orgoMs: wake.durationMs,
+      outboundId: input.outboundId,
     },
     requestId: input.requestId,
   });
-  return {
-    reply: combined.message,
-    orgo: { durationMs: relay.durationMs, steps: relay.steps },
-  };
+  return wake;
 }
 
-function formatOrgoReply(
+function formatWakeSent(
   msg: InboxMessage,
-  reply: InboxMessage,
   peerUsername: string,
-  timing: Record<string, number>,
-  continueThread: boolean
+  timing: Record<string, number>
 ) {
-  const event = {
-    id: reply.id,
-    type: "peer_message" as const,
-    at: reply.createdAt,
-    text: reply.body,
-    fromUsername: reply.fromUsername,
-    toUsername: reply.toUsername,
-    conversationId: reply.conversationId,
-    replyToId: reply.replyToId,
-    status: reply.status,
-  };
   return jsonText({
     ok: true,
     message: msg,
-    events: [event],
-    event_count: 1,
-    via: "orgo",
-    next_action: "continue_conversation",
+    via: "wake",
+    next_action: "await_reply",
     conversation_id: msg.conversationId,
     peer_username: peerUsername,
-    continue_thread: continueThread,
     timing,
-    instructions: `Reply from ${peerUsername} via Airsup (their ChatGPT). Show it clearly. For follow-ups use talk_to_user(to="${peerUsername}", conversation_id="${msg.conversationId}", reply_to_id=${reply.id}) — same thread, faster.`,
+    instructions: `Message stored and ${peerUsername} woken. Call await_reply(from="${peerUsername}", conversation_id="${msg.conversationId}", after_message_id=${msg.id}). Their Supi will pick up the message via check_inbox and reply via reply_to_user.`,
   });
 }
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "2.10.2" },
+    { name: "airsup", version: "3.0.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -259,22 +213,129 @@ export function createAirsupMcpServer(me: User): McpServer {
   );
 
   server.registerTool(
+    "check_inbox",
+    {
+      title: "Check inbound messages",
+      description:
+        "Check for new airsup messages sent to you. Call when woken by @airsup or polling for peers.",
+      inputSchema: {
+        from: z.string().optional().describe("Optional filter by sender username"),
+        max_seconds: z.number().optional().describe("Max wait (default 15)"),
+      },
+      annotations: readOnlyTool,
+      _meta: noauthMeta,
+    },
+    async ({ from, max_seconds }) => {
+      const sender = from ? cleanTarget(from) : undefined;
+      const result = await runInboxWatch(
+        me,
+        {
+          waitSeconds: 5,
+          polls: 3,
+          maxSeconds: max_seconds ?? 15,
+          windowSeconds: 120,
+          fromUsername: sender,
+        },
+        { batch: true, mode: "scanner" }
+      );
+      logActivitySafe({
+        kind: "check_inbox",
+        ok: true,
+        username: me.username,
+        peerUsername: sender || result.events[0]?.fromUsername || "",
+        httpStatus: 200,
+        durationMs: result.timing.total_ms ?? 0,
+        summary: `${me.username} check_inbox → ${result.event_count} message(s)`,
+        detail: { from: sender || null, eventCount: result.event_count },
+      });
+      return jsonText({
+        ...result,
+        next_action: result.event_count ? "reply_to_user" : "check_inbox",
+        instructions: result.event_count
+          ? "Read the message(s), respond to the user, then call reply_to_user for each."
+          : "No new messages. Call check_inbox again or wait for another @airsup wake.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "reply_to_user",
+    {
+      title: "Reply to airsup user",
+      description:
+        "Send your reply back to another airsup user after check_inbox. Delivers directly via API.",
+      inputSchema: {
+        to: z.string().describe("Recipient username (who messaged you)"),
+        message: z.string().describe("Your reply text"),
+        conversation_id: z.string().describe("From the inbound message"),
+        reply_to_id: z.number().describe("Inbound message id you are answering"),
+      },
+      annotations: relayTool,
+      _meta: noauthMeta,
+    },
+    async ({ to, message, conversation_id, reply_to_id }) => {
+      const target = cleanTarget(to);
+      const body = message.trim();
+      if (!target) return errorText("to is required");
+      if (!body) return errorText("message is required");
+      if (!conversation_id.trim()) return errorText("conversation_id is required");
+      const inboundId = Number(reply_to_id);
+      if (!Number.isFinite(inboundId) || inboundId <= 0) {
+        return errorText("reply_to_id is required");
+      }
+
+      try {
+        const combined = await replyAndAckMessage({
+          fromUsername: me.username,
+          toUsername: target,
+          body,
+          conversationId: conversation_id.trim(),
+          replyToId: inboundId,
+          ackId: inboundId,
+        });
+        logActivitySafe({
+          kind: "reply_and_ack",
+          ok: true,
+          username: me.username,
+          peerUsername: target,
+          httpStatus: 200,
+          durationMs: 0,
+          summary: `${me.username} → ${target} reply (#${combined.message.id})`,
+          detail: {
+            replyId: combined.message.id,
+            ackId: inboundId,
+            conversationId: conversation_id,
+          },
+        });
+        return jsonText({
+          ok: true,
+          message: combined.message,
+          acked_inbound_id: inboundId,
+          via: "api",
+          next_action: "finish",
+          instructions: `Reply sent to ${target}. They will receive it via await_reply on their side.`,
+        });
+      } catch (e) {
+        return errorText(e instanceof Error ? e.message : String(e));
+      }
+    }
+  );
+
+  server.registerTool(
     "talk_to_user",
     {
-      title: "Message peer via ChatGPT",
+      title: "Message peer",
       description:
-        "Send a plain message to another user's ChatGPT and wait for their reply. You think here; they see only a natural message from you.",
+        "Store a message for another user, wake their ChatGPT via Orgo, then await_reply for their Supi's answer.",
       inputSchema: {
         to: z.string().describe("Target username"),
         message: z
           .string()
-          .describe(
-            "Plain message their ChatGPT will read — natural language, no meta-instructions"
-          ),
+          .describe("Plain message — delivered to their Supi via check_inbox"),
         conversation_id: z
           .string()
           .optional()
-          .describe("Reuse from prior talk_to_user for follow-ups (faster, same ChatGPT thread)"),
+          .describe("Reuse from prior talk_to_user for follow-ups in the same thread"),
         reply_to_id: z
           .number()
           .optional()
@@ -314,12 +375,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         );
       }
 
-      const continueThread = resolveContinueThread({
-        conversationId: conversation_id,
-        replyToId: reply_to_id,
-      });
-
-      await report(`Recording message for ${peer.username}…`, 10);
+      await report(`Recording message for ${peer.username}…`, 12);
       const tSend0 = Date.now();
       const msg = await sendMessage({
         fromUsername: me.username,
@@ -338,27 +394,19 @@ export function createAirsupMcpServer(me: User): McpServer {
         liveAwait: true,
       }).catch(() => {});
 
-      await report(`Connecting to ${peer.username}'s Orgo computer…`, 16);
-      await report(
-        continueThread
-          ? `Handoff to ${peer.username}'s ChatGPT (same thread)…`
-          : `Handoff to ${peer.username}'s ChatGPT (new chat)…`,
-        24
-      );
+      await report(`Waking ${peer.username}'s ChatGPT…`, 20);
 
       try {
-        const orgoResult = await relayPeerViaOrgo({
+        const wake = await wakePeerOnOrgo({
           peerUsername: peer.username,
           fromUsername: me.username,
-          fromDisplayName: me.displayName,
           computerId: peer.orgoComputerId,
-          outbound: msg,
-          continueThread,
+          conversationId: msg.conversationId,
+          outboundId: msg.id,
           requestId,
           report,
         });
-        await report(`Saving ${peer.username}'s reply…`, 96);
-        await report(`Reply received from ${peer.username}.`, 100);
+        await report(`${peer.username} woken — waiting for their Supi to reply…`, 90);
         logActivitySafe({
           kind: "talk",
           ok: true,
@@ -366,32 +414,30 @@ export function createAirsupMcpServer(me: User): McpServer {
           peerUsername: peer.username,
           httpStatus: 200,
           durationMs: Date.now() - started,
-          summary: `${me.username} → ${peer.username} (#${msg.id}) + orgo reply`,
-          detail: { messageId: msg.id, replyId: orgoResult.reply.id, via: "orgo" },
+          summary: `${me.username} → ${peer.username} (#${msg.id}) wake sent`,
+          detail: { messageId: msg.id, via: "wake", orgoMs: wake.durationMs },
           requestId,
         });
-        return formatOrgoReply(msg, orgoResult.reply, peer.username, {
+        return formatWakeSent(msg, peer.username, {
           send_ms: sendMs,
-          orgo_ms: orgoResult.orgo.durationMs,
+          wake_ms: wake.durationMs,
           total_ms: Date.now() - started,
-        }, continueThread);
+        });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
         logActivitySafe({
-          kind: "orgo_relay",
+          kind: "orgo_wake",
           ok: false,
           username: me.username,
           peerUsername: peer.username,
           httpStatus: 502,
           durationMs: Date.now() - started,
-          summary: `Orgo relay failed ${me.username} → ${peer.username}`,
+          summary: `Orgo wake failed ${me.username} → ${peer.username}`,
           detail: { error: err, messageId: msg.id },
           requestId,
         });
         return errorText(
-          continueThread
-            ? `Orgo relay to ${peer.username} failed: ${err}. Retry talk_to_user with the same conversation_id="${msg.conversationId}" and reply_to_id=${reply_to_id ?? "?"}.`
-            : `Orgo relay to ${peer.username} failed: ${err}. Retry talk_to_user(to="${peer.username}", conversation_id="${msg.conversationId}", message="...") — do NOT pass reply_to_id until you received a peer reply. await_reply will not help until a reply exists.`
+          `Orgo wake to ${peer.username} failed: ${err}. Message is stored — retry talk_to_user with conversation_id="${msg.conversationId}" or use await_reply if they may have already replied.`
         );
       }
     }
@@ -402,7 +448,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Wait for peer reply",
       description:
-        "Wait for a peer reply that was already sent to your inbox (e.g. delayed delivery). Not useful after Orgo relay failure — retry talk_to_user instead.",
+        "Wait for a peer's Supi to reply via reply_to_user after you called talk_to_user.",
       inputSchema: {
         from: z.string().describe("Peer username you are waiting on"),
         conversation_id: z.string(),
@@ -446,7 +492,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         {
           startMessage: `Waiting for reply from ${from}…`,
           tickMessage: (t) =>
-            `Waiting for ${from}'s reply… ${formatProgressTiming(t)}`,
+            `Waiting for ${from}'s Supi… ${formatProgressTiming(t)}`,
           startProgress: 10,
           endProgress: 90,
           intervalMs: 5000,

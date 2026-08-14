@@ -24,6 +24,8 @@ export const PLUGIN_TOOL_NAMES = [
   "whoami",
   "list_users",
   "lookup_user",
+  "check_inbox",
+  "reply_to_user",
   "talk_to_user",
   "await_reply",
   "cancel_wait",
