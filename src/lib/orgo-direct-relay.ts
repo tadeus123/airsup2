@@ -3,15 +3,15 @@ import type { OrgoRelayInput, OrgoRelayResult } from "./orgo";
 import {
   localSleep,
   orgoClickChatInput,
+  orgoPasteText,
   orgoPressKey,
-  orgoTypeText,
 } from "./orgo-actions";
 import { relayProgressMessage } from "./orgo-relay-progress";
 import { pollUntilChatGptReply } from "./orgo-reply-poller";
 
 /**
  * Simple relay:
- *   new message → Ctrl+Shift+O → type → Enter → wait → copy → return
+ *   new message → Ctrl+Shift+O → paste → Enter → wait → copy → return
  * Follow-ups skip the new-chat hotkey and type into the same thread.
  */
 export async function relayViaChatGptDirect(
@@ -41,7 +41,7 @@ export async function relayViaChatGptDirect(
 
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 40);
   await orgoClickChatInput(computerId);
-  await orgoTypeText(computerId, peerText);
+  await orgoPasteText(computerId, peerText);
   await orgoPressKey(computerId, "Return");
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 48);
 

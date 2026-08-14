@@ -50,7 +50,8 @@ export async function orgoClick(
 }
 
 export async function orgoTypeText(computerId: string, text: string): Promise<void> {
-  await orgoAction(computerId, "/type", { text });
+  // delay:0 — Orgo otherwise types one keystroke at a time, like a human.
+  await orgoAction(computerId, "/type", { text, delay: 0 });
 }
 
 export async function orgoBash(computerId: string, command: string): Promise<string> {
@@ -85,6 +86,47 @@ export async function orgoReadClipboard(computerId: string): Promise<string> {
     `${DISPLAY_SETUP}
 timeout 3 xclip -selection clipboard -o 2>/dev/null || timeout 3 xsel --clipboard --output 2>/dev/null || true`
   );
+}
+
+/**
+ * Put text on the VM clipboard. Do not wrap xclip in `timeout` — it forks and
+ * must stay alive to serve Ctrl+V. DISPLAY is required; Orgo bash has none.
+ */
+export async function orgoSetClipboard(computerId: string, text: string): Promise<void> {
+  const b64 = Buffer.from(text, "utf8").toString("base64");
+  await orgoBash(
+    computerId,
+    `${DISPLAY_SETUP}
+f=/tmp/airsup-clip.$$
+echo '${b64}' | base64 -d > "$f" || exit 1
+if ! xclip -selection clipboard -i "$f" >/dev/null 2>&1; then
+  timeout 2 xsel --clipboard --input < "$f" || true
+fi
+xclip -selection primary -i "$f" >/dev/null 2>&1 || true
+rm -f "$f"
+echo ok`
+  );
+}
+
+function clipEqual(a: string, b: string): boolean {
+  return a.replace(/\r\n/g, "\n").trim() === b.replace(/\r\n/g, "\n").trim();
+}
+
+/** Instant paste into the focused field. Falls back to delay-0 typing. */
+export async function orgoPasteText(computerId: string, text: string): Promise<void> {
+  try {
+    await orgoSetClipboard(computerId, text);
+    const got = await orgoReadClipboard(computerId);
+    if (!clipEqual(got, text)) {
+      throw new Error("clipboard roundtrip mismatch");
+    }
+    await orgoPressKey(computerId, "ctrl+a");
+    await orgoPressKey(computerId, "ctrl+v");
+    await localSleep(80);
+  } catch (err) {
+    console.warn("[orgo] clipboard paste failed, typing with delay 0", err);
+    await orgoTypeText(computerId, text);
+  }
 }
 
 export function localSleep(ms: number): Promise<void> {
