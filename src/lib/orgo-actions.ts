@@ -1,5 +1,3 @@
-import { decodePngRgba, findChatGptSendButton } from "./orgo-send-button";
-
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -105,60 +103,63 @@ echo ok`
   );
 }
 
-/** Empty ChatGPT composer on a 1280×720 Orgo desktop (sidebar open). */
-const CHAT_COMPOSER = { x: 700, y: 400 };
-/** Fallback send arrow if screenshot search misses. */
-const CHAT_SEND = { x: 1120, y: 400 };
-
-async function orgoScreenshotPng(computerId: string): Promise<Buffer | null> {
-  try {
-    const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/screenshot`, {
-      headers: authHeaders(),
-    });
-    const json = (await res.json()) as { image?: string };
-    const image = json.image;
-    if (!image) return null;
-    const url = image.startsWith("http")
-      ? image
-      : `${ORGO_API_BASE}${image.startsWith("/") ? "" : "/"}${image}`;
-    const img = await fetch(url, { headers: authHeaders() });
-    if (!img.ok) return null;
-    return Buffer.from(await img.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
-async function orgoClickSendButton(computerId: string): Promise<void> {
-  const buf = await orgoScreenshotPng(computerId);
-  const img = buf ? decodePngRgba(buf) : null;
-  const found = img ? findChatGptSendButton(img) : null;
-  if (found) {
-    await orgoClick(computerId, found.x, found.y);
-    return;
-  }
-  await orgoClick(computerId, CHAT_SEND.x, CHAT_SEND.y);
-}
+/**
+ * ChatGPT @ 1280×720 (sidebar open), measured on kosti2:
+ * - Empty new chat: composer mid-screen, send circle ~ (1128, 394)
+ * - In-thread: composer bottom, send/voice ~ (1064, 670)
+ *
+ * Stupid bugs we hit before:
+ * - Separate Orgo /key+/click calls left focus on sidebar after Ctrl+Shift+O
+ * - Send click at y=400 while in-thread composer is at y≈670 (or vice versa)
+ * - PNG send-button finder ROI cut off at 0.92×height and never saw y=670
+ */
+const LAYOUT = {
+  newChat: { composer: { x: 720, y: 400 }, send: { x: 1128, y: 394 } },
+  thread: { composer: { x: 720, y: 650 }, send: { x: 1064, y: 670 } },
+} as const;
 
 /**
- * New chat → click input → Ctrl+V → click send.
- * Mouse for focus/send; keyboard only for new-chat + paste.
+ * New chat (optional) → focus composer → paste → click send.
+ * One bash/xdotool round-trip so modifiers/focus cannot desync between API calls.
  */
 export async function orgoSendChat(
   computerId: string,
   text: string,
   newChat: boolean
 ): Promise<void> {
-  await orgoSetClipboard(computerId, text);
-  if (newChat) {
-    await orgoPressKey(computerId, "ctrl+shift+o");
-    await localSleep(700);
+  const b64 = Buffer.from(text, "utf8").toString("base64");
+  const spot = newChat ? LAYOUT.newChat : LAYOUT.thread;
+  const openNew = newChat
+    ? `xdotool key --clearmodifiers ctrl+shift+o
+sleep 1.2
+`
+    : "";
+
+  const out = await orgoBash(
+    computerId,
+    `set -e
+${DISPLAY_SETUP}
+command -v xdotool >/dev/null || { echo "xdotool missing"; exit 1; }
+f=/tmp/airsup-send-clip.$$
+echo '${b64}' | base64 -d > "$f" || exit 1
+xclip -selection clipboard -i "$f" >/dev/null 2>&1 || xsel --clipboard --input < "$f"
+xdotool keyup Shift_L Shift_R Control_L Control_R Alt_L Alt_R Meta_L Meta_R 2>/dev/null || true
+sleep 0.1
+${openNew}xdotool mousemove ${spot.composer.x} ${spot.composer.y} click 1
+sleep 0.25
+xdotool key --clearmodifiers ctrl+a
+sleep 0.05
+xdotool key --clearmodifiers ctrl+v
+sleep 0.9
+xdotool mousemove ${spot.send.x} ${spot.send.y} click 1
+sleep 0.25
+rm -f "$f"
+echo SENT`
+  );
+
+  if (!/\bSENT\b/.test(out)) {
+    throw new Error(`orgoSendChat failed: ${out.slice(0, 240)}`);
   }
-  await orgoClick(computerId, CHAT_COMPOSER.x, CHAT_COMPOSER.y);
-  await localSleep(150);
-  await orgoPressKey(computerId, "ctrl+v");
-  await localSleep(400);
-  await orgoClickSendButton(computerId);
 }
 
 export function localSleep(ms: number): Promise<void> {
