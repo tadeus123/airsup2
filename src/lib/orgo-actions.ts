@@ -1,3 +1,5 @@
+import { decodePngRgba, findChatGptSendButton } from "./orgo-send-button";
+
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -103,18 +105,44 @@ echo ok`
   );
 }
 
-/** Drop leftover Ctrl/Shift from the previous combo (else Enter becomes Shift+Enter = newline). */
-async function orgoReleaseModifiers(computerId: string): Promise<void> {
-  await orgoBash(
-    computerId,
-    `${DISPLAY_SETUP}
-xdotool keyup Shift_L Shift_R Control_L Control_R 2>/dev/null || true`
-  );
+/** Empty ChatGPT composer on a 1280×720 Orgo desktop (sidebar open). */
+const CHAT_COMPOSER = { x: 700, y: 400 };
+/** Fallback send arrow if screenshot search misses. */
+const CHAT_SEND = { x: 1120, y: 400 };
+
+async function orgoScreenshotPng(computerId: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/screenshot`, {
+      headers: authHeaders(),
+    });
+    const json = (await res.json()) as { image?: string };
+    const image = json.image;
+    if (!image) return null;
+    const url = image.startsWith("http")
+      ? image
+      : `${ORGO_API_BASE}${image.startsWith("/") ? "" : "/"}${image}`;
+    const img = await fetch(url, { headers: authHeaders() });
+    if (!img.ok) return null;
+    return Buffer.from(await img.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function orgoClickSendButton(computerId: string): Promise<void> {
+  const buf = await orgoScreenshotPng(computerId);
+  const img = buf ? decodePngRgba(buf) : null;
+  const found = img ? findChatGptSendButton(img) : null;
+  if (found) {
+    await orgoClick(computerId, found.x, found.y);
+    return;
+  }
+  await orgoClick(computerId, CHAT_SEND.x, CHAT_SEND.y);
 }
 
 /**
- * Ctrl+Shift+O → Ctrl+V → focus composer → Enter.
- * Paste can leave focus outside the input; Enter then does nothing.
+ * New chat → click input → Ctrl+V → click send.
+ * Mouse for focus/send; keyboard only for new-chat + paste.
  */
 export async function orgoSendChat(
   computerId: string,
@@ -125,14 +153,12 @@ export async function orgoSendChat(
   if (newChat) {
     await orgoPressKey(computerId, "ctrl+shift+o");
     await localSleep(700);
-    await orgoReleaseModifiers(computerId);
   }
+  await orgoClick(computerId, CHAT_COMPOSER.x, CHAT_COMPOSER.y);
+  await localSleep(150);
   await orgoPressKey(computerId, "ctrl+v");
-  await localSleep(300);
-  // ChatGPT shortcut: Shift+Esc focuses the message box.
-  await orgoPressKey(computerId, "shift+Escape");
-  await localSleep(200);
-  await orgoPressKey(computerId, "Enter");
+  await localSleep(400);
+  await orgoClickSendButton(computerId);
 }
 
 export function localSleep(ms: number): Promise<void> {
