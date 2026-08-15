@@ -104,22 +104,18 @@ echo ok`
 }
 
 /**
- * ChatGPT @ 1280×720 (sidebar open), measured on kosti2:
- * - Empty new chat: composer mid-screen, send circle ~ (1128, 394)
- * - In-thread: composer bottom, send/voice ~ (1064, 670)
- *
- * Stupid bugs we hit before:
- * - Separate Orgo /key+/click calls left focus on sidebar after Ctrl+Shift+O
- * - Send click at y=400 while in-thread composer is at y≈670 (or vice versa)
- * - PNG send-button finder ROI cut off at 0.92×height and never saw y=670
+ * ChatGPT @ 1280×720 (sidebar open).
+ * Empty new-chat composer is mid-screen; long wake text expands it and moves
+ * the blue send circle down — fixed click coords after paste are unreliable.
+ * Send with Return (--clearmodifiers) so layout height does not matter.
  */
-const LAYOUT = {
-  newChat: { composer: { x: 720, y: 400 }, send: { x: 1128, y: 394 } },
-  thread: { composer: { x: 720, y: 650 }, send: { x: 1064, y: 670 } },
+const COMPOSER = {
+  newChat: { x: 720, y: 400 },
+  thread: { x: 720, y: 650 },
 } as const;
 
 /**
- * New chat (optional) → focus composer → paste → click send.
+ * New chat (optional) → focus composer → paste → Enter.
  * One bash/xdotool round-trip so modifiers/focus cannot desync between API calls.
  */
 export async function orgoSendChat(
@@ -128,10 +124,10 @@ export async function orgoSendChat(
   newChat: boolean
 ): Promise<void> {
   const b64 = Buffer.from(text, "utf8").toString("base64");
-  const spot = newChat ? LAYOUT.newChat : LAYOUT.thread;
+  const spot = newChat ? COMPOSER.newChat : COMPOSER.thread;
   const openNew = newChat
     ? `xdotool key --clearmodifiers ctrl+shift+o
-sleep 1.2
+sleep 0.6
 `
     : "";
 
@@ -144,15 +140,13 @@ f=/tmp/airsup-send-clip.$$
 echo '${b64}' | base64 -d > "$f" || exit 1
 xclip -selection clipboard -i "$f" >/dev/null 2>&1 || xsel --clipboard --input < "$f"
 xdotool keyup Shift_L Shift_R Control_L Control_R Alt_L Alt_R Meta_L Meta_R 2>/dev/null || true
-sleep 0.1
-${openNew}xdotool mousemove ${spot.composer.x} ${spot.composer.y} click 1
-sleep 0.25
+${openNew}xdotool mousemove ${spot.x} ${spot.y} click 1
+sleep 0.15
 xdotool key --clearmodifiers ctrl+a
-sleep 0.05
 xdotool key --clearmodifiers ctrl+v
-sleep 0.9
-xdotool mousemove ${spot.send.x} ${spot.send.y} click 1
-sleep 0.25
+sleep 0.35
+xdotool key --clearmodifiers Return
+sleep 0.15
 rm -f "$f"
 echo SENT`
   );
