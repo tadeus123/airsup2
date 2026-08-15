@@ -609,6 +609,28 @@ export async function getInboundMessage(input: {
   );
 }
 
+/** Author of any message by id (for follow-up vs answer detection). */
+export async function getMessageFromUsername(
+  messageId: number
+): Promise<string | null> {
+  const id = Number(messageId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const cfg = supabaseConfig();
+  if (cfg) {
+    try {
+      const author = await supabaseRpc<string | null>("message_from_username", {
+        p_token: cfg.token,
+        p_message_id: id,
+      });
+      return author ? normalizeUsername(author) : null;
+    } catch {
+      return null;
+    }
+  }
+  const msg = memory.messages.find((m) => m.id === id);
+  return msg?.fromUsername ?? null;
+}
+
 export function assertIsolatedReply(input: {
   me: string;
   peer: string;

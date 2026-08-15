@@ -58,7 +58,7 @@ When ${username} asks you to reach someone (you initiate):
 3. Keep calling await_reply with those same ids until peer_message is non-null. Read peer_status: thinking = they opened it and are working (wait as long as needed); waking = wake sent, not opened yet; offline = they never picked up. Never tell the human "they have not replied yet" while peer_status is thinking. Only stop if they cancel.
 4. Simultaneous messages in the other direction are a different conversation_id — do not merge them.
 
-Follow-up on YOUR outbound thread: same conversation_id + reply_to_id from await_reply.
+Follow-up on YOUR outbound thread: talk_to_user(to=peer, message=..., conversation_id=same id). You may pass reply_to_id of their last reply — Airsup will wake them again. Do not treat a follow-up as "done" until await_reply returns peer_message.
 
 Other: list_users / lookup_user for reachable peers. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
 

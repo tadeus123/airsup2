@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   inboundFirstContactBlocksTalk,
   getInboundMessage,
+  getMessageFromUsername,
   getOutboundWait,
   listUsers,
   markDelivered,
@@ -183,7 +184,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.3" },
+    { name: "airsup", version: "3.2.4" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -471,6 +472,14 @@ export function createAirsupMcpServer(me: User): McpServer {
           fromUsername: peer.username,
         });
         if (inbound) {
+          // Peer reply in our outbound thread (parent was from us) = follow-up.
+          // Must wake Orgo — replyAndAck alone only writes DB and looks "delivered".
+          const parentFrom = inbound.replyToId
+            ? await getMessageFromUsername(inbound.replyToId)
+            : null;
+          const isOutboundFollowUp =
+            inbound.replyToId != null && parentFrom === me.username;
+
           try {
             const combined = await replyAndAckMessage({
               fromUsername: me.username,
@@ -480,6 +489,66 @@ export function createAirsupMcpServer(me: User): McpServer {
               replyToId: inbound.id,
               ackId: inbound.id,
             });
+
+            if (isOutboundFollowUp) {
+              if (!orgoRelayEnabled()) {
+                return errorText(
+                  "Airsup Orgo relay is not configured on the server (missing ORGO_API_KEY)."
+                );
+              }
+              if (!peer.orgoComputerId) {
+                return errorText(
+                  `User "${peer.username}" has no Orgo computer linked yet.`
+                );
+              }
+              await report(`Waking ${peer.username}'s ChatGPT…`, 20);
+              try {
+                const wake = await wakePeerOnOrgo({
+                  peerUsername: peer.username,
+                  fromUsername: me.username,
+                  computerId: peer.orgoComputerId,
+                  conversationId: combined.message.conversationId,
+                  outboundId: combined.message.id,
+                  requestId,
+                  report,
+                });
+                await markWakeSent({
+                  fromUsername: me.username,
+                  messageId: combined.message.id,
+                });
+                logActivitySafe({
+                  kind: "talk",
+                  ok: true,
+                  username: me.username,
+                  peerUsername: peer.username,
+                  httpStatus: 200,
+                  durationMs: Date.now() - started,
+                  summary: `${me.username} → ${peer.username} (#${combined.message.id}) follow-up wake`,
+                  detail: {
+                    messageId: combined.message.id,
+                    via: "follow_up_wake",
+                    ackedInboundId: inbound.id,
+                    orgoMs: wake.durationMs,
+                  },
+                  requestId,
+                });
+                return formatWakeSent(combined.message, peer.username, {
+                  wake_ms: wake.durationMs,
+                  total_ms: Date.now() - started,
+                });
+              } catch (e) {
+                const err = e instanceof Error ? e.message : String(e);
+                await markWakeSent({
+                  fromUsername: me.username,
+                  messageId: combined.message.id,
+                  error: err,
+                });
+                return errorText(
+                  `Follow-up stored (#${combined.message.id}) but Orgo wake failed: ${err}. Retry talk_to_user with conversation_id="${combined.message.conversationId}".`
+                );
+              }
+            }
+
             logActivitySafe({
               kind: "reply_and_ack",
               ok: true,
