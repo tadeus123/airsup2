@@ -125,6 +125,8 @@ async function wakePeerOnOrgo(input: {
     httpStatus: 200,
     durationMs: Date.now() - t0,
     summary: `${input.fromUsername} woke ${input.peerUsername} (#${input.outboundId})`,
+    messageId: input.outboundId,
+    computerId: input.computerId,
     detail: {
       computerId: input.computerId,
       orgoMs: wake.durationMs,
@@ -184,7 +186,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.4" },
+    { name: "airsup", version: "3.2.5" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -668,6 +670,8 @@ export function createAirsupMcpServer(me: User): McpServer {
           httpStatus: 502,
           durationMs: Date.now() - started,
           summary: `Orgo wake failed ${me.username} → ${peer.username}`,
+          messageId: msg.id,
+          computerId: peer.orgoComputerId,
           detail: { error: err, messageId: msg.id },
           requestId,
         });

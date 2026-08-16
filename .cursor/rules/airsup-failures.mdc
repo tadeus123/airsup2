@@ -1,0 +1,16 @@
+---
+description: When user asks what is failing / broken in Airsup, run the failures report
+globs:
+alwaysApply: false
+---
+
+# Airsup failure triage
+
+When the user asks what is failing, what's broken, or for a failure list:
+
+1. Run from repo root:
+   `node --env-file=.env.local scripts/what-is-failing.mjs 48`
+2. Reply with the list (message issues + event issues), grouped briefly.
+3. Propose fixing the top item unless they ask only for the list.
+
+Do not invent failures — only report what the script/API returns.

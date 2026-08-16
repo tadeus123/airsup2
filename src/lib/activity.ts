@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { logAirsupEventSafe } from "./airsup-events";
 
 export type ActivityKind =
   | "onboard"
@@ -14,6 +15,7 @@ export type ActivityKind =
   | "reply_and_ack"
   | "orgo_relay"
   | "orgo_wake"
+  | "orgo_send"
   | "check_inbox"
   | "error";
 
@@ -32,8 +34,12 @@ export function logActivitySafe(input: {
   summary: string;
   detail?: Record<string, unknown>;
   requestId?: string;
+  messageId?: number | null;
+  computerId?: string | null;
+  severity?: "info" | "warn" | "error";
 }): void {
   try {
+    const ok = input.ok !== false;
     const timing =
       input.detail &&
       typeof input.detail === "object" &&
@@ -45,7 +51,7 @@ export function logActivitySafe(input: {
       JSON.stringify({
         airsup_trace: true,
         kind: input.kind,
-        ok: input.ok !== false,
+        ok,
         username: input.username || "",
         peer: input.peerUsername || "",
         ms: input.durationMs || 0,
@@ -54,6 +60,39 @@ export function logActivitySafe(input: {
         timing: timing || null,
       })
     );
+
+    const severity =
+      input.severity ||
+      (!ok ? "error" : input.kind === "orgo_wake" || input.kind === "orgo_send"
+        ? "info"
+        : "info");
+
+    // Persist failures + Orgo path events so "what is failing?" is queryable.
+    const shouldPersist =
+      !ok ||
+      severity === "warn" ||
+      severity === "error" ||
+      input.kind === "orgo_wake" ||
+      input.kind === "orgo_send";
+
+    if (shouldPersist) {
+      logAirsupEventSafe({
+        kind: String(input.kind),
+        severity: !ok ? "error" : severity,
+        ok,
+        username: input.username,
+        peerUsername: input.peerUsername,
+        messageId: input.messageId ?? null,
+        computerId: input.computerId ?? null,
+        requestId: input.requestId,
+        summary: input.summary,
+        detail: {
+          ...(input.detail || {}),
+          httpStatus: input.httpStatus ?? null,
+          durationMs: input.durationMs ?? null,
+        },
+      });
+    }
   } catch {
     // ignore
   }

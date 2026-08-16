@@ -51,7 +51,7 @@ const memory: MemoryStore = {
 
 const authCache = new Map<string, { user: User; expiresAt: number }>();
 
-function supabaseConfig() {
+export function supabaseConfig() {
   const url = (process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
   const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
   const token = process.env.AIRSUP_DB_TOKEN ?? "";
@@ -68,7 +68,7 @@ function supabaseConfig() {
   return { url, anonKey, token };
 }
 
-async function supabaseRpc<T>(
+export async function supabaseRpc<T>(
   fn: string,
   body: Record<string, unknown>
 ): Promise<T | null> {

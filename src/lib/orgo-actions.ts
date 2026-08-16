@@ -1,6 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 
+import { logActivitySafe } from "./activity";
+
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -248,12 +250,49 @@ export async function orgoSendChat(
 ): Promise<void> {
   try {
     await orgoSendChatViaCdp(computerId, text, newChat);
+    logActivitySafe({
+      kind: "orgo_send",
+      ok: true,
+      computerId,
+      summary: `Orgo CDP send ok (newChat=${newChat})`,
+      detail: { method: "cdp", newChat, textLen: text.length },
+    });
   } catch (cdpErr) {
-    console.warn(
-      "[orgo] CDP send failed, falling back to xdotool:",
-      cdpErr instanceof Error ? cdpErr.message : cdpErr
-    );
-    await orgoSendChatViaXdotool(computerId, text, newChat);
+    const cdpMsg = cdpErr instanceof Error ? cdpErr.message : String(cdpErr);
+    logActivitySafe({
+      kind: "orgo_send",
+      ok: false,
+      severity: "warn",
+      computerId,
+      summary: `Orgo CDP failed, trying xdotool: ${cdpMsg.slice(0, 120)}`,
+      detail: { method: "cdp", error: cdpMsg.slice(0, 240), newChat },
+    });
+    try {
+      await orgoSendChatViaXdotool(computerId, text, newChat);
+      logActivitySafe({
+        kind: "orgo_send",
+        ok: true,
+        severity: "warn",
+        computerId,
+        summary: `Orgo xdotool fallback send ok (newChat=${newChat})`,
+        detail: { method: "xdotool_fallback", newChat, textLen: text.length },
+      });
+    } catch (xdoErr) {
+      const xdoMsg = xdoErr instanceof Error ? xdoErr.message : String(xdoErr);
+      logActivitySafe({
+        kind: "orgo_send",
+        ok: false,
+        computerId,
+        summary: `Orgo send failed (cdp+xdotool): ${xdoMsg.slice(0, 120)}`,
+        detail: {
+          method: "both_failed",
+          cdpError: cdpMsg.slice(0, 240),
+          xdotoolError: xdoMsg.slice(0, 240),
+          newChat,
+        },
+      });
+      throw xdoErr;
+    }
   }
 }
 

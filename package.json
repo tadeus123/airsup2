@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:e2e": "node --env-file=.env.local --import tsx scripts/peer-e2e.ts"
+    "test:e2e": "node --env-file=.env.local --import tsx scripts/peer-e2e.ts",
+    "failures": "node --env-file=.env.local scripts/what-is-failing.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
