@@ -340,6 +340,29 @@ async function orgoBash(computerId: string, command: string): Promise<void> {
   }
 }
 
+/** Read chrome launch diagnostics from the VM (for portal debugging). */
+export async function orgoBashDebug(computerId: string): Promise<string> {
+  const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/bash`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${orgoApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      command:
+        "pgrep -af chrome | head -3; echo '---'; tail -20 /tmp/airsup-chrome.log 2>/dev/null || echo no_log",
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) return `bash_err_${res.status}:${raw.slice(0, 120)}`;
+  try {
+    const json = JSON.parse(raw) as { stdout?: string; output?: string; result?: string };
+    return (json.stdout ?? json.output ?? json.result ?? raw).trim().slice(0, 400);
+  } catch {
+    return raw.trim().slice(0, 400);
+  }
+}
+
 /** WebSocket URL for noVNC / RFB clients. */
 export function orgoVncWebSocketUrl(
   computer: OrgoComputerRecord,
