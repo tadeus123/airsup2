@@ -98,20 +98,31 @@ export default function PortalChatGptPage() {
       </header>
 
       {phase === "loading" ? (
-        <section className="portal-connect-body portal-connect-body--center">
+        <section className="portal-connect-body">
           <div className="portal-connect-intro">
             <p className="portal-connect-eyebrow">preparing</p>
             <h1 className="portal-connect-title">your chatgpt</h1>
             <div className="portal-gate-rule" aria-hidden="true" />
           </div>
-          <p className="portal-connect-loading">{loadingText}</p>
+          <div className="portal-connect-frame portal-connect-frame--loading">
+            <p className="portal-connect-frame-status">{loadingText}</p>
+          </div>
+          <p className="portal-connect-note">
+            inside your private computer — airsup never sees your password.
+          </p>
         </section>
       ) : null}
 
       {phase === "error" ? (
-        <section className="portal-connect-body portal-connect-body--center">
-          <h1 className="portal-connect-title">something went wrong</h1>
-          <p className="portal-connect-error">{error}</p>
+        <section className="portal-connect-body">
+          <div className="portal-connect-intro">
+            <p className="portal-connect-eyebrow">could not open</p>
+            <h1 className="portal-connect-title">the veil</h1>
+            <div className="portal-gate-rule" aria-hidden="true" />
+          </div>
+          <div className="portal-connect-frame portal-connect-frame--failed">
+            <p className="portal-connect-frame-error">{error}</p>
+          </div>
           <button
             type="button"
             className="portal-connect-retry"
