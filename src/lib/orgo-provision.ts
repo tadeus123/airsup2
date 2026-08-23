@@ -58,8 +58,32 @@ async function orgoApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+function normalizeOrgoComputer(data: Record<string, unknown>): OrgoComputerRecord {
+  const raw = data as OrgoComputerRecord;
+  const connection = (raw.connection_url || "").trim();
+  let instanceId = (raw.instance_id || "").trim();
+  if (!instanceId && connection) {
+    const match = connection.match(/\/desktops\/([^/?#]+)/);
+    if (match?.[1]) instanceId = match[1];
+  }
+  return {
+    ...raw,
+    instance_id: instanceId || raw.instance_id,
+    vnc_password:
+      (raw.vnc_password || (data.vncPassword as string | undefined) || "").trim() ||
+      undefined,
+  };
+}
+
 export async function getOrgoComputer(computerId: string): Promise<OrgoComputerRecord> {
-  return orgoApiFetch<OrgoComputerRecord>(`/computers/${computerId}`);
+  const data = await orgoApiFetch<Record<string, unknown>>(`/computers/${computerId}`);
+  return normalizeOrgoComputer(data);
+}
+
+export async function restartOrgoComputer(computerId: string): Promise<void> {
+  await orgoApiFetch<{ success?: boolean }>(`/computers/${computerId}/restart`, {
+    method: "POST",
+  });
 }
 
 export async function startOrgoComputer(computerId: string): Promise<void> {
@@ -119,7 +143,7 @@ export async function createOrgoComputerForUser(
 ): Promise<OrgoComputerRecord> {
   const workspaceId = orgoWorkspaceId();
   const name = `airsup-${username}`.slice(0, 48);
-  return orgoApiFetch<OrgoComputerRecord>("/computers", {
+  const data = await orgoApiFetch<Record<string, unknown>>("/computers", {
     method: "POST",
     body: JSON.stringify({
       workspace_id: workspaceId,
@@ -129,6 +153,7 @@ export async function createOrgoComputerForUser(
       os: "linux",
     }),
   });
+  return normalizeOrgoComputer(data);
 }
 
 async function orgoBash(computerId: string, command: string): Promise<void> {
@@ -187,6 +212,7 @@ export async function waitForComputerReady(
   const started = Date.now();
   let last: OrgoComputerRecord | null = null;
   let startAttempted = false;
+  let restartAttempted = false;
 
   while (Date.now() - started < maxMs) {
     last = await getOrgoComputer(computerId);
@@ -201,6 +227,13 @@ export async function waitForComputerReady(
       startAttempted = true;
       await startOrgoComputer(computerId).catch(() => {});
       await sleep(600);
+      continue;
+    }
+
+    if (!instanceId && Date.now() - started > 12_000 && !restartAttempted) {
+      restartAttempted = true;
+      await restartOrgoComputer(computerId).catch(() => {});
+      await sleep(1500);
       continue;
     }
 
@@ -221,7 +254,12 @@ export async function waitForComputerReady(
   }
 
   const status = last?.status || "unknown";
-  throw new Error(`Computer is still starting (${status})`);
+  const hasInstance = Boolean((last?.instance_id || "").trim());
+  throw new Error(
+    hasInstance
+      ? `Computer is still starting (${status})`
+      : `Computer has no desktop id yet (${status}) — Orgo may be at capacity`
+  );
 }
 
 export type OrgoDesktopSession = {
