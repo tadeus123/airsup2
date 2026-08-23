@@ -1,5 +1,3 @@
-import { orgoBash } from "./orgo-actions";
-
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -94,6 +92,21 @@ export async function createOrgoComputerForUser(
       os: "linux",
     }),
   });
+}
+
+async function orgoBash(computerId: string, command: string): Promise<void> {
+  const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/bash`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${orgoApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ command }),
+  });
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(`Orgo bash failed (${res.status}): ${raw.slice(0, 200)}`);
+  }
 }
 
 /** Open ChatGPT in the user's cloud desktop (best-effort). */

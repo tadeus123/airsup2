@@ -8,10 +8,15 @@
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:e2e": "node --env-file=.env.local --import tsx scripts/peer-e2e.ts",
-    "failures": "node --env-file=.env.local scripts/what-is-failing.mjs"
+    "failures": "node --env-file=.env.local scripts/what-is-failing.mjs",
+    "postinstall": "patch-package"
+  },
+  "overrides": {
+    "@novnc/novnc": "1.6.0-beta"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@novnc/novnc": "1.6.0-beta",
     "next": "^15.3.4",
     "orgo-vnc": "^0.2.20",
     "react": "^19.1.0",
@@ -19,6 +24,7 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "patch-package": "^8.0.0",
     "@types/node": "^22.15.30",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

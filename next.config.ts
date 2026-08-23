@@ -7,9 +7,6 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**/*": ["./src/lib/vm/airsup-chatgpt-send.js"],
   },
-  async rewrites() {
-    return [{ source: "/mcp", destination: "/api/mcp" }, { source: "/mcp/:path*", destination: "/api/mcp" }];
-  },
 };
 
 export default nextConfig;
