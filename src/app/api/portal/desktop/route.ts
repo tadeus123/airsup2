@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   launchChatGptLoginWithRetries,
-  orgoBashDebug,
   orgoProvisionConfigured,
   resolveOrgoDesktopSession,
 } from "@/lib/orgo-provision";
@@ -62,16 +61,9 @@ export async function GET(request: Request) {
       waitMs: sessionWaitMs,
     });
 
-    let launchDebug = "";
     if (shouldLaunch) {
       await Promise.race([
-        launchChatGptLoginWithRetries(user.orgoComputerId).then(async () => {
-          try {
-            launchDebug = await orgoBashDebug(user.orgoComputerId!);
-          } catch {
-            launchDebug = "debug_failed";
-          }
-        }),
+        launchChatGptLoginWithRetries(user.orgoComputerId!),
         new Promise((r) => setTimeout(r, launchBudget)),
       ]).catch(() => {});
     }
@@ -85,7 +77,6 @@ export async function GET(request: Request) {
         vncUrl: session.vncUrl,
         password: session.password,
         status: session.computer.status || "running",
-        launchDebug: launchDebug || undefined,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

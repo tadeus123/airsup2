@@ -410,8 +410,11 @@ async function focusChatGptEmailForm(computerId: string): Promise<void> {
     "command -v xdotool >/dev/null || { echo NO_XDOTOOL; exit 0; }",
     "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
     "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do xdotool key Tab; done",
-    "xdotool key Return",
+    "sleep 0.5",
+    "xdotool mousemove 640 478 click 1",
+    "sleep 2",
+    "xdotool mousemove 640 520 click 1",
+    "sleep 1",
     "echo FOCUSED",
   ].join("\n");
   await orgoBash(computerId, cmd);
