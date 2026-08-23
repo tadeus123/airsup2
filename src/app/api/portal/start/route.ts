@@ -4,6 +4,7 @@ import {
   cleanupStalePortalComputers,
   createOrgoComputerForUser,
   forceFreeOrgoSlot,
+  getOrgoComputer,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
           firstError instanceof Error ? firstError.message : String(firstError);
         if (
           firstMsg.includes("Computer limit reached") ||
-          firstMsg.includes("VM_SLOT")
+          firstMsg.includes("VM_SLOT") ||
+          firstMsg.toLowerCase().includes("limit")
         ) {
           const reclaimed = await claimStalePortalComputer({ keepIds: linkedIds });
           if (reclaimed?.id) {
@@ -73,7 +75,20 @@ export async function POST(request: Request) {
                 created = reclaimedAfter;
               } else {
                 await forceFreeOrgoSlot({ keepIds: linkedIds });
-                created = await createOrgoComputerForUser(user.username);
+                try {
+                  created = await createOrgoComputerForUser(user.username);
+                } catch {
+                  const sharedId = (
+                    process.env.ORGO_PORTAL_SHARED_COMPUTER_ID ||
+                    process.env.ORGO_DEFAULT_COMPUTER_ID ||
+                    ""
+                  ).trim();
+                  if (sharedId) {
+                    created = await getOrgoComputer(sharedId);
+                  } else {
+                    throw firstError;
+                  }
+                }
               }
             }
           }
