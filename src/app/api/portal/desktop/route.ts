@@ -54,10 +54,19 @@ export async function GET(request: Request) {
       );
     }
 
+    const launchBudget = shouldLaunch ? 24_000 : 0;
+    const sessionWaitMs = Math.max(3000, waitMs - launchBudget);
+
     const session = await resolveOrgoDesktopSession(user.orgoComputerId, {
-      waitMs,
-      launchChrome: shouldLaunch,
+      waitMs: sessionWaitMs,
     });
+
+    if (shouldLaunch) {
+      await Promise.race([
+        launchChatGptLoginWithRetries(user.orgoComputerId),
+        new Promise((r) => setTimeout(r, launchBudget)),
+      ]).catch(() => {});
+    }
 
     return NextResponse.json(
       {

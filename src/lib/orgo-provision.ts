@@ -377,7 +377,7 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
     "else export DISPLAY=:99",
     "fi",
     "command -v xdotool >/dev/null || { echo PREP_SKIP; exit 0; }",
-    "sleep 8",
+    "sleep 5",
     "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
     "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
     "sleep 0.5",
@@ -385,7 +385,7 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
     "sleep 0.25",
     "xdotool type --delay 10 'https://chatgpt.com/auth/login'",
     "xdotool key Return",
-    "sleep 12",
+    "sleep 8",
     "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
     "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do xdotool key Tab; sleep 0.12; done",
     "xdotool key Return",
@@ -425,17 +425,13 @@ export async function fillChatGptLoginOnDesktop(
   await orgoBash(computerId, cmd);
 }
 
-/** Launch ChatGPT login with retries while the desktop comes up. */
+/** Launch ChatGPT login — await this before returning from serverless handlers. */
 export async function launchChatGptLoginWithRetries(computerId: string): Promise<void> {
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    try {
-      await prepareChatGptLoginOnDesktop(computerId);
-      return;
-    } catch {
-      await sleep(2000 + attempt * 1500);
-    }
+  try {
+    await prepareChatGptLoginOnDesktop(computerId);
+  } catch {
+    await openChromeToChatGpt(computerId).catch(() => {});
   }
-  void openChromeToChatGpt(computerId).catch(() => {});
 }
 
 const STARTABLE_STATUSES = new Set(["stopped", "frozen", "suspended", "stopping"]);
@@ -511,17 +507,12 @@ export type OrgoDesktopSession = {
 /** Resolve a connectable desktop session (iframe URL + VNC fallback). */
 export async function resolveOrgoDesktopSession(
   computerId: string,
-  opts?: { waitMs?: number; launchChrome?: boolean }
+  opts?: { waitMs?: number }
 ): Promise<OrgoDesktopSession> {
   const computer = await waitForComputerReady(computerId, opts?.waitMs ?? 55000);
   const password = await resolveVncPassword(computer);
   const desktopUrl = orgoDesktopUrl(computer);
   const vncUrl = orgoVncWebSocketUrl(computer, password);
-
-  if (opts?.launchChrome) {
-    void launchChatGptLoginWithRetries(computerId).catch(() => {});
-  }
-
   return { computer, desktopUrl, vncUrl, password };
 }
 

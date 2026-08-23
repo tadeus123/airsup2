@@ -87,7 +87,7 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
       className={`portal-connect-frame${connected ? " portal-connect-frame--live" : ""}${failed ? " portal-connect-frame--failed" : ""}`}
     >
       {!connected && !failed ? (
-        <p className="portal-connect-frame-status">loading chatgpt…</p>
+          <p className="portal-connect-frame-status">opening chatgpt in your browser…</p>
       ) : null}
       {failed ? (
         <p className="portal-connect-frame-error">

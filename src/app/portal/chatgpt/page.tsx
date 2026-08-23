@@ -49,12 +49,12 @@ export default function PortalChatGptPage() {
         if (cancelled) return;
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 65000);
+        const timeout = setTimeout(() => controller.abort(), 90000);
 
         try {
           const desk = await fetchPortalDesktop(started.token, {
             launch: true,
-            waitMs: 58000,
+            waitMs: 52000,
             signal: controller.signal,
           });
           if (!cancelled) {
