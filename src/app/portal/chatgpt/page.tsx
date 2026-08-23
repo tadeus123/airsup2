@@ -24,7 +24,7 @@ type Phase = "loading" | "login" | "error";
 const LOADING_STAGES = [
   "connecting…",
   "starting your private computer…",
-  "opening chatgpt…",
+  "opening chatgpt in your browser…",
 ] as const;
 
 export default function PortalChatGptPage() {

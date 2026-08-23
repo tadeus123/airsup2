@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const launchBudget = shouldLaunch ? 24_000 : 0;
+    const launchBudget = shouldLaunch ? 35_000 : 0;
     const sessionWaitMs = Math.max(3000, waitMs - launchBudget);
 
     const session = await resolveOrgoDesktopSession(user.orgoComputerId, {

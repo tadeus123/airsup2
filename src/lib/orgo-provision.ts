@@ -351,6 +351,14 @@ export function orgoVncWebSocketUrl(
   return `wss://www.orgo.ai/desktops/${instanceId}/ws/websockify?token=${token}`;
 }
 
+async function orgoWait(computerId: string, seconds: number): Promise<void> {
+  const sec = Math.min(60, Math.max(0, seconds));
+  await orgoApiFetch<{ success?: boolean }>(`/computers/${computerId}/wait`, {
+    method: "POST",
+    body: JSON.stringify({ seconds: sec }),
+  });
+}
+
 /** Open ChatGPT login in kiosk-style Chrome — fullscreen app window. */
 export async function openChromeToChatGpt(computerId: string): Promise<void> {
   const cmd = [
@@ -358,12 +366,30 @@ export async function openChromeToChatGpt(computerId: string): Promise<void> {
     "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
     "else export DISPLAY=:99",
     "fi",
-    "pkill -f 'chrome.*chatgpt' 2>/dev/null || pkill -f chrome 2>/dev/null || true",
-    "sleep 1",
-    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,720 --window-position=0,0 --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI 2>/dev/null",
-    "|| chromium-browser --app=https://chatgpt.com/auth/login --window-size=1280,720 --no-first-run 2>/dev/null",
-    "|| google-chrome --new-window https://chatgpt.com/auth/login 2>/dev/null",
-    "|| true) &",
+    "CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1)",
+    "if [ -z \"$CHROME\" ]; then echo NO_CHROME; exit 1; fi",
+    "nohup \"$CHROME\" --new-window --window-size=1280,720 --window-position=0,0",
+    "  --no-first-run --disable-infobars --disable-session-crashed-bubble",
+    "  'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
+    "sleep 2",
+    "pgrep -af chrome | head -3 || cat /tmp/airsup-chrome.log",
+    "echo LAUNCHED",
+  ].join("\n");
+  await orgoBash(computerId, cmd);
+}
+
+async function focusChatGptEmailForm(computerId: string): Promise<void> {
+  const cmd = [
+    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
+    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
+    "else export DISPLAY=:99",
+    "fi",
+    "command -v xdotool >/dev/null || { echo NO_XDOTOOL; exit 0; }",
+    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
+    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
+    "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do xdotool key Tab; done",
+    "xdotool key Return",
+    "echo FOCUSED",
   ].join("\n");
   await orgoBash(computerId, cmd);
 }
@@ -371,28 +397,8 @@ export async function openChromeToChatGpt(computerId: string): Promise<void> {
 /** Launch Chrome and tab to the email login form (runs on the VM, not via VNC). */
 export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<void> {
   await openChromeToChatGpt(computerId);
-  const cmd = [
-    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
-    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
-    "else export DISPLAY=:99",
-    "fi",
-    "command -v xdotool >/dev/null || { echo PREP_SKIP; exit 0; }",
-    "sleep 5",
-    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
-    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "sleep 0.5",
-    "xdotool key --clearmodifiers ctrl+l",
-    "sleep 0.25",
-    "xdotool type --delay 10 'https://chatgpt.com/auth/login'",
-    "xdotool key Return",
-    "sleep 8",
-    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do xdotool key Tab; sleep 0.12; done",
-    "xdotool key Return",
-    "sleep 2",
-    "echo PREPARED",
-  ].join("\n");
-  await orgoBash(computerId, cmd);
+  await orgoWait(computerId, 10);
+  await focusChatGptEmailForm(computerId);
 }
 
 /** Fill ChatGPT email + password on the VM (for ops/testing only). */
@@ -413,16 +419,23 @@ export async function fillChatGptLoginOnDesktop(
     "PASS=$(echo '" + passB64 + "' | base64 -d)",
     "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
     "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "sleep 0.4",
     "xdotool type --delay 12 -- \"$EMAIL\"",
     "xdotool key Return",
-    "sleep 4",
-    "xdotool type --delay 12 -- \"$PASS\"",
-    "xdotool key Return",
-    "sleep 3",
-    "echo FILLED",
+    "echo TYPED_EMAIL",
   ].join("\n");
   await orgoBash(computerId, cmd);
+  await orgoWait(computerId, 4);
+  const passCmd = [
+    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
+    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
+    "else export DISPLAY=:99",
+    "fi",
+    "PASS=$(echo '" + passB64 + "' | base64 -d)",
+    "xdotool type --delay 12 -- \"$PASS\"",
+    "xdotool key Return",
+    "echo FILLED",
+  ].join("\n");
+  await orgoBash(computerId, passCmd);
 }
 
 /** Launch ChatGPT login — await this before returning from serverless handlers. */
