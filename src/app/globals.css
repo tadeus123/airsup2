@@ -368,3 +368,63 @@ button {
   min-height: 100dvh;
   background-color: #f2f1e8;
 }
+
+.portal-entry {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) 1fr;
+  min-height: 100dvh;
+}
+
+.portal-entry-aside {
+  padding: 2rem 1.5rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.portal-entry-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--text-color);
+  cursor: pointer;
+  text-align: left;
+}
+
+.portal-entry-btn:hover {
+  border-color: var(--accent-color);
+}
+
+.portal-entry-btn-primary {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.portal-entry-btn-secondary {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.portal-entry-main {
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .portal-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-entry-aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.25rem 1.15rem;
+  }
+
+  .portal-entry-main {
+    padding: 1.25rem 1.15rem 2rem;
+  }
+}
