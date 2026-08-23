@@ -1,0 +1,20 @@
+{
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.automationProfile.windows": {
+    "path": "C:\\Users\\tm9sk\\AppData\\Local\\Microsoft\\WindowsApps\\Microsoft.PowerShell_8wekyb3d8bbwe\\pwsh.exe",
+    "icon": "terminal-powershell"
+  },
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "path": "C:\\Users\\tm9sk\\AppData\\Local\\Microsoft\\WindowsApps\\Microsoft.PowerShell_8wekyb3d8bbwe\\pwsh.exe",
+      "icon": "terminal-powershell",
+      "args": []
+    },
+    "Command Prompt": {
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "icon": "terminal-cmd",
+      "args": []
+    },
+    "Windows PowerShell": null
+  }
+}

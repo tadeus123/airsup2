@@ -363,3 +363,58 @@ button {
     font-size: 17px;
   }
 }
+
+.portal-shell {
+  min-height: 100dvh;
+  background-color: #f2f1e8;
+  color: #1a1a1a;
+}
+
+.portal-page {
+  min-height: 100dvh;
+  position: relative;
+}
+
+.portal-entry {
+  position: fixed;
+  top: 50%;
+  left: 1.35rem;
+  transform: translateY(-50%);
+  z-index: 20;
+  max-width: 11rem;
+}
+
+.portal-entry-btn {
+  border: 0;
+  background: none;
+  color: #c16a28;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+  line-height: 1.35;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.portal-entry-btn span {
+  display: block;
+}
+
+.portal-entry-btn:hover {
+  opacity: 0.85;
+}
+
+.portal-entry-btn:focus-visible {
+  outline: 2px solid #c16a28;
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  .portal-entry {
+    top: auto;
+    bottom: 1.75rem;
+    left: 1.15rem;
+    transform: none;
+  }
+}
