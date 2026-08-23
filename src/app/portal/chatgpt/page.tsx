@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PORTAL_TOKEN_STORAGE_KEY } from "@/lib/portal-constants";
+import {
+  fetchPortalDesktop,
+  preloadNovnc,
+  startPortalSession,
+} from "@/lib/portal-client";
 
 const ChatGptLoginFrame = dynamic(() => import("./ChatGptLoginFrame"), {
   ssr: false,
@@ -21,91 +25,70 @@ type DesktopSession = {
 
 type Phase = "loading" | "login" | "error";
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const LOADING_STAGES = [
+  "connecting…",
+  "starting your private computer…",
+  "opening chatgpt…",
+] as const;
 
 export default function PortalChatGptPage() {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [loadingText, setLoadingText] = useState("starting…");
+  const [loadingText, setLoadingText] = useState<string>(LOADING_STAGES[0]);
   const [desktop, setDesktop] = useState<DesktopSession | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    let stageTimer: ReturnType<typeof setInterval> | null = null;
+    let stageIndex = 0;
+
+    preloadNovnc();
+
+    stageTimer = setInterval(() => {
+      stageIndex = Math.min(stageIndex + 1, LOADING_STAGES.length - 1);
+      if (!cancelled) setLoadingText(LOADING_STAGES[stageIndex]);
+    }, 8000);
 
     void (async () => {
       try {
-        const saved = window.sessionStorage.getItem(PORTAL_TOKEN_STORAGE_KEY)?.trim();
-        const headers: Record<string, string> = {
-          "content-type": "application/json",
-        };
-        if (saved) headers.authorization = `Bearer ${saved}`;
+        const started = await startPortalSession();
+        if (cancelled) return;
 
-        if (!cancelled) setLoadingText("creating your private session…");
-        const startRes = await fetch("/api/portal/start", {
-          method: "POST",
-          headers,
-        });
-        const startJson = (await startRes.json().catch(() => ({}))) as {
-          ok?: boolean;
-          token?: string;
-          error?: string;
-          message?: string;
-        };
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 65000);
 
-        if (!startRes.ok || !startJson.token) {
-          throw new Error(
-            startJson.message || startJson.error || "could not start session"
-          );
-        }
-
-        window.sessionStorage.setItem(PORTAL_TOKEN_STORAGE_KEY, startJson.token);
-        const authHeaders = { authorization: `Bearer ${startJson.token}` };
-
-        if (!cancelled) setLoadingText("opening chatgpt…");
-
-        for (let attempt = 0; attempt < 40; attempt++) {
-          const launch = attempt === 0 ? "?launch=1" : "";
-          const deskRes = await fetch(`/api/portal/desktop${launch}`, {
-            headers: authHeaders,
+        try {
+          const desk = await fetchPortalDesktop(started.token, {
+            launch: true,
+            waitMs: 58000,
+            signal: controller.signal,
           });
-          const deskJson = (await deskRes.json().catch(() => ({}))) as {
-            ok?: boolean;
-            vncUrl?: string;
-            password?: string;
-            error?: string;
-            message?: string;
-          };
-
-          if (deskRes.ok && deskJson.vncUrl && deskJson.password) {
-            if (!cancelled) {
-              setDesktop({ vncUrl: deskJson.vncUrl, password: deskJson.password });
-              setPhase("login");
-            }
-            return;
+          if (!cancelled) {
+            setDesktop({ vncUrl: desk.vncUrl, password: desk.password });
+            setPhase("login");
           }
-
-          if (deskRes.status !== 404 && deskRes.status !== 503) {
-            throw new Error(
-              deskJson.message || deskJson.error || "could not open chatgpt"
-            );
-          }
-
-          await sleep(2500);
+        } finally {
+          clearTimeout(timeout);
         }
-
-        throw new Error("chatgpt took too long to open — try again");
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
+          const msg =
+            e instanceof Error && e.name === "AbortError"
+              ? "chatgpt took too long to open — try again"
+              : e instanceof Error
+                ? e.message
+                : String(e);
+          setError(msg);
           setPhase("error");
         }
+      } finally {
+        if (stageTimer) clearInterval(stageTimer);
       }
     })();
 
     return () => {
       cancelled = true;
+      if (stageTimer) clearInterval(stageTimer);
     };
   }, []);
 

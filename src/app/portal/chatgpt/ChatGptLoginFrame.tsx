@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getNovncModuleUrl } from "@/lib/portal-client";
 
 type Props = {
   vncUrl: string;
@@ -27,8 +28,7 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
 
     void (async () => {
       try {
-        const novncUrl =
-          "https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/core/rfb.js";
+        const novncUrl = getNovncModuleUrl();
         const mod = (await import(
           /* webpackIgnore: true */
           novncUrl

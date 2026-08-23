@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { ChatGptBrandIcon, ClaudeBrandIcon } from "@/components/portal/PortalBrandIcons";
+import { usePortalWarmup } from "@/hooks/usePortalWarmup";
 
 function PortalPassage({
   label,
@@ -33,6 +34,7 @@ function PortalPassage({
 
 export default function PortalPage() {
   const router = useRouter();
+  usePortalWarmup();
 
   return (
     <main className="portal-page">

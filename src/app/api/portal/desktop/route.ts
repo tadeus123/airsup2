@@ -5,11 +5,13 @@ import {
   openChromeToChatGpt,
   orgoProvisionConfigured,
   orgoVncWebSocketUrl,
+  waitForComputerRunning,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
@@ -37,8 +39,22 @@ export async function GET(request: Request) {
       );
     }
 
-    const computer = await getOrgoComputer(user.orgoComputerId);
-    const instanceId = (computer.instance_id || "").trim();
+    const url = new URL(request.url);
+    const shouldWait = url.searchParams.get("wait") === "1";
+    const shouldLaunch = url.searchParams.get("launch") === "1";
+    const waitMs = Math.min(
+      58000,
+      Math.max(3000, Number(url.searchParams.get("waitMs") || 55000))
+    );
+
+    let computer = await getOrgoComputer(user.orgoComputerId);
+    let instanceId = (computer.instance_id || "").trim();
+
+    if (!instanceId && shouldWait) {
+      computer = await waitForComputerRunning(user.orgoComputerId, waitMs);
+      instanceId = (computer.instance_id || "").trim();
+    }
+
     if (!instanceId) {
       return NextResponse.json(
         { error: "not_ready", message: "Computer is still starting." },
@@ -46,8 +62,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const url = new URL(request.url);
-    if (url.searchParams.get("launch") === "1") {
+    if (shouldLaunch) {
       void openChromeToChatGpt(user.orgoComputerId).catch(() => {});
     }
 

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   createOrgoComputerForUser,
-  getOrgoComputer,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
@@ -54,20 +53,12 @@ export async function POST(request: Request) {
       provisioned = true;
     }
 
-    let status = "starting";
-    try {
-      const computer = await getOrgoComputer(orgoComputerId);
-      status = computer.status || status;
-    } catch {
-      // ignore
-    }
-
     return NextResponse.json({
       ok: true,
       token,
       orgoComputerId,
       provisioned,
-      status,
+      status: provisioned ? "starting" : "ready",
       username: user.username,
     });
   } catch (error) {

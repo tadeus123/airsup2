@@ -156,8 +156,11 @@ export async function waitForComputerRunning(
   while (Date.now() - started < maxMs) {
     last = await getOrgoComputer(computerId);
     const status = (last.status || "").toLowerCase();
-    if (status === "running" && (last.instance_id || "").trim()) return last;
-    await new Promise((r) => setTimeout(r, 2500));
+    const instanceId = (last.instance_id || "").trim();
+    if (instanceId && (status === "running" || status === "active" || !status)) {
+      return last;
+    }
+    await new Promise((r) => setTimeout(r, 1200));
   }
   if (last) return last;
   return getOrgoComputer(computerId);
