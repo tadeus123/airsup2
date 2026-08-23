@@ -367,8 +367,22 @@ button {
 .portal-shell {
   min-height: 100dvh;
   background-color: #f2f1e8;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% 0%, rgba(180, 155, 90, 0.045) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(139, 105, 20, 0.035) 0%, transparent 60%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  position: relative;
+}
+
+.portal-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
 }
 
 .portal-page {
@@ -377,6 +391,27 @@ button {
   justify-content: center;
   min-height: 100dvh;
   padding: 2rem 1.5rem;
+  position: relative;
+  isolation: isolate;
+}
+
+.portal-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 42% 32% at 50% 44%,
+    rgba(210, 185, 120, 0.09) 0%,
+    rgba(210, 185, 120, 0.02) 42%,
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.portal-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .portal-hero {
@@ -401,13 +436,14 @@ button {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(9rem, 52vw);
+  width: min(11rem, 58vw);
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(139, 105, 20, 0.22) 18%,
-    rgba(139, 105, 20, 0.22) 82%,
+    rgba(139, 105, 20, 0.08) 12%,
+    rgba(139, 105, 20, 0.28) 50%,
+    rgba(139, 105, 20, 0.08) 88%,
     transparent
   );
   pointer-events: none;
@@ -421,6 +457,13 @@ button {
   bottom: 0;
 }
 
+.portal-headline-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+}
+
 .portal-headline {
   margin: 0;
   font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
@@ -430,6 +473,85 @@ button {
   line-height: 1.15;
   text-transform: lowercase;
   color: rgba(26, 26, 26, 0.9);
+}
+
+.portal-headline-block .portal-headline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: clamp(1.875rem, 5vw, 2.375rem);
+  font-style: normal;
+  letter-spacing: normal;
+  line-height: 1;
+  color: rgba(34, 28, 20, 0.92);
+  text-shadow: none;
+}
+
+.portal-headline-lead {
+  font-size: 0.44em;
+  font-weight: 400;
+  letter-spacing: 0.36em;
+  padding-left: 0.36em;
+  color: rgba(34, 28, 20, 0.46);
+}
+
+.portal-headline-veil {
+  position: relative;
+  display: inline-block;
+  font-size: 1em;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  padding-left: 0.28em;
+  color: rgba(52, 40, 22, 0.94);
+  text-shadow:
+    0 0 1px rgba(139, 105, 20, 0.22),
+    0 0 36px rgba(180, 145, 70, 0.16),
+    0 1px 0 rgba(255, 252, 240, 0.4);
+}
+
+.portal-headline-veil::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% + 2.75rem);
+  height: calc(100% + 1.35rem);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(196, 168, 98, 0.16) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.portal-headline-ornament {
+  width: min(4.5rem, 26vw);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(139, 105, 20, 0.42) 50%,
+    transparent
+  );
+  position: relative;
+}
+
+.portal-headline-ornament::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 3px;
+  height: 3px;
+  border: 1px solid rgba(139, 105, 20, 0.45);
+  background: rgba(242, 241, 232, 0.95);
+  box-shadow: 0 0 8px rgba(180, 145, 70, 0.12);
 }
 
 .portal-chatgpt-btn,
@@ -625,8 +747,18 @@ button {
     padding: 2.25rem 0;
   }
 
-  .portal-headline {
-    letter-spacing: 0.04em;
+  .portal-headline-lead {
+    letter-spacing: 0.28em;
+    padding-left: 0.28em;
+  }
+
+  .portal-headline-veil {
+    letter-spacing: 0.22em;
+    padding-left: 0.22em;
+  }
+
+  .portal-headline-block {
+    gap: 0.75rem;
   }
 
   .portal-chatgpt-btn,

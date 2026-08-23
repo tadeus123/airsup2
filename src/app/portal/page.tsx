@@ -36,7 +36,13 @@ export default function PortalPage() {
     <main className="portal-page">
       <div className="portal-hero">
         <div className="portal-entry">
-          <h1 className="portal-headline">cross the vail</h1>
+          <div className="portal-headline-block">
+            <h1 className="portal-headline">
+              <span className="portal-headline-lead">cross the</span>
+              <span className="portal-headline-veil">veil</span>
+            </h1>
+            <div className="portal-headline-ornament" aria-hidden="true" />
+          </div>
           <div className="portal-choice-stack">
             <PortalChoiceButton
               label="with chatgpt"
