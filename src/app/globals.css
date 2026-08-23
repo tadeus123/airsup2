@@ -604,6 +604,16 @@ button {
   top: 0.04em;
 }
 
+.portal-chatgpt-icon {
+  color: #1a1a1a;
+}
+
+.portal-claude-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #c15f3c;
+}
+
 
 @media (max-width: 480px) {
   .portal-page {

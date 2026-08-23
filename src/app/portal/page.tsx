@@ -1,15 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
+import { ChatGptBrandIcon, ClaudeBrandIcon } from "@/components/portal/PortalBrandIcons";
 
 function PortalChoiceButton({
   label,
-  logoSrc,
+  icon,
   onClick,
   disabled,
 }: {
   label: string;
-  logoSrc: string;
+  icon: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
 }) {
@@ -22,12 +24,7 @@ function PortalChoiceButton({
       aria-disabled={disabled || undefined}
     >
       <span className="portal-choice-label">{label}</span>
-      <img
-        src={logoSrc}
-        alt=""
-        aria-hidden="true"
-        className="portal-choice-logo"
-      />
+      {icon}
     </button>
   );
 }
@@ -43,12 +40,12 @@ export default function PortalPage() {
           <div className="portal-choice-stack">
             <PortalChoiceButton
               label="with chatgpt"
-              logoSrc="/portal/chatgpt-logo.svg"
+              icon={<ChatGptBrandIcon className="portal-choice-logo portal-chatgpt-icon" />}
               onClick={() => router.push("/portal/chatgpt")}
             />
             <PortalChoiceButton
               label="with claude"
-              logoSrc="/portal/claude-logo.svg"
+              icon={<ClaudeBrandIcon className="portal-choice-logo portal-claude-icon" />}
               disabled
             />
           </div>
