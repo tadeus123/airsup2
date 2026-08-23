@@ -376,52 +376,134 @@ button {
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
-  padding: 2rem;
+  padding: 2rem 1.5rem;
 }
 
 .portal-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
   text-align: center;
+}
+
+.portal-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.125rem;
+  padding: 2.75rem 0;
+  position: relative;
+}
+
+.portal-entry::before,
+.portal-entry::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(9rem, 52vw);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(139, 105, 20, 0.22) 18%,
+    rgba(139, 105, 20, 0.22) 82%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.portal-entry::before {
+  top: 0;
+}
+
+.portal-entry::after {
+  bottom: 0;
 }
 
 .portal-headline {
   margin: 0;
-  font-size: 1.8rem;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-size: clamp(1.75rem, 4.5vw, 2.125rem);
   font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: 0.055em;
+  line-height: 1.15;
   text-transform: lowercase;
-  color: var(--text-color);
+  color: rgba(26, 26, 26, 0.9);
 }
 
 .portal-chatgpt-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.75rem 1.25rem;
-  border: 1px solid #8b6914;
+  gap: 0.5625rem;
+  padding: 0.6875rem 1.375rem;
+  border: 1px solid rgba(139, 105, 20, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(139, 105, 20, 0.1);
   border-radius: 0;
   background: transparent;
-  color: var(--text-color);
+  color: rgba(26, 26, 26, 0.92);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.875rem;
   font-weight: 400;
+  letter-spacing: 0.045em;
   text-transform: lowercase;
+  transition: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.portal-chatgpt-btn:hover,
+.portal-chatgpt-btn:active {
+  background: transparent;
+  color: rgba(26, 26, 26, 0.92);
+  border-color: rgba(139, 105, 20, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(139, 105, 20, 0.1);
+  opacity: 1;
+  transform: none;
 }
 
 .portal-chatgpt-btn:focus-visible {
-  outline: 2px solid #8b6914;
+  outline: 2px solid rgba(139, 105, 20, 0.65);
   outline-offset: 3px;
 }
 
+.portal-chatgpt-label {
+  line-height: 1;
+}
+
 .portal-chatgpt-logo {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 0.9375rem;
+  height: 0.9375rem;
   flex-shrink: 0;
   display: block;
+  position: relative;
+  top: 0.04em;
+}
+
+@media (max-width: 480px) {
+  .portal-page {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .portal-entry {
+    gap: 1.875rem;
+    padding: 2.25rem 0;
+  }
+
+  .portal-headline {
+    letter-spacing: 0.04em;
+  }
+
+  .portal-chatgpt-btn {
+    padding: 0.625rem 1.125rem;
+    font-size: 0.8125rem;
+    gap: 0.5rem;
+  }
+
+  .portal-chatgpt-logo {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
 }
 
 .portal-setup {
