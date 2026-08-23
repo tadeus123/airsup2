@@ -421,7 +421,7 @@ button {
   width: 1.15rem;
   height: 1.15rem;
   flex-shrink: 0;
-  color: var(--text-color);
+  display: block;
 }
 
 .portal-setup {
