@@ -3,6 +3,7 @@ import {
   claimStalePortalComputer,
   cleanupStalePortalComputers,
   createOrgoComputerForUser,
+  forceFreeOrgoSlot,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
@@ -68,8 +69,12 @@ export async function POST(request: Request) {
               created = await createOrgoComputerForUser(user.username);
             } catch {
               const reclaimedAfter = await claimStalePortalComputer({ keepIds: linkedIds });
-              if (reclaimedAfter?.id) created = reclaimedAfter;
-              else throw firstError;
+              if (reclaimedAfter?.id) {
+                created = reclaimedAfter;
+              } else {
+                await forceFreeOrgoSlot({ keepIds: linkedIds });
+                created = await createOrgoComputerForUser(user.username);
+              }
             }
           }
         } else {

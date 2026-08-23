@@ -96,7 +96,28 @@ export type OrgoWorkspaceComputer = OrgoComputerRecord & {
   created_at?: string;
 };
 
-/** List computers in the configured Orgo workspace. */
+function permanentlyProtectedIds(): Set<string> {
+  const keep = new Set<string>();
+  const fallback = (process.env.ORGO_DEFAULT_COMPUTER_ID || "").trim();
+  if (fallback) keep.add(fallback);
+  const portalShared = (process.env.ORGO_PORTAL_SHARED_COMPUTER_ID || "").trim();
+  if (portalShared) keep.add(portalShared);
+  const raw = (process.env.ORGO_COMPUTER_MAP || "").trim();
+  if (raw) {
+    try {
+      const obj = JSON.parse(raw) as Record<string, string>;
+      for (const id of Object.values(obj)) {
+        const trimmed = (id || "").trim();
+        if (trimmed) keep.add(trimmed);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return keep;
+}
+
+/** List computers in the configured Orgo workspace (falls back to all workspaces). */
 export async function listOrgoWorkspaceComputers(): Promise<OrgoWorkspaceComputer[]> {
   const workspaceId = orgoWorkspaceId();
   const data = await orgoApiFetch<{
@@ -106,13 +127,22 @@ export async function listOrgoWorkspaceComputers(): Promise<OrgoWorkspaceCompute
     }>;
   }>("/workspaces");
   const workspaces = data.workspaces || [];
-  const ws = workspaces.find((w) => w.id === workspaceId) || workspaces[0];
-  const desktops = ws?.desktops || [];
-  return desktops.map((d) => normalizeOrgoComputer(d));
+  const ws = workspaces.find((w) => w.id === workspaceId);
+  const primary = (ws?.desktops || []).map((d) => normalizeOrgoComputer(d));
+  if (primary.length > 0) return primary;
+
+  const all: OrgoWorkspaceComputer[] = [];
+  for (const workspace of workspaces) {
+    for (const desktop of workspace.desktops || []) {
+      all.push(normalizeOrgoComputer(desktop));
+    }
+  }
+  return all;
 }
 
 function portalEphemeralName(name?: string): boolean {
-  return /^airsup-p\d/i.test((name || "").trim());
+  const n = (name || "").trim().toLowerCase();
+  return n.startsWith("airsup-p") || n.startsWith("airsup-portal");
 }
 
 /** Protect manually provisioned computers; ephemeral portal VMs are reclaimable. */
@@ -121,7 +151,7 @@ function protectedComputerIds(
   linkedIds: Iterable<string>
 ): Set<string> {
   const linked = new Set([...linkedIds].map((id) => id.trim()).filter(Boolean));
-  const keep = new Set<string>();
+  const keep = permanentlyProtectedIds();
   for (const computer of computers) {
     if (!portalEphemeralName(computer.name) && linked.has(computer.id)) {
       keep.add(computer.id);
@@ -179,6 +209,24 @@ export async function claimStalePortalComputer(opts?: {
       return ta - tb;
     })[0];
   return candidate || null;
+}
+
+/** Last resort: delete the oldest non-protected computer to free a slot. */
+export async function forceFreeOrgoSlot(opts?: {
+  keepIds?: Iterable<string>;
+}): Promise<string | null> {
+  const computers = await listOrgoWorkspaceComputers();
+  const keep = protectedComputerIds(computers, opts?.keepIds || []);
+  const victim = computers
+    .filter((c) => !keep.has(c.id))
+    .sort((a, b) => {
+      const ta = Date.parse(a.created_at || "") || 0;
+      const tb = Date.parse(b.created_at || "") || 0;
+      return ta - tb;
+    })[0];
+  if (!victim?.id) return null;
+  await deleteOrgoComputer(victim.id);
+  return victim.id;
 }
 
 export async function startOrgoComputer(computerId: string): Promise<void> {
