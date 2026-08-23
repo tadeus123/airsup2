@@ -360,12 +360,82 @@ export async function openChromeToChatGpt(computerId: string): Promise<void> {
     "fi",
     "pkill -f 'chrome.*chatgpt' 2>/dev/null || pkill -f chrome 2>/dev/null || true",
     "sleep 1",
-    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,720 --window-position=0,0 --no-first-run --disable-infobars --disable-session-crashed-bubble 2>/dev/null",
+    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,720 --window-position=0,0 --no-first-run --disable-infobars --disable-session-crashed-bubble --disable-features=TranslateUI 2>/dev/null",
     "|| chromium-browser --app=https://chatgpt.com/auth/login --window-size=1280,720 --no-first-run 2>/dev/null",
-    "|| google-chrome --kiosk https://chatgpt.com/auth/login 2>/dev/null",
+    "|| google-chrome --new-window https://chatgpt.com/auth/login 2>/dev/null",
     "|| true) &",
   ].join("\n");
   await orgoBash(computerId, cmd);
+}
+
+/** Launch Chrome and tab to the email login form (runs on the VM, not via VNC). */
+export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<void> {
+  await openChromeToChatGpt(computerId);
+  const cmd = [
+    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
+    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
+    "else export DISPLAY=:99",
+    "fi",
+    "command -v xdotool >/dev/null || { echo PREP_SKIP; exit 0; }",
+    "sleep 8",
+    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
+    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
+    "sleep 0.5",
+    "xdotool key --clearmodifiers ctrl+l",
+    "sleep 0.25",
+    "xdotool type --delay 10 'https://chatgpt.com/auth/login'",
+    "xdotool key Return",
+    "sleep 12",
+    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
+    "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do xdotool key Tab; sleep 0.12; done",
+    "xdotool key Return",
+    "sleep 2",
+    "echo PREPARED",
+  ].join("\n");
+  await orgoBash(computerId, cmd);
+}
+
+/** Fill ChatGPT email + password on the VM (for ops/testing only). */
+export async function fillChatGptLoginOnDesktop(
+  computerId: string,
+  email: string,
+  password: string
+): Promise<void> {
+  const emailB64 = Buffer.from(email, "utf8").toString("base64");
+  const passB64 = Buffer.from(password, "utf8").toString("base64");
+  const cmd = [
+    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
+    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
+    "else export DISPLAY=:99",
+    "fi",
+    "command -v xdotool >/dev/null || { echo FILL_SKIP; exit 0; }",
+    "EMAIL=$(echo '" + emailB64 + "' | base64 -d)",
+    "PASS=$(echo '" + passB64 + "' | base64 -d)",
+    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
+    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
+    "sleep 0.4",
+    "xdotool type --delay 12 -- \"$EMAIL\"",
+    "xdotool key Return",
+    "sleep 4",
+    "xdotool type --delay 12 -- \"$PASS\"",
+    "xdotool key Return",
+    "sleep 3",
+    "echo FILLED",
+  ].join("\n");
+  await orgoBash(computerId, cmd);
+}
+
+/** Launch ChatGPT login with retries while the desktop comes up. */
+export async function launchChatGptLoginWithRetries(computerId: string): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await prepareChatGptLoginOnDesktop(computerId);
+      return;
+    } catch {
+      await sleep(2000 + attempt * 1500);
+    }
+  }
+  void openChromeToChatGpt(computerId).catch(() => {});
 }
 
 const STARTABLE_STATUSES = new Set(["stopped", "frozen", "suspended", "stopping"]);
@@ -449,7 +519,7 @@ export async function resolveOrgoDesktopSession(
   const vncUrl = orgoVncWebSocketUrl(computer, password);
 
   if (opts?.launchChrome) {
-    void openChromeToChatGpt(computerId).catch(() => {});
+    void launchChatGptLoginWithRetries(computerId).catch(() => {});
   }
 
   return { computer, desktopUrl, vncUrl, password };

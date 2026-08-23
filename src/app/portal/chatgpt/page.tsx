@@ -108,7 +108,7 @@ export default function PortalChatGptPage() {
             <p className="portal-connect-frame-status">{loadingText}</p>
           </div>
           <p className="portal-connect-note">
-            inside your private computer — airsup never sees your password.
+            click inside the window to interact — airsup never sees your password.
           </p>
         </section>
       ) : null}
@@ -142,7 +142,7 @@ export default function PortalChatGptPage() {
           </div>
           <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
           <p className="portal-connect-note">
-            inside your private computer — airsup never sees your password.
+            click inside the window to interact — airsup never sees your password.
           </p>
         </section>
       ) : null}

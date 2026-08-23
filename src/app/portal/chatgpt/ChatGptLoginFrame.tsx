@@ -48,7 +48,10 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
         rfb.background = "#2c2a26";
         rfb.focusOnClick = true;
         rfb.showDotCursor = true;
-        rfb.addEventListener("connect", () => setConnected(true));
+        rfb.addEventListener("connect", () => {
+          setConnected(true);
+          hostRef.current?.focus();
+        });
         rfb.addEventListener("disconnect", () => setConnected(false));
         rfb.addEventListener("credentialsrequired", () => {
           rfb.sendCredentials({ password });
@@ -91,7 +94,7 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
           could not load the login window — refresh to try again.
         </p>
       ) : null}
-      <div ref={hostRef} className="portal-connect-vnc" />
+      <div ref={hostRef} className="portal-connect-vnc" tabIndex={0} aria-label="chatgpt login window" />
     </div>
   );
 }

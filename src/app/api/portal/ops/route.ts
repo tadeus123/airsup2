@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import {
   claimStalePortalComputer,
   cleanupStalePortalComputers,
+  fillChatGptLoginOnDesktop,
   listOrgoWorkspaceComputers,
   orgoProvisionConfigured,
+  prepareChatGptLoginOnDesktop,
 } from "@/lib/orgo-provision";
 import { listLinkedOrgoComputerIds } from "@/lib/users";
 
@@ -19,13 +21,35 @@ function opsAuthorized(request: Request): boolean {
   return q === secret || h === secret;
 }
 
-/** Ops: inspect / reclaim Orgo capacity for portal testing. */
+/** Ops: inspect / reclaim Orgo capacity / prep ChatGPT login. */
 export async function POST(request: Request) {
   if (!opsAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!orgoProvisionConfigured()) {
     return NextResponse.json({ error: "orgo_not_configured" }, { status: 503 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as {
+    action?: string;
+    computerId?: string;
+    email?: string;
+    password?: string;
+  };
+
+  if (body.action === "prepare_login" && body.computerId) {
+    await prepareChatGptLoginOnDesktop(body.computerId.trim());
+    return NextResponse.json({ ok: true, action: "prepare_login" });
+  }
+
+  if (body.action === "fill_login" && body.computerId && body.email && body.password) {
+    await prepareChatGptLoginOnDesktop(body.computerId.trim());
+    await fillChatGptLoginOnDesktop(
+      body.computerId.trim(),
+      body.email.trim(),
+      body.password
+    );
+    return NextResponse.json({ ok: true, action: "fill_login" });
   }
 
   const linkedIds = await listLinkedOrgoComputerIds();
