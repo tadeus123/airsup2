@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChatGptBrandIcon, ClaudeBrandIcon } from "@/components/portal/PortalBrandIcons";
 import { usePortalWarmup } from "@/hooks/usePortalWarmup";
@@ -8,32 +8,41 @@ import { usePortalWarmup } from "@/hooks/usePortalWarmup";
 function PortalPassage({
   label,
   icon,
-  onClick,
+  href,
   disabled,
 }: {
   label: string;
   icon: ReactNode;
-  onClick?: () => void;
+  href?: string;
   disabled?: boolean;
 }) {
+  if (disabled || !href) {
+    return (
+      <button
+        type="button"
+        className="portal-passage portal-passage--disabled"
+        disabled
+        aria-disabled="true"
+      >
+        <span className="portal-passage-mark" aria-hidden="true">
+          {icon}
+        </span>
+        <span className="portal-passage-label">{label}</span>
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      className={`portal-passage${disabled ? " portal-passage--disabled" : ""}`}
-      onClick={onClick}
-      disabled={disabled}
-      aria-disabled={disabled || undefined}
-    >
+    <Link href={href} className="portal-passage">
       <span className="portal-passage-mark" aria-hidden="true">
         {icon}
       </span>
       <span className="portal-passage-label">{label}</span>
-    </button>
+    </Link>
   );
 }
 
 export default function PortalPage() {
-  const router = useRouter();
   usePortalWarmup();
 
   return (
@@ -50,8 +59,8 @@ export default function PortalPage() {
         <nav className="portal-passages" aria-label="choose your path">
           <PortalPassage
             label="with chatgpt"
+            href="/portal/chatgpt"
             icon={<ChatGptBrandIcon className="portal-passage-logo portal-chatgpt-icon" />}
-            onClick={() => router.push("/portal/chatgpt")}
           />
           <PortalPassage
             label="with claude"

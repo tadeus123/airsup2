@@ -1,73 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { getNovncModuleUrl } from "@/lib/portal-client";
-
 type Props = {
-  vncUrl: string;
-  password: string;
+  desktopUrl: string;
 };
 
-type RfbInstance = {
-  disconnect: () => void;
-  scaleViewport: boolean;
-  resizeSession: boolean;
-  clipViewport: boolean;
-  background: string;
-  addEventListener: (type: string, fn: () => void) => void;
-};
-
-export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [connected, setConnected] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let rfb: RfbInstance | null = null;
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const novncUrl = getNovncModuleUrl();
-        const mod = (await import(
-          /* webpackIgnore: true */
-          novncUrl
-        )) as { default: new (el: HTMLElement, url: string, opts?: object) => RfbInstance };
-        if (cancelled || !hostRef.current) return;
-
-        rfb = new mod.default(hostRef.current, vncUrl, {
-          credentials: { password },
-        });
-        rfb.scaleViewport = true;
-        rfb.resizeSession = true;
-        rfb.clipViewport = true;
-        rfb.background = "#ffffff";
-        rfb.addEventListener("connect", () => setConnected(true));
-        rfb.addEventListener("disconnect", () => setConnected(false));
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      rfb?.disconnect();
-    };
-  }, [vncUrl, password]);
-
+/** Native Orgo desktop embed — no broken noVNC CDN dependency. */
+export default function ChatGptLoginFrame({ desktopUrl }: Props) {
   return (
-    <div className="portal-chatgpt-login-card">
-      {!connected && !failed ? (
-        <p className="portal-chatgpt-login-loading">loading chatgpt…</p>
-      ) : null}
-      {failed ? (
-        <p className="portal-chatgpt-login-error">
-          could not load the login window — refresh to try again.
-        </p>
-      ) : null}
-      <div
-        ref={hostRef}
-        className={`portal-chatgpt-vnc-host${connected ? " portal-chatgpt-vnc-host--live" : ""}`}
+    <div className="portal-chatgpt-login-card portal-chatgpt-login-card--live">
+      <iframe
+        src={desktopUrl}
+        title="chatgpt login"
+        className="portal-chatgpt-desktop-iframe"
+        allow="clipboard-read; clipboard-write; fullscreen"
       />
     </div>
   );

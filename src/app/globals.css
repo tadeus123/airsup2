@@ -497,6 +497,7 @@ button {
   letter-spacing: 0.045em;
   text-transform: lowercase;
   text-align: left;
+  text-decoration: none;
   transition: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -794,6 +795,23 @@ button {
   color: #900;
   font-size: 0.9rem;
   z-index: 2;
+}
+
+.portal-chatgpt-login-card--live {
+  display: flex;
+  flex-direction: column;
+  min-height: 28rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.portal-chatgpt-desktop-iframe {
+  display: block;
+  width: 100%;
+  min-height: 28rem;
+  height: min(70vh, 36rem);
+  border: 0;
+  background: #ffffff;
 }
 
 .portal-chatgpt-vnc-host {

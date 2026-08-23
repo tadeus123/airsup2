@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  getOrgoComputer,
-  getOrgoVncPassword,
-  openChromeToChatGpt,
   orgoProvisionConfigured,
-  orgoVncWebSocketUrl,
-  waitForComputerRunning,
+  resolveOrgoDesktopSession,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 
@@ -47,41 +43,41 @@ export async function GET(request: Request) {
       Math.max(3000, Number(url.searchParams.get("waitMs") || 55000))
     );
 
-    let computer = await getOrgoComputer(user.orgoComputerId);
-    let instanceId = (computer.instance_id || "").trim();
-
-    if (!instanceId && shouldWait) {
-      computer = await waitForComputerRunning(user.orgoComputerId, waitMs);
-      instanceId = (computer.instance_id || "").trim();
-    }
-
-    if (!instanceId) {
+    if (!shouldWait) {
       return NextResponse.json(
-        { error: "not_ready", message: "Computer is still starting." },
-        { status: 404 }
+        {
+          error: "not_ready",
+          message: "Use wait=1 to wait for the desktop.",
+        },
+        { status: 400 }
       );
     }
 
-    if (shouldLaunch) {
-      void openChromeToChatGpt(user.orgoComputerId).catch(() => {});
-    }
-
-    const password = await getOrgoVncPassword(user.orgoComputerId);
-    const vncUrl = orgoVncWebSocketUrl(computer, password);
+    const session = await resolveOrgoDesktopSession(user.orgoComputerId, {
+      waitMs,
+      launchChrome: shouldLaunch,
+    });
 
     return NextResponse.json(
       {
         ok: true,
         computerId: user.orgoComputerId,
-        instanceId,
-        vncUrl,
-        password,
-        status: computer.status || "unknown",
+        instanceId: session.computer.instance_id,
+        desktopUrl: session.desktopUrl,
+        vncUrl: session.vncUrl,
+        password: session.password,
+        status: session.computer.status || "running",
       },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "desktop_failed";
+    if (message.includes("still starting")) {
+      return NextResponse.json(
+        { error: "not_ready", message },
+        { status: 503 }
+      );
+    }
     const status = message === "Unauthorized" ? 401 : 400;
     return NextResponse.json({ error: message }, { status });
   }
