@@ -359,18 +359,16 @@ async function orgoWait(computerId: string, seconds: number): Promise<void> {
   });
 }
 
-/** Open ChatGPT login — double-click desktop Chrome icon, then xdg-open fallback. */
+/** Open ChatGPT login via Chrome on the VM desktop. */
 export async function openChromeToChatGpt(computerId: string): Promise<void> {
   const cmd = [
     "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
     "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
     "else export DISPLAY=:99",
     "fi",
-    "command -v xdotool >/dev/null && xdotool mousemove 72 108 click 1 click 1 || true",
-    "sleep 2",
     "CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1)",
     "if [ -n \"$CHROME\" ]; then",
-    "  nohup \"$CHROME\" --new-window --start-maximized 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
+    "  nohup \"$CHROME\" --new-window --start-maximized --no-first-run 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
     "elif command -v xdg-open >/dev/null; then",
     "  nohup xdg-open 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
     "else",
