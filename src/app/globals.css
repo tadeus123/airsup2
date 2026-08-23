@@ -460,6 +460,117 @@ button {
   gap: 0.75rem;
 }
 
+.portal-choice-btn--disabled {
+  opacity: 0.38;
+  cursor: default;
+  pointer-events: none;
+}
+
+.portal-chatgpt-flow {
+  min-height: 100dvh;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+.portal-chatgpt-flow-header {
+  max-width: 28rem;
+  margin: 0 auto 1.5rem;
+}
+
+.portal-chatgpt-flow-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - 5rem);
+}
+
+.portal-chatgpt-login-shell {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.portal-chatgpt-login-title {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: lowercase;
+  color: rgba(26, 26, 26, 0.92);
+}
+
+.portal-chatgpt-login-card {
+  position: relative;
+  width: 100%;
+  min-height: 28rem;
+  background: #ffffff;
+  border: 1px solid rgba(26, 26, 26, 0.1);
+  box-shadow: 0 10px 36px rgba(26, 26, 26, 0.07);
+  overflow: hidden;
+}
+
+.portal-chatgpt-login-card--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.portal-chatgpt-login-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-transform: lowercase;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.portal-chatgpt-login-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  margin: 0;
+  text-align: center;
+  color: #900;
+  font-size: 0.9rem;
+  z-index: 2;
+}
+
+.portal-chatgpt-vnc-host {
+  width: 100%;
+  min-height: 28rem;
+  background: #ffffff;
+  opacity: 0;
+}
+
+.portal-chatgpt-vnc-host--live {
+  opacity: 1;
+}
+
+.portal-chatgpt-vnc-host canvas {
+  width: 100% !important;
+  height: auto !important;
+}
+
+.portal-chatgpt-login-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
 .portal-chatgpt-btn:hover,
 .portal-chatgpt-btn:active,
 .portal-choice-btn:hover,

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   getOrgoComputer,
-  orgoDesktopUrl,
+  getOrgoVncPassword,
+  openChromeToChatGpt,
   orgoProvisionConfigured,
+  orgoVncWebSocketUrl,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 
@@ -19,7 +21,7 @@ export async function GET(request: Request) {
 
     if (!user.orgoComputerId) {
       return NextResponse.json(
-        { error: "no_orgo_computer", message: "No workspace linked yet." },
+        { error: "not_ready", message: "Computer is still starting." },
         { status: 404 }
       );
     }
@@ -37,19 +39,31 @@ export async function GET(request: Request) {
 
     const computer = await getOrgoComputer(user.orgoComputerId);
     const instanceId = (computer.instance_id || "").trim();
-    const desktopUrl = orgoDesktopUrl(computer);
+    if (!instanceId) {
+      return NextResponse.json(
+        { error: "not_ready", message: "Computer is still starting." },
+        { status: 404 }
+      );
+    }
+
+    const url = new URL(request.url);
+    if (url.searchParams.get("launch") === "1") {
+      void openChromeToChatGpt(user.orgoComputerId).catch(() => {});
+    }
+
+    const password = await getOrgoVncPassword(user.orgoComputerId);
+    const vncUrl = orgoVncWebSocketUrl(computer, password);
 
     return NextResponse.json(
       {
         ok: true,
         computerId: user.orgoComputerId,
         instanceId,
-        desktopUrl,
+        vncUrl,
+        password,
         status: computer.status || "unknown",
       },
-      {
-        headers: { "Cache-Control": "no-store" },
-      }
+      { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "desktop_failed";

@@ -5,22 +5,28 @@ import { useRouter } from "next/navigation";
 function PortalChoiceButton({
   label,
   logoSrc,
-  logoClassName,
   onClick,
+  disabled,
 }: {
   label: string;
   logoSrc: string;
-  logoClassName?: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <button type="button" className="portal-choice-btn" onClick={onClick}>
+    <button
+      type="button"
+      className={`portal-choice-btn${disabled ? " portal-choice-btn--disabled" : ""}`}
+      onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
+    >
       <span className="portal-choice-label">{label}</span>
       <img
         src={logoSrc}
         alt=""
         aria-hidden="true"
-        className={`portal-choice-logo${logoClassName ? ` ${logoClassName}` : ""}`}
+        className="portal-choice-logo"
       />
     </button>
   );
@@ -38,11 +44,12 @@ export default function PortalPage() {
             <PortalChoiceButton
               label="with chatgpt"
               logoSrc="/portal/chatgpt-logo.svg"
-              onClick={() => router.push("/portal/setup")}
+              onClick={() => router.push("/portal/chatgpt")}
             />
             <PortalChoiceButton
               label="with claude"
               logoSrc="/portal/claude-logo.svg"
+              disabled
             />
           </div>
         </div>

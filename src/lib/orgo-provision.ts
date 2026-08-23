@@ -119,14 +119,46 @@ async function orgoBash(computerId: string, command: string): Promise<void> {
   }
 }
 
-/** Open ChatGPT in the user's cloud desktop (best-effort). */
+/** WebSocket URL for noVNC / RFB clients. */
+export function orgoVncWebSocketUrl(
+  computer: OrgoComputerRecord,
+  password: string
+): string {
+  const instanceId = (computer.instance_id || "").trim();
+  if (!instanceId) throw new Error("Computer has no instance id yet");
+  const token = encodeURIComponent(password);
+  return `wss://www.orgo.ai/desktops/${instanceId}/ws/websockify?token=${token}`;
+}
+
+/** Open ChatGPT login in kiosk-style Chrome (best-effort). */
 export async function openChromeToChatGpt(computerId: string): Promise<void> {
-  await orgoBash(
-    computerId,
-    `if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99
-elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0
-else export DISPLAY=:99
-fi
-(google-chrome --new-window https://chatgpt.com 2>/dev/null || chromium-browser --new-window https://chatgpt.com 2>/dev/null || xdg-open https://chatgpt.com 2>/dev/null || true) &`
-  );
+  const cmd = [
+    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
+    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
+    "else export DISPLAY=:99",
+    "fi",
+    "pkill -f chrome 2>/dev/null || true",
+    "sleep 1",
+    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,800 --window-position=0,0 --no-first-run --disable-infobars 2>/dev/null",
+    "|| chromium-browser --app=https://chatgpt.com/auth/login --window-size=1280,800 --no-first-run 2>/dev/null",
+    "|| google-chrome --kiosk https://chatgpt.com/auth/login 2>/dev/null",
+    "|| true) &",
+  ].join("\n");
+  await orgoBash(computerId, cmd);
+}
+
+export async function waitForComputerRunning(
+  computerId: string,
+  maxMs = 90000
+): Promise<OrgoComputerRecord> {
+  const started = Date.now();
+  let last: OrgoComputerRecord | null = null;
+  while (Date.now() - started < maxMs) {
+    last = await getOrgoComputer(computerId);
+    const status = (last.status || "").toLowerCase();
+    if (status === "running" && (last.instance_id || "").trim()) return last;
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  if (last) return last;
+  return getOrgoComputer(computerId);
 }
