@@ -359,20 +359,25 @@ async function orgoWait(computerId: string, seconds: number): Promise<void> {
   });
 }
 
-/** Open ChatGPT login in kiosk-style Chrome — fullscreen app window. */
+/** Open ChatGPT login — double-click desktop Chrome icon, then xdg-open fallback. */
 export async function openChromeToChatGpt(computerId: string): Promise<void> {
   const cmd = [
     "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
     "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
     "else export DISPLAY=:99",
     "fi",
-    "CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1)",
-    "if [ -z \"$CHROME\" ]; then echo NO_CHROME; exit 1; fi",
-    "nohup \"$CHROME\" --new-window --window-size=1280,720 --window-position=0,0",
-    "  --no-first-run --disable-infobars --disable-session-crashed-bubble",
-    "  'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
+    "command -v xdotool >/dev/null && xdotool mousemove 72 108 click 1 click 1 || true",
     "sleep 2",
-    "pgrep -af chrome | head -3 || cat /tmp/airsup-chrome.log",
+    "CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1)",
+    "if [ -n \"$CHROME\" ]; then",
+    "  nohup \"$CHROME\" --new-window --start-maximized 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
+    "elif command -v xdg-open >/dev/null; then",
+    "  nohup xdg-open 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 &",
+    "else",
+    "  echo NO_CHROME; exit 1",
+    "fi",
+    "sleep 2",
+    "pgrep -af chrome | head -2 || cat /tmp/airsup-chrome.log",
     "echo LAUNCHED",
   ].join("\n");
   await orgoBash(computerId, cmd);
@@ -397,7 +402,7 @@ async function focusChatGptEmailForm(computerId: string): Promise<void> {
 /** Launch Chrome and tab to the email login form (runs on the VM, not via VNC). */
 export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<void> {
   await openChromeToChatGpt(computerId);
-  await orgoWait(computerId, 10);
+  await orgoWait(computerId, 12);
   await focusChatGptEmailForm(computerId);
 }
 
