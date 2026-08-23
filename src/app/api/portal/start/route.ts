@@ -5,6 +5,7 @@ import {
   createOrgoComputerForUser,
   forceFreeOrgoSlot,
   getOrgoComputer,
+  listOrgoWorkspaceComputers,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
@@ -86,7 +87,12 @@ export async function POST(request: Request) {
                   if (sharedId) {
                     created = await getOrgoComputer(sharedId);
                   } else {
-                    throw firstError;
+                    const pool = await listOrgoWorkspaceComputers();
+                    const pick =
+                      pool.find((c) => (c.status || "").toLowerCase() === "running") ||
+                      pool[0];
+                    if (pick?.id) created = pick;
+                    else throw firstError;
                   }
                 }
               }
