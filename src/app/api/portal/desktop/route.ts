@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   getOrgoComputer,
-  getOrgoVncPassword,
+  orgoDesktopUrl,
   orgoProvisionConfigured,
-  orgoVncHostname,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 
@@ -37,17 +36,15 @@ export async function GET(request: Request) {
     }
 
     const computer = await getOrgoComputer(user.orgoComputerId);
-    const password = await getOrgoVncPassword(user.orgoComputerId);
     const instanceId = (computer.instance_id || "").trim();
-    const vncHostname = orgoVncHostname(computer);
+    const desktopUrl = orgoDesktopUrl(computer);
 
     return NextResponse.json(
       {
         ok: true,
         computerId: user.orgoComputerId,
         instanceId,
-        password,
-        vncHostname,
+        desktopUrl,
         status: computer.status || "unknown",
       },
       {

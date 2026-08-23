@@ -21,8 +21,7 @@ type SessionUser = {
 };
 
 type DesktopCreds = {
-  vncHostname: string;
-  password: string;
+  desktopUrl: string;
   status: string;
 };
 
@@ -92,14 +91,13 @@ export default function PortalSetupPage() {
     setLoadingText("opening your workspace…");
     const desktopRes = await apiJson<{
       ok?: boolean;
-      vncHostname?: string;
-      password?: string;
+      desktopUrl?: string;
       status?: string;
       error?: string;
       message?: string;
     }>("/api/portal/desktop", { headers: authHeaders });
 
-    if (!desktopRes.ok || !desktopRes.data.vncHostname || !desktopRes.data.password) {
+    if (!desktopRes.ok || !desktopRes.data.desktopUrl) {
       const msg =
         desktopRes.data.message ||
         desktopRes.data.error ||
@@ -108,8 +106,7 @@ export default function PortalSetupPage() {
     }
 
     setDesktop({
-      vncHostname: desktopRes.data.vncHostname,
-      password: desktopRes.data.password,
+      desktopUrl: desktopRes.data.desktopUrl,
       status: desktopRes.data.status || "running",
     });
     setPhase("desktop");
@@ -230,10 +227,7 @@ export default function PortalSetupPage() {
               )}
             </p>
           </div>
-          <PortalDesktop
-            vncHostname={desktop.vncHostname}
-            password={desktop.password}
-          />
+          <PortalDesktop desktopUrl={desktop.desktopUrl} />
           <p className="portal-workspace-note portal-muted">
             your password stays inside this desktop. airsup never sees it.
           </p>

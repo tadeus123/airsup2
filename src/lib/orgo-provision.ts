@@ -9,6 +9,7 @@ export type OrgoComputerRecord = {
   instance_id?: string;
   hostname?: string;
   connection_url?: string;
+  url?: string;
 };
 
 function orgoApiKey(): string {
@@ -63,6 +64,15 @@ export async function getOrgoVncPassword(computerId: string): Promise<string> {
   const password = (data.password || "").trim();
   if (!password) throw new Error("Failed to fetch VNC password");
   return password;
+}
+
+/** Public Orgo desktop page for iframe embed. */
+export function orgoDesktopUrl(computer: OrgoComputerRecord): string {
+  const connection = (computer.connection_url || computer.url || "").trim();
+  if (connection) return connection;
+  const instanceId = (computer.instance_id || "").trim();
+  if (instanceId) return `https://www.orgo.ai/desktops/${instanceId}`;
+  throw new Error("Computer has no connection details yet");
 }
 
 /** Host string for orgo-vnc: wss://{hostname}/websockify */
