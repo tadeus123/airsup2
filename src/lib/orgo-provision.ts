@@ -86,7 +86,10 @@ export async function waitForDesktopHealth(
   const url = `${ORGO_API_BASE}/api/desktops/${instanceId}/proxy/health`;
   while (Date.now() - started < maxMs) {
     try {
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${orgoApiKey()}` },
+      });
       if (res.ok) return true;
     } catch {
       // retry
@@ -204,8 +207,12 @@ export async function waitForComputerReady(
     if (instanceId) {
       const remaining = maxMs - (Date.now() - started);
       if (remaining > 0) {
-        const healthy = await waitForDesktopHealth(instanceId, remaining);
+        const healthBudget = Math.min(remaining, 10_000);
+        const healthy = await waitForDesktopHealth(instanceId, healthBudget);
         if (healthy) return last;
+      }
+      if (status === "running" || status === "starting" || status === "creating") {
+        return last;
       }
       break;
     }

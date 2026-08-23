@@ -14,6 +14,11 @@ const ChatGptLoginFrame = dynamic(() => import("./ChatGptLoginFrame"), {
   ),
 });
 
+type DesktopSession = {
+  vncUrl: string;
+  password: string;
+};
+
 type Phase = "loading" | "login" | "error";
 
 const LOADING_STAGES = [
@@ -25,7 +30,7 @@ const LOADING_STAGES = [
 export default function PortalChatGptPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [loadingText, setLoadingText] = useState<string>(LOADING_STAGES[0]);
-  const [desktopUrl, setDesktopUrl] = useState("");
+  const [desktop, setDesktop] = useState<DesktopSession | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -53,7 +58,7 @@ export default function PortalChatGptPage() {
             signal: controller.signal,
           });
           if (!cancelled) {
-            setDesktopUrl(desk.desktopUrl);
+            setDesktop({ vncUrl: desk.vncUrl, password: desk.password });
             setPhase("login");
           }
         } finally {
@@ -109,11 +114,11 @@ export default function PortalChatGptPage() {
         </div>
       ) : null}
 
-      {phase === "login" && desktopUrl ? (
+      {phase === "login" && desktop ? (
         <div className="portal-chatgpt-flow-center">
           <div className="portal-chatgpt-login-shell">
             <h1 className="portal-chatgpt-login-title">connect your chatgpt</h1>
-            <ChatGptLoginFrame desktopUrl={desktopUrl} />
+            <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             <p className="portal-chatgpt-login-note">
               sign in below — this happens directly inside your private computer.
               airsup never sees your password.

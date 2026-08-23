@@ -63,6 +63,16 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "portal_start_failed";
+    if (message.includes("Computer limit reached") || message.includes("VM_SLOT")) {
+      return NextResponse.json(
+        {
+          error: "orgo_capacity",
+          message:
+            "Portal is at capacity (Orgo computer limit). Delete unused computers in your Orgo workspace or add a slot.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

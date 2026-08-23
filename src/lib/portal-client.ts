@@ -9,8 +9,8 @@ export type PortalStartResult = {
 
 export type PortalDesktopResult = {
   desktopUrl: string;
-  vncUrl?: string;
-  password?: string;
+  vncUrl: string;
+  password: string;
   status?: string;
 };
 
@@ -66,7 +66,7 @@ export async function fetchPortalDesktop(
     message?: string;
   };
 
-  if (!res.ok || !json.desktopUrl) {
+  if (!res.ok || !json.vncUrl || !json.password) {
     throw new Error(json.message || json.error || "could not open chatgpt");
   }
 
