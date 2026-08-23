@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  claimStalePortalComputer,
   cleanupStalePortalComputers,
   createOrgoComputerForUser,
   orgoProvisionConfigured,
@@ -58,8 +59,19 @@ export async function POST(request: Request) {
           firstMsg.includes("Computer limit reached") ||
           firstMsg.includes("VM_SLOT")
         ) {
-          await cleanupStalePortalComputers({ keepIds: linkedIds, targetFree: 2 });
-          created = await createOrgoComputerForUser(user.username);
+          const reclaimed = await claimStalePortalComputer({ keepIds: linkedIds });
+          if (reclaimed?.id) {
+            created = reclaimed;
+          } else {
+            await cleanupStalePortalComputers({ keepIds: linkedIds, targetFree: 3 });
+            try {
+              created = await createOrgoComputerForUser(user.username);
+            } catch {
+              const reclaimedAfter = await claimStalePortalComputer({ keepIds: linkedIds });
+              if (reclaimedAfter?.id) created = reclaimedAfter;
+              else throw firstError;
+            }
+          }
         } else {
           throw firstError;
         }

@@ -111,22 +111,38 @@ export async function listOrgoWorkspaceComputers(): Promise<OrgoWorkspaceCompute
   return desktops.map((d) => normalizeOrgoComputer(d));
 }
 
+function portalEphemeralName(name?: string): boolean {
+  return /^airsup-p\d/i.test((name || "").trim());
+}
+
+/** Protect manually provisioned computers; ephemeral portal VMs are reclaimable. */
+function protectedComputerIds(
+  computers: OrgoWorkspaceComputer[],
+  linkedIds: Iterable<string>
+): Set<string> {
+  const linked = new Set([...linkedIds].map((id) => id.trim()).filter(Boolean));
+  const keep = new Set<string>();
+  for (const computer of computers) {
+    if (!portalEphemeralName(computer.name) && linked.has(computer.id)) {
+      keep.add(computer.id);
+    }
+  }
+  return keep;
+}
+
 /**
  * Delete stale auto-provisioned portal VMs to free Orgo capacity.
  * Only targets ephemeral portal sessions (name prefix `airsup-p`).
- * Keeps explicit keepIds and manually named computers (e.g. airsup-tade1).
  */
 export async function cleanupStalePortalComputers(opts?: {
   keepIds?: Iterable<string>;
   targetFree?: number;
 }): Promise<{ deleted: string[]; skipped: number }> {
-  const keep = new Set(
-    [...(opts?.keepIds || [])].map((id) => id.trim()).filter(Boolean)
-  );
-  const targetFree = Math.max(1, opts?.targetFree ?? 1);
   const computers = await listOrgoWorkspaceComputers();
+  const keep = protectedComputerIds(computers, opts?.keepIds || []);
+  const targetFree = Math.max(1, opts?.targetFree ?? 1);
   const portalCandidates = computers
-    .filter((c) => (c.name || "").toLowerCase().startsWith("airsup-p"))
+    .filter((c) => portalEphemeralName(c.name))
     .filter((c) => !keep.has(c.id))
     .sort((a, b) => {
       const ta = Date.parse(a.created_at || "") || 0;
@@ -146,6 +162,23 @@ export async function cleanupStalePortalComputers(opts?: {
   }
 
   return { deleted, skipped: portalCandidates.length - deleted.length };
+}
+
+/** Claim an existing ephemeral portal VM instead of creating a new one. */
+export async function claimStalePortalComputer(opts?: {
+  keepIds?: Iterable<string>;
+}): Promise<OrgoComputerRecord | null> {
+  const computers = await listOrgoWorkspaceComputers();
+  const keep = protectedComputerIds(computers, opts?.keepIds || []);
+  const candidate = computers
+    .filter((c) => portalEphemeralName(c.name))
+    .filter((c) => !keep.has(c.id))
+    .sort((a, b) => {
+      const ta = Date.parse(a.created_at || "") || 0;
+      const tb = Date.parse(b.created_at || "") || 0;
+      return ta - tb;
+    })[0];
+  return candidate || null;
 }
 
 export async function startOrgoComputer(computerId: string): Promise<void> {
