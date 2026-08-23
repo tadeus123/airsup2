@@ -367,6 +367,8 @@ button {
 .portal-shell {
   min-height: 100dvh;
   background-color: #f2f1e8;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .portal-page {
@@ -381,14 +383,25 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
   text-align: center;
 }
 
-.portal-headline {
-  font-size: 1.8rem;
+.portal-kicker {
+  margin: 0;
+  font-size: 0.72rem;
   font-weight: 400;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: rgba(26, 26, 26, 0.42);
+}
+
+.portal-headline {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
   text-transform: lowercase;
   color: var(--text-color);
 }
@@ -396,23 +409,41 @@ button {
 .portal-chatgpt-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.35);
-  color: var(--muted);
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid rgba(26, 26, 26, 0.08);
+  border-radius: 10px;
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.72);
   cursor: pointer;
-  font-size: 0.95rem;
-  text-transform: lowercase;
+  font-size: 0.92rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.04),
+    0 4px 14px rgba(26, 26, 26, 0.06);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .portal-chatgpt-btn:hover {
-  border-color: var(--accent-color);
-  color: var(--text-color);
+  transform: translateY(-2px);
+  border-color: rgba(26, 26, 26, 0.12);
+  box-shadow:
+    0 2px 4px rgba(26, 26, 26, 0.05),
+    0 8px 22px rgba(26, 26, 26, 0.1);
+}
+
+.portal-chatgpt-btn:active {
+  transform: translateY(0);
 }
 
 .portal-chatgpt-logo {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.1rem;
+  height: 1.1rem;
   flex-shrink: 0;
+  color: #10a37f;
 }

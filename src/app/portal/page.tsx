@@ -17,9 +17,10 @@ export default function PortalPage() {
   return (
     <main className="portal-page">
       <div className="portal-hero">
+        <p className="portal-kicker">airsup</p>
         <h1 className="portal-headline">enter portal</h1>
         <button type="button" className="portal-chatgpt-btn">
-          with chatgpt
+          with ChatGPT
           <ChatGptLogo />
         </button>
       </div>
