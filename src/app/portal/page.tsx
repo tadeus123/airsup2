@@ -33,7 +33,7 @@ export default function PortalPage() {
     <main className="portal-page">
       <div className="portal-hero">
         <div className="portal-entry">
-          <h1 className="portal-headline">enter portal</h1>
+          <h1 className="portal-headline">cross the vail</h1>
           <div className="portal-choice-stack">
             <PortalChoiceButton
               label="with chatgpt"
