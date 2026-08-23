@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  cleanupStalePortalComputers,
   createOrgoComputerForUser,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 import { registerPortalUser } from "@/lib/portal-user";
-import { setOrgoComputerForToken, type User } from "@/lib/users";
+import { listLinkedOrgoComputerIds, setOrgoComputerForToken, type User } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +47,23 @@ export async function POST(request: Request) {
     let provisioned = false;
 
     if (!orgoComputerId) {
-      const created = await createOrgoComputerForUser(user.username);
+      const linkedIds = await listLinkedOrgoComputerIds();
+      let created: Awaited<ReturnType<typeof createOrgoComputerForUser>> | null = null;
+      try {
+        created = await createOrgoComputerForUser(user.username);
+      } catch (firstError) {
+        const firstMsg =
+          firstError instanceof Error ? firstError.message : String(firstError);
+        if (
+          firstMsg.includes("Computer limit reached") ||
+          firstMsg.includes("VM_SLOT")
+        ) {
+          await cleanupStalePortalComputers({ keepIds: linkedIds, targetFree: 2 });
+          created = await createOrgoComputerForUser(user.username);
+        } else {
+          throw firstError;
+        }
+      }
       orgoComputerId = (created.id || "").trim();
       if (!orgoComputerId) throw new Error("Orgo did not return a computer id");
       await setOrgoComputerForToken({ token, orgoComputerId });

@@ -363,6 +363,20 @@ export async function setOrgoComputerForToken(input: {
   };
 }
 
+export async function listLinkedOrgoComputerIds(): Promise<Set<string>> {
+  const cfg = supabaseConfig();
+  if (!cfg) return new Set();
+  try {
+    const rows = await supabaseRpc<string[] | unknown>("orgo_computer_ids_list", {
+      p_token: cfg.token,
+    });
+    if (!Array.isArray(rows)) return new Set();
+    return new Set(rows.map((id) => String(id).trim()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
 export async function listUsers(input?: {
   query?: string;
   limit?: number;

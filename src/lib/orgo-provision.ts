@@ -86,6 +86,68 @@ export async function restartOrgoComputer(computerId: string): Promise<void> {
   });
 }
 
+export async function deleteOrgoComputer(computerId: string): Promise<void> {
+  await orgoApiFetch<{ success?: boolean }>(`/computers/${computerId}`, {
+    method: "DELETE",
+  });
+}
+
+export type OrgoWorkspaceComputer = OrgoComputerRecord & {
+  created_at?: string;
+};
+
+/** List computers in the configured Orgo workspace. */
+export async function listOrgoWorkspaceComputers(): Promise<OrgoWorkspaceComputer[]> {
+  const workspaceId = orgoWorkspaceId();
+  const data = await orgoApiFetch<{
+    workspaces?: Array<{
+      id: string;
+      desktops?: Array<Record<string, unknown>>;
+    }>;
+  }>("/workspaces");
+  const workspaces = data.workspaces || [];
+  const ws = workspaces.find((w) => w.id === workspaceId) || workspaces[0];
+  const desktops = ws?.desktops || [];
+  return desktops.map((d) => normalizeOrgoComputer(d));
+}
+
+/**
+ * Delete stale auto-provisioned portal VMs to free Orgo capacity.
+ * Only targets ephemeral portal sessions (name prefix `airsup-p`).
+ * Keeps explicit keepIds and manually named computers (e.g. airsup-tade1).
+ */
+export async function cleanupStalePortalComputers(opts?: {
+  keepIds?: Iterable<string>;
+  targetFree?: number;
+}): Promise<{ deleted: string[]; skipped: number }> {
+  const keep = new Set(
+    [...(opts?.keepIds || [])].map((id) => id.trim()).filter(Boolean)
+  );
+  const targetFree = Math.max(1, opts?.targetFree ?? 1);
+  const computers = await listOrgoWorkspaceComputers();
+  const portalCandidates = computers
+    .filter((c) => (c.name || "").toLowerCase().startsWith("airsup-p"))
+    .filter((c) => !keep.has(c.id))
+    .sort((a, b) => {
+      const ta = Date.parse(a.created_at || "") || 0;
+      const tb = Date.parse(b.created_at || "") || 0;
+      return ta - tb;
+    });
+
+  const deleted: string[] = [];
+  for (const computer of portalCandidates) {
+    if (deleted.length >= targetFree) break;
+    try {
+      await deleteOrgoComputer(computer.id);
+      deleted.push(computer.id);
+    } catch {
+      // try next
+    }
+  }
+
+  return { deleted, skipped: portalCandidates.length - deleted.length };
+}
+
 export async function startOrgoComputer(computerId: string): Promise<void> {
   await orgoApiFetch<{ success?: boolean }>(`/computers/${computerId}/start`, {
     method: "POST",
@@ -182,17 +244,17 @@ export function orgoVncWebSocketUrl(
   return `wss://www.orgo.ai/desktops/${instanceId}/ws/websockify?token=${token}`;
 }
 
-/** Open ChatGPT login in kiosk-style Chrome (best-effort). */
+/** Open ChatGPT login in kiosk-style Chrome — fullscreen app window. */
 export async function openChromeToChatGpt(computerId: string): Promise<void> {
   const cmd = [
     "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
     "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
     "else export DISPLAY=:99",
     "fi",
-    "pkill -f chrome 2>/dev/null || true",
+    "pkill -f 'chrome.*chatgpt' 2>/dev/null || pkill -f chrome 2>/dev/null || true",
     "sleep 1",
-    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,800 --window-position=0,0 --no-first-run --disable-infobars 2>/dev/null",
-    "|| chromium-browser --app=https://chatgpt.com/auth/login --window-size=1280,800 --no-first-run 2>/dev/null",
+    "(google-chrome --app=https://chatgpt.com/auth/login --window-size=1280,720 --window-position=0,0 --no-first-run --disable-infobars --disable-session-crashed-bubble 2>/dev/null",
+    "|| chromium-browser --app=https://chatgpt.com/auth/login --window-size=1280,720 --no-first-run 2>/dev/null",
     "|| google-chrome --kiosk https://chatgpt.com/auth/login 2>/dev/null",
     "|| true) &",
   ].join("\n");
