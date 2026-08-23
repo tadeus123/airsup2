@@ -369,62 +369,50 @@ button {
   background-color: #f2f1e8;
 }
 
-.portal-entry {
-  display: grid;
-  grid-template-columns: minmax(12rem, 16rem) 1fr;
-  min-height: 100dvh;
-}
-
-.portal-entry-aside {
-  padding: 2rem 1.5rem;
-  border-right: 1px solid var(--border-color);
-}
-
-.portal-entry-btn {
+.portal-page {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.35);
-  color: var(--text-color);
-  cursor: pointer;
-  text-align: left;
-}
-
-.portal-entry-btn:hover {
-  border-color: var(--accent-color);
-}
-
-.portal-entry-btn-primary {
-  color: var(--accent-color);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.portal-entry-btn-secondary {
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-.portal-entry-main {
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
   padding: 2rem;
 }
 
-@media (max-width: 768px) {
-  .portal-entry {
-    grid-template-columns: 1fr;
-  }
+.portal-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
+}
 
-  .portal-entry-aside {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-color);
-    padding: 1.25rem 1.15rem;
-  }
+.portal-headline {
+  font-size: 1.8rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+  color: var(--text-color);
+}
 
-  .portal-entry-main {
-    padding: 1.25rem 1.15rem 2rem;
-  }
+.portal-chatgpt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  text-transform: lowercase;
+}
+
+.portal-chatgpt-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--text-color);
+}
+
+.portal-chatgpt-logo {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
 }
