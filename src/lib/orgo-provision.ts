@@ -120,22 +120,48 @@ function permanentlyProtectedIds(): Set<string> {
 /** List computers in the configured Orgo workspace (falls back to all workspaces). */
 export async function listOrgoWorkspaceComputers(): Promise<OrgoWorkspaceComputer[]> {
   const workspaceId = orgoWorkspaceId();
-  const data = await orgoApiFetch<{
-    workspaces?: Array<{
+  const data = await orgoApiFetch<Record<string, unknown>>("/workspaces");
+  const workspaces =
+    (data.workspaces as Array<{
       id: string;
       desktops?: Array<Record<string, unknown>>;
-    }>;
-  }>("/workspaces");
-  const workspaces = data.workspaces || [];
+      computers?: Array<Record<string, unknown>>;
+    }>) ||
+    (data.projects as Array<{
+      id: string;
+      desktops?: Array<Record<string, unknown>>;
+      computers?: Array<Record<string, unknown>>;
+    }>) ||
+    [];
+
+  function desktopsOf(ws: {
+    desktops?: Array<Record<string, unknown>>;
+    computers?: Array<Record<string, unknown>>;
+  }): OrgoWorkspaceComputer[] {
+    const raw = ws.desktops?.length ? ws.desktops : ws.computers || [];
+    return raw.map((d) => normalizeOrgoComputer(d));
+  }
+
   const ws = workspaces.find((w) => w.id === workspaceId);
-  const primary = (ws?.desktops || []).map((d) => normalizeOrgoComputer(d));
+  const primary = ws ? desktopsOf(ws) : [];
   if (primary.length > 0) return primary;
+
+  if (ws) {
+    try {
+      const detail = await orgoApiFetch<{
+        desktops?: Array<Record<string, unknown>>;
+        computers?: Array<Record<string, unknown>>;
+      }>(`/workspaces/${workspaceId}`);
+      const detailed = desktopsOf(detail);
+      if (detailed.length > 0) return detailed;
+    } catch {
+      // fall through
+    }
+  }
 
   const all: OrgoWorkspaceComputer[] = [];
   for (const workspace of workspaces) {
-    for (const desktop of workspace.desktops || []) {
-      all.push(normalizeOrgoComputer(desktop));
-    }
+    all.push(...desktopsOf(workspace));
   }
   return all;
 }

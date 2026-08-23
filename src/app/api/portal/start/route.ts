@@ -16,6 +16,40 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Last-resort IDs referenced in repo scripts — used only when Orgo is at capacity. */
+const PORTAL_FALLBACK_COMPUTER_IDS = [
+  "099c33f0-8459-47bb-8e4d-3b94329e2c85",
+  "dca96bed-5904-4e6b-ada3-8be624df291a",
+];
+
+async function borrowExistingOrgoComputer(
+  linkedIds: Set<string>
+): Promise<Awaited<ReturnType<typeof createOrgoComputerForUser>> | null> {
+  const sharedId = (
+    process.env.ORGO_PORTAL_SHARED_COMPUTER_ID ||
+    process.env.ORGO_DEFAULT_COMPUTER_ID ||
+    ""
+  ).trim();
+  const tryIds = [
+    sharedId,
+    ...PORTAL_FALLBACK_COMPUTER_IDS,
+    ...(await listOrgoWorkspaceComputers()).map((c) => c.id),
+  ].filter(Boolean);
+
+  const seen = new Set<string>();
+  for (const id of tryIds) {
+    const trimmed = id.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    try {
+      return await getOrgoComputer(trimmed);
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     if (!orgoProvisionConfigured()) {
@@ -79,21 +113,8 @@ export async function POST(request: Request) {
                 try {
                   created = await createOrgoComputerForUser(user.username);
                 } catch {
-                  const sharedId = (
-                    process.env.ORGO_PORTAL_SHARED_COMPUTER_ID ||
-                    process.env.ORGO_DEFAULT_COMPUTER_ID ||
-                    ""
-                  ).trim();
-                  if (sharedId) {
-                    created = await getOrgoComputer(sharedId);
-                  } else {
-                    const pool = await listOrgoWorkspaceComputers();
-                    const pick =
-                      pool.find((c) => (c.status || "").toLowerCase() === "running") ||
-                      pool[0];
-                    if (pick?.id) created = pick;
-                    else throw firstError;
-                  }
+                  created = await borrowExistingOrgoComputer(linkedIds);
+                  if (!created) throw firstError;
                 }
               }
             }
