@@ -8,8 +8,8 @@ import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
 const ChatGptLoginFrame = dynamic(() => import("./ChatGptLoginFrame"), {
   ssr: false,
   loading: () => (
-    <div className="portal-chatgpt-login-card portal-chatgpt-login-card--loading">
-      <p className="portal-chatgpt-login-loading">opening chatgpt…</p>
+    <div className="portal-connect-frame portal-connect-frame--loading">
+      <p className="portal-connect-frame-status">opening chatgpt…</p>
     </div>
   ),
 });
@@ -87,44 +87,53 @@ export default function PortalChatGptPage() {
   }, []);
 
   return (
-    <main className="portal-chatgpt-flow">
-      <header className="portal-chatgpt-flow-header">
-        <Link href="/portal" className="portal-back">
+    <main className="portal-connect">
+      <div className="portal-gate-light" aria-hidden="true" />
+      <div className="portal-gate-vignette" aria-hidden="true" />
+
+      <header className="portal-connect-header">
+        <Link href="/portal" className="portal-connect-back">
           ← back
         </Link>
       </header>
 
       {phase === "loading" ? (
-        <div className="portal-chatgpt-flow-center">
-          <p className="portal-loading-text">{loadingText}</p>
-        </div>
+        <section className="portal-connect-body portal-connect-body--center">
+          <div className="portal-connect-intro">
+            <p className="portal-connect-eyebrow">preparing</p>
+            <h1 className="portal-connect-title">your chatgpt</h1>
+            <div className="portal-gate-rule" aria-hidden="true" />
+          </div>
+          <p className="portal-connect-loading">{loadingText}</p>
+        </section>
       ) : null}
 
       {phase === "error" ? (
-        <div className="portal-chatgpt-flow-center">
-          <h1 className="portal-headline">something went wrong</h1>
-          <p className="portal-error">{error}</p>
+        <section className="portal-connect-body portal-connect-body--center">
+          <h1 className="portal-connect-title">something went wrong</h1>
+          <p className="portal-connect-error">{error}</p>
           <button
             type="button"
-            className="portal-primary-btn"
+            className="portal-connect-retry"
             onClick={() => window.location.reload()}
           >
             try again
           </button>
-        </div>
+        </section>
       ) : null}
 
       {phase === "login" && desktop ? (
-        <div className="portal-chatgpt-flow-center">
-          <div className="portal-chatgpt-login-shell">
-            <h1 className="portal-chatgpt-login-title">connect your chatgpt</h1>
-            <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
-            <p className="portal-chatgpt-login-note">
-              sign in below — this happens directly inside your private computer.
-              airsup never sees your password.
-            </p>
+        <section className="portal-connect-body">
+          <div className="portal-connect-intro">
+            <p className="portal-connect-eyebrow">sign in</p>
+            <h1 className="portal-connect-title">your chatgpt</h1>
+            <div className="portal-gate-rule" aria-hidden="true" />
           </div>
-        </div>
+          <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
+          <p className="portal-connect-note">
+            inside your private computer — airsup never sees your password.
+          </p>
+        </section>
       ) : null}
     </main>
   );

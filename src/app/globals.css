@@ -597,6 +597,255 @@ button {
   outline-offset: 6px;
 }
 
+/* —— portal connect: chatgpt sign-in threshold —— */
+
+.portal-connect {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: clamp(1.25rem, 4vh, 2rem) clamp(1.25rem, 5vw, 2rem)
+    clamp(2rem, 6vh, 3rem);
+}
+
+.portal-connect-header {
+  position: relative;
+  z-index: 2;
+  width: min(42rem, 100%);
+  margin: 0 auto;
+}
+
+.portal-connect-back {
+  display: inline-block;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  text-decoration: none;
+  color: rgba(28, 25, 21, 0.42);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.portal-connect-back:focus-visible {
+  outline: 1px solid rgba(28, 25, 21, 0.28);
+  outline-offset: 4px;
+}
+
+.portal-connect-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(42rem, 100%);
+  margin: 0 auto;
+  gap: clamp(1.25rem, 3vh, 1.75rem);
+}
+
+.portal-connect-body--center {
+  min-height: calc(100dvh - 5rem);
+}
+
+.portal-connect-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.portal-connect-eyebrow {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  text-transform: lowercase;
+  color: rgba(28, 25, 21, 0.42);
+}
+
+.portal-connect-title {
+  margin: 0;
+  font-family: var(--font-portal-display), Georgia, serif;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: rgba(22, 18, 12, 0.94);
+  text-shadow: 0 1px 0 rgba(255, 252, 245, 0.45);
+}
+
+.portal-connect-intro .portal-gate-rule {
+  margin-top: clamp(0.85rem, 2vh, 1.15rem);
+  margin-bottom: 0;
+}
+
+.portal-connect-loading {
+  margin: 0;
+  font-family: var(--font-portal-display), Georgia, serif;
+  font-size: clamp(1.05rem, 2.8vw, 1.25rem);
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: rgba(28, 25, 21, 0.52);
+  animation: portal-connect-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes portal-connect-pulse {
+  0%,
+  100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 0.88;
+  }
+}
+
+.portal-connect-error {
+  margin: 0.75rem 0 0;
+  max-width: 22rem;
+  text-align: center;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: rgba(120, 40, 32, 0.88);
+  text-transform: lowercase;
+}
+
+.portal-connect-retry {
+  margin-top: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid rgba(28, 25, 21, 0.22);
+  background: transparent;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  color: rgba(22, 18, 12, 0.82);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.portal-connect-retry:focus-visible {
+  outline: 1px solid rgba(28, 25, 21, 0.28);
+  outline-offset: 4px;
+}
+
+.portal-connect-frame {
+  position: relative;
+  width: min(42rem, 100%);
+  aspect-ratio: 16 / 10;
+  max-height: min(72vh, 34rem);
+  background: #2c2a26;
+  border: 1px solid rgba(28, 25, 21, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 252, 245, 0.35) inset,
+    0 24px 56px rgba(28, 22, 14, 0.12),
+    0 8px 20px rgba(28, 22, 14, 0.06);
+  overflow: hidden;
+}
+
+.portal-connect-frame--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(165deg, #35322d 0%, #2c2a26 48%, #242220 100%);
+}
+
+.portal-connect-frame--live {
+  background: #1e1c19;
+}
+
+.portal-connect-frame--failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(165deg, #35322d 0%, #2c2a26 100%);
+}
+
+.portal-connect-frame-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 1.5rem;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: rgba(255, 252, 245, 0.42);
+  pointer-events: none;
+  animation: portal-connect-pulse 2.4s ease-in-out infinite;
+}
+
+.portal-connect-frame--live .portal-connect-frame-status {
+  display: none;
+}
+
+.portal-connect-frame-error {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  padding: 1.5rem;
+  text-align: center;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: rgba(255, 210, 200, 0.88);
+  text-transform: lowercase;
+}
+
+.portal-connect-vnc {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.portal-connect-vnc canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.portal-connect-note {
+  margin: 0;
+  max-width: 22rem;
+  text-align: center;
+  font-family: var(--font-portal-sans), sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: rgba(28, 25, 21, 0.38);
+}
+
+@media (max-width: 480px) {
+  .portal-connect-frame {
+    aspect-ratio: 4 / 3;
+    max-height: min(58vh, 26rem);
+  }
+
+  .portal-connect-eyebrow {
+    letter-spacing: 0.34em;
+    text-indent: 0.34em;
+  }
+}
+
 .portal-hero {
   display: flex;
   flex-direction: column;

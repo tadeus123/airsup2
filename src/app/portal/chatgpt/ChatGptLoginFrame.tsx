@@ -15,17 +15,19 @@ type RfbInstance = {
   resizeSession: boolean;
   clipViewport: boolean;
   background: string;
+  focusOnClick: boolean;
+  showDotCursor: boolean;
   sendCredentials: (creds: { password: string }) => void;
   addEventListener: (type: string, fn: () => void) => void;
 };
 
 export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const rfbRef = useRef<RfbInstance | null>(null);
   const [connected, setConnected] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let rfb: RfbInstance | null = null;
     let cancelled = false;
 
     void (async () => {
@@ -36,17 +38,20 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
         )) as { default: new (el: HTMLElement, url: string, opts?: object) => RfbInstance };
         if (cancelled || !hostRef.current) return;
 
-        rfb = new mod.default(hostRef.current, vncUrl, {
+        const rfb = new mod.default(hostRef.current, vncUrl, {
           credentials: { password },
         });
+        rfbRef.current = rfb;
         rfb.scaleViewport = true;
-        rfb.resizeSession = true;
+        rfb.resizeSession = false;
         rfb.clipViewport = true;
-        rfb.background = "#ffffff";
+        rfb.background = "#2c2a26";
+        rfb.focusOnClick = true;
+        rfb.showDotCursor = true;
         rfb.addEventListener("connect", () => setConnected(true));
         rfb.addEventListener("disconnect", () => setConnected(false));
         rfb.addEventListener("credentialsrequired", () => {
-          rfb?.sendCredentials({ password });
+          rfb.sendCredentials({ password });
         });
         rfb.addEventListener("securityfailure", () => setFailed(true));
       } catch {
@@ -56,24 +61,37 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
 
     return () => {
       cancelled = true;
-      rfb?.disconnect();
+      rfbRef.current?.disconnect();
+      rfbRef.current = null;
     };
   }, [vncUrl, password]);
 
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    const ro = new ResizeObserver(() => {
+      const rfb = rfbRef.current;
+      if (!rfb) return;
+      rfb.scaleViewport = true;
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="portal-chatgpt-login-card">
+    <div
+      className={`portal-connect-frame${connected ? " portal-connect-frame--live" : ""}${failed ? " portal-connect-frame--failed" : ""}`}
+    >
       {!connected && !failed ? (
-        <p className="portal-chatgpt-login-loading">loading chatgpt…</p>
+        <p className="portal-connect-frame-status">loading chatgpt…</p>
       ) : null}
       {failed ? (
-        <p className="portal-chatgpt-login-error">
+        <p className="portal-connect-frame-error">
           could not load the login window — refresh to try again.
         </p>
       ) : null}
-      <div
-        ref={hostRef}
-        className={`portal-chatgpt-vnc-host${connected ? " portal-chatgpt-vnc-host--live" : ""}`}
-      />
+      <div ref={hostRef} className="portal-connect-vnc" />
     </div>
   );
 }
