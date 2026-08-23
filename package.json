@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "npm run typecheck && npm run build",
+    "push-live": "bash scripts/push-live.sh",
     "test:e2e": "node --env-file=.env.local --import tsx scripts/peer-e2e.ts",
     "failures": "node --env-file=.env.local scripts/what-is-failing.mjs"
   },

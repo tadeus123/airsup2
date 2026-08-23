@@ -1,0 +1,17 @@
+---
+description: Deploy discipline — always verify build and confirm Vercel before saying "live"
+alwaysApply: true
+---
+
+# Deploy to production
+
+When pushing portal or app changes to `main`:
+
+1. **Never** `git push` alone after code changes — run **`npm run push-live -- "commit message"`** (or `bash scripts/push-live.sh "message"`).
+2. `push-live` runs **typecheck + production build** first; push is aborted if either fails.
+3. After push, it **waits for Vercel** via GitHub commit status and exits **non-zero on deploy failure**.
+4. Only tell the user something is **live** after Vercel status is **success** (or report failure with the Vercel inspect link from gh status).
+5. Do **not** add npm packages that break Vercel (avoid `orgo-vnc` / patched `@novnc` — use iframe embed for Orgo desktop).
+6. Keep diffs minimal; no duplicate rewrites in both `vercel.json` and `next.config.ts`.
+
+Production URL: https://airsup2.vercel.app/

@@ -37,6 +37,14 @@ npm run build
 
 ## Deploy (Vercel)
 
+**Always use the verified push script** (runs typecheck + build before push, waits for Vercel):
+
+```bash
+npm run push-live -- "your commit message"
+```
+
+GitHub Actions also runs `npm run verify` on every push to `main`.
+
 Required env vars:
 
 - `SUPABASE_URL`
