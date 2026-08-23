@@ -383,25 +383,16 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
   text-align: center;
-}
-
-.portal-kicker {
-  margin: 0;
-  font-size: 0.72rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: lowercase;
-  color: rgba(26, 26, 26, 0.42);
 }
 
 .portal-headline {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   text-transform: lowercase;
   color: var(--text-color);
 }
@@ -409,25 +400,26 @@ button {
 .portal-chatgpt-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  margin-top: 0.35rem;
-  padding: 0.7rem 1.15rem;
-  border: 1px solid rgba(26, 26, 26, 0.08);
-  border-radius: 10px;
-  background: #ffffff;
-  color: rgba(26, 26, 26, 0.72);
+  gap: 0.65rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid #8b6914;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-color);
   cursor: pointer;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 400;
-  letter-spacing: -0.01em;
-  box-shadow:
-    0 1px 2px rgba(26, 26, 26, 0.04),
-    0 4px 14px rgba(26, 26, 26, 0.06);
+  text-transform: lowercase;
+}
+
+.portal-chatgpt-btn:focus-visible {
+  outline: 2px solid #8b6914;
+  outline-offset: 3px;
 }
 
 .portal-chatgpt-logo {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.15rem;
+  height: 1.15rem;
   flex-shrink: 0;
-  color: #10a37f;
+  color: var(--text-color);
 }
