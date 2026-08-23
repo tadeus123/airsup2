@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 function ChatGptLogo() {
   return (
     <svg
@@ -14,11 +16,17 @@ function ChatGptLogo() {
 }
 
 export default function PortalPage() {
+  const router = useRouter();
+
   return (
     <main className="portal-page">
       <div className="portal-hero">
         <h1 className="portal-headline">enter portal</h1>
-        <button type="button" className="portal-chatgpt-btn">
+        <button
+          type="button"
+          className="portal-chatgpt-btn"
+          onClick={() => router.push("/portal/setup")}
+        >
           <span>with chatgpt</span>
           <ChatGptLogo />
         </button>

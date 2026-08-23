@@ -510,6 +510,7 @@ export async function authUserFromRequest(request: Request): Promise<User> {
     displayName: mem.displayName,
     bio: mem.bio,
     tokenPrefix: mem.tokenPrefix,
+    orgoComputerId: mem.orgoComputerId,
     createdAt: mem.createdAt,
     updatedAt: mem.updatedAt,
   };
