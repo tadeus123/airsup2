@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify build locally, push to main, wait for Vercel, smoke-check /portal.
+# Verify build locally, push to main, wait for Vercel, smoke-check /company.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

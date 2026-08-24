@@ -44,7 +44,6 @@ const VM_SEND_PATH = "/tmp/airsup-chatgpt-send.js";
 function loadVmSendScript(): string {
   const candidates = [
     join(process.cwd(), "src/lib/vm/airsup-chatgpt-send.js"),
-    join(process.cwd(), "scripts/airsup-chatgpt-send.js"),
     join(__dirname, "vm/airsup-chatgpt-send.js"),
   ];
   for (const p of candidates) {

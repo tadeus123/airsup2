@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { logAirsupEventSafe } from "./airsup-events";
 
 export type ActivityKind =
-  | "onboard"
   | "whoami"
   | "lookup"
   | "list_users"
