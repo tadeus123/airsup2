@@ -72,3 +72,26 @@ export async function fetchPortalDesktop(
 
   return json;
 }
+
+export async function submitPortalLogin(
+  token: string,
+  email: string,
+  password: string
+): Promise<void> {
+  const res = await fetch("/api/portal/login", {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+  };
+  if (!res.ok || !json.ok) {
+    throw new Error(json.message || json.error || "could not sign in");
+  }
+}

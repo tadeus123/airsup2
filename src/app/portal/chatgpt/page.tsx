@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
+import ChatGptNativeLoginForm from "./ChatGptNativeLoginForm";
 
 const ChatGptLoginFrame = dynamic(() => import("./ChatGptLoginFrame"), {
   ssr: false,
@@ -32,6 +33,7 @@ export default function PortalChatGptPage() {
   const [loadingText, setLoadingText] = useState<string>(LOADING_STAGES[0]);
   const [desktop, setDesktop] = useState<DesktopSession | null>(null);
   const [error, setError] = useState("");
+  const [signing, setSigning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,7 +110,7 @@ export default function PortalChatGptPage() {
             <p className="portal-connect-frame-status">{loadingText}</p>
           </div>
           <p className="portal-connect-note">
-            click inside the window to interact — airsup never sees your password.
+            preparing your private computer…
           </p>
         </section>
       ) : null}
@@ -140,10 +142,17 @@ export default function PortalChatGptPage() {
             <h1 className="portal-connect-title">your chatgpt</h1>
             <div className="portal-gate-rule" aria-hidden="true" />
           </div>
-          <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
-          <p className="portal-connect-note">
-            click inside the window to interact — airsup never sees your password.
-          </p>
+          <div
+            className={`portal-connect-stage${signing ? " portal-connect-stage--signing" : ""}`}
+          >
+            <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
+            {signing ? (
+              <p className="portal-connect-signing-overlay" aria-live="polite">
+                typing into your private computer…
+              </p>
+            ) : null}
+          </div>
+          <ChatGptNativeLoginForm onSigning={setSigning} />
         </section>
       ) : null}
     </main>

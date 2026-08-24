@@ -54,6 +54,10 @@ export async function orgoClick(
   await orgoAction(computerId, "/click", { x, y });
 }
 
+export async function orgoType(computerId: string, text: string): Promise<void> {
+  await orgoAction(computerId, "/type", { text });
+}
+
 export async function orgoBash(computerId: string, command: string): Promise<string> {
   const res = await fetch(`${ORGO_API_BASE}/api/computers/${computerId}/bash`, {
     method: "POST",

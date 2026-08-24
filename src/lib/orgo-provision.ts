@@ -1,3 +1,5 @@
+import { localSleep, orgoClick, orgoPressKey, orgoType } from "./orgo-actions";
+
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
 ).replace(/\/$/, "");
@@ -427,41 +429,31 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
   await focusChatGptEmailForm(computerId);
 }
 
-/** Fill ChatGPT email + password on the VM (for ops/testing only). */
+/** Fill ChatGPT email + password on the VM via Orgo desktop APIs (not VNC typing). */
 export async function fillChatGptLoginOnDesktop(
   computerId: string,
   email: string,
   password: string
 ): Promise<void> {
-  const emailB64 = Buffer.from(email, "utf8").toString("base64");
-  const passB64 = Buffer.from(password, "utf8").toString("base64");
-  const cmd = [
-    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
-    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
-    "else export DISPLAY=:99",
-    "fi",
-    "command -v xdotool >/dev/null || { echo FILL_SKIP; exit 0; }",
-    "EMAIL=$(echo '" + emailB64 + "' | base64 -d)",
-    "PASS=$(echo '" + passB64 + "' | base64 -d)",
-    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
-    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "xdotool type --delay 12 -- \"$EMAIL\"",
-    "xdotool key Return",
-    "echo TYPED_EMAIL",
-  ].join("\n");
-  await orgoBash(computerId, cmd);
-  await orgoWait(computerId, 4);
-  const passCmd = [
-    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
-    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
-    "else export DISPLAY=:99",
-    "fi",
-    "PASS=$(echo '" + passB64 + "' | base64 -d)",
-    "xdotool type --delay 12 -- \"$PASS\"",
-    "xdotool key Return",
-    "echo FILLED",
-  ].join("\n");
-  await orgoBash(computerId, passCmd);
+  // Focus Chrome + email field (layout from chatgpt.com/auth/login @ 1280x720)
+  await orgoClick(computerId, 640, 455);
+  await localSleep(400);
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(120);
+  await orgoType(computerId, email.trim());
+  await localSleep(350);
+  await orgoPressKey(computerId, "Return");
+  await orgoWait(computerId, 3);
+
+  // Password step
+  await orgoClick(computerId, 640, 380);
+  await localSleep(350);
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(120);
+  await orgoType(computerId, password);
+  await localSleep(350);
+  await orgoPressKey(computerId, "Return");
+  await orgoWait(computerId, 2);
 }
 
 /** Launch ChatGPT login — await this before returning from serverless handlers. */
