@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "npm run typecheck && npm run build",
     "scope-check": "node --import tsx scripts/scope-check.ts",
+    "watch-live": "node --env-file=.env.local scripts/watch-live.mjs",
     "push-live": "bash scripts/push-live.sh",
     "test:e2e": "node --env-file=.env.local --import tsx scripts/peer-e2e.ts",
     "failures": "node --env-file=.env.local scripts/what-is-failing.mjs"

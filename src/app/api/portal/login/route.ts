@@ -5,11 +5,21 @@ import {
   getChatGptAuthState,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
+import { chatgptReadyCookieHeader } from "@/lib/oauth-setup";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+function signedInResponse(username: string) {
+  const res = NextResponse.json(
+    { ok: true, status: "signed_in" },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+  res.headers.append("set-cookie", chatgptReadyCookieHeader(username));
+  return res;
+}
 
 export async function GET(request: Request) {
   try {
@@ -76,10 +86,7 @@ export async function POST(request: Request) {
       }
       const continued = await continueChatGptLoginOnDesktop(computerId, threadId, code);
       if (continued.status === "signed_in") {
-        return NextResponse.json(
-          { ok: true, status: "signed_in" },
-          { headers: { "Cache-Control": "no-store" } }
-        );
+        return signedInResponse(user.username);
       }
       if (continued.status === "needs_2fa") {
         return NextResponse.json(
@@ -118,10 +125,7 @@ export async function POST(request: Request) {
     const result = await fillChatGptLoginOnDesktop(computerId, email, password);
 
     if (result.status === "signed_in") {
-      return NextResponse.json(
-        { ok: true, status: "signed_in" },
-        { headers: { "Cache-Control": "no-store" } }
-      );
+      return signedInResponse(user.username);
     }
 
     if (result.status === "needs_2fa") {

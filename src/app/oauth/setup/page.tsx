@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandNav } from "@/components/BrandNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import {
@@ -33,11 +33,46 @@ export default function OauthSetupPage() {
   const [finishing, setFinishing] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState("Setting up…");
+  const trustedRef = useRef(false);
+  const finishStartedRef = useRef(false);
 
   const refreshLogin = useCallback(async (token: string) => {
     const { loggedIn: ok } = await fetchPortalLoginStatus(token);
-    setLoggedIn(ok);
-    return ok;
+    if (ok) {
+      setLoggedIn(true);
+      return true;
+    }
+    // Never undo a successful form login — CDP can lag behind Orgo agent.
+    if (trustedRef.current) return true;
+    setLoggedIn(false);
+    return false;
+  }, []);
+
+  const finish = useCallback(async () => {
+    if (finishStartedRef.current) return;
+    finishStartedRef.current = true;
+    setFinishing(true);
+    setError("");
+    setStatus("Returning to ChatGPT…");
+    try {
+      let lastErr = "could not finish";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const res = await fetch("/api/oauth/setup", { method: "POST" });
+        const json = (await res.json()) as { redirect?: string; error?: string };
+        if (res.ok && json.redirect) {
+          window.location.href = json.redirect;
+          return;
+        }
+        lastErr = json.error || lastErr;
+        if (res.status === 401) break;
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      throw new Error(lastErr);
+    } catch (e) {
+      finishStartedRef.current = false;
+      setError(e instanceof Error ? e.message : String(e));
+      setFinishing(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -59,9 +94,10 @@ export default function OauthSetupPage() {
         setAspToken(mj.aspToken);
         savePortalToken(mj.aspToken);
         setDisplayName(mj.displayName || mj.username || "");
-        setLoggedIn(Boolean(mj.loggedIn));
 
         if (mj.loggedIn) {
+          setLoggedIn(true);
+          trustedRef.current = true;
           setPhase("ready");
           return;
         }
@@ -101,23 +137,11 @@ export default function OauthSetupPage() {
     return () => window.clearInterval(id);
   }, [aspToken, phase, refreshLogin]);
 
-  async function finish() {
-    if (!loggedIn) {
-      setError("Sign into ChatGPT first");
-      return;
-    }
-    setFinishing(true);
-    setError("");
-    try {
-      const res = await fetch("/api/oauth/setup", { method: "POST" });
-      const json = (await res.json()) as { redirect?: string; error?: string };
-      if (!res.ok || !json.redirect) throw new Error(json.error || "could not finish");
-      window.location.href = json.redirect;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setFinishing(false);
-    }
-  }
+  // Once ChatGPT is signed in, automatically return to ChatGPT's OAuth modal.
+  useEffect(() => {
+    if (!loggedIn || finishing || phase === "loading" || phase === "error") return;
+    void finish();
+  }, [loggedIn, finishing, phase, finish]);
 
   const canFinish = loggedIn && !finishing;
 
@@ -143,26 +167,34 @@ export default function OauthSetupPage() {
         {phase === "login" && desktop ? (
           <section className="oauth-stage oauth-stage--wide">
             <div className="oauth-copy co-form-card co-form-card--enter">
-              <h1>Sign into ChatGPT</h1>
+              <h1>{finishing ? "Returning to ChatGPT…" : "Sign into ChatGPT"}</h1>
               {displayName ? <p className="oauth-name">{displayName}</p> : null}
-              <ChatGptNativeLoginForm
-                onSigning={setSigning}
-                onSignedIn={() => {
-                  setLoggedIn(true);
-                  if (aspToken) void refreshLogin(aspToken);
-                }}
-              />
+              {!finishing ? (
+                <ChatGptNativeLoginForm
+                  onSigning={setSigning}
+                  onSignedIn={() => {
+                    trustedRef.current = true;
+                    setLoggedIn(true);
+                  }}
+                />
+              ) : (
+                <p className="oauth-login-status">Signed in — finishing connection…</p>
+              )}
               {error ? <p className="ainet-note err">{error}</p> : null}
-              <button
-                type="button"
-                className="co-go co-go--wide"
-                disabled={!canFinish}
-                onClick={() => void finish()}
-              >
-                {finishing ? "…" : loggedIn ? "Continue" : "Sign in to continue"}
-              </button>
+              {!finishing ? (
+                <button
+                  type="button"
+                  className="co-go co-go--wide"
+                  disabled={!canFinish}
+                  onClick={() => void finish()}
+                >
+                  {loggedIn ? "Continue to ChatGPT" : "Sign in to continue"}
+                </button>
+              ) : (
+                <span className="co-pulse" aria-hidden="true" />
+              )}
             </div>
-            <div className={`oauth-vnc-wrap${signing ? " oauth-vnc-wrap--busy" : ""}`}>
+            <div className={`oauth-vnc-wrap${signing || finishing ? " oauth-vnc-wrap--busy" : ""}`}>
               <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             </div>
           </section>
@@ -170,17 +202,21 @@ export default function OauthSetupPage() {
 
         {phase === "ready" ? (
           <section className="oauth-stage co-form-card co-form-card--enter">
-            <h1>Ready</h1>
+            <h1>{finishing ? "Returning to ChatGPT…" : "Ready"}</h1>
             {displayName ? <p className="oauth-name">{displayName}</p> : null}
             {error ? <p className="ainet-note err">{error}</p> : null}
-            <button
-              type="button"
-              className="co-go co-go--wide"
-              disabled={!canFinish}
-              onClick={() => void finish()}
-            >
-              {finishing ? "…" : "Continue to ChatGPT"}
-            </button>
+            {finishing ? (
+              <span className="co-pulse" aria-hidden="true" />
+            ) : (
+              <button
+                type="button"
+                className="co-go co-go--wide"
+                disabled={!canFinish}
+                onClick={() => void finish()}
+              >
+                Continue to ChatGPT
+              </button>
+            )}
           </section>
         ) : null}
       </main>

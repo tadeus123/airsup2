@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  clearChatgptReadyCookieHeader,
   clearOauthSetupCookieHeader,
   finishRedirectUrl,
+  readChatgptReadyCookie,
   readOauthSetupCookie,
 } from "@/lib/oauth-setup";
 import { getChatGptAuthState, orgoProvisionConfigured } from "@/lib/orgo-provision";
@@ -11,14 +13,19 @@ import { getUserByUsername } from "@/lib/users";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 export async function GET(request: Request) {
   const setup = readOauthSetupCookie(request);
   if (!setup) {
     return NextResponse.json({ error: "setup session expired — reconnect the plugin" }, { status: 401 });
   }
   const user = await getUserByUsername(setup.username);
-  let loggedIn = false;
-  if (orgoProvisionConfigured() && user?.orgoComputerId) {
+  const ready = readChatgptReadyCookie(request);
+  let loggedIn = Boolean(ready && ready.username === setup.username.toLowerCase());
+  if (!loggedIn && orgoProvisionConfigured() && user?.orgoComputerId) {
     try {
       const state = await getChatGptAuthState(user.orgoComputerId);
       loggedIn = state.loggedIn;
@@ -53,8 +60,21 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const state = await getChatGptAuthState(computerId);
-      if (!state.loggedIn) {
+
+      const ready = readChatgptReadyCookie(request);
+      const trusted =
+        Boolean(ready) && ready!.username === setup.username.toLowerCase();
+
+      let loggedIn = trusted;
+      if (!loggedIn) {
+        for (let i = 0; i < 4 && !loggedIn; i++) {
+          if (i > 0) await sleep(1500);
+          const state = await getChatGptAuthState(computerId);
+          loggedIn = state.loggedIn;
+        }
+      }
+
+      if (!loggedIn) {
         return NextResponse.json(
           { error: "Sign into ChatGPT before continuing" },
           { status: 400 }
@@ -71,5 +91,6 @@ export async function POST(request: Request) {
   const url = finishRedirectUrl(setup);
   const res = NextResponse.json({ ok: true, redirect: url });
   res.headers.append("set-cookie", clearOauthSetupCookieHeader());
+  res.headers.append("set-cookie", clearChatgptReadyCookieHeader());
   return res;
 }

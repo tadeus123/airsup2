@@ -1,7 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const OAUTH_SETUP_COOKIE = "airsup_oauth_setup";
+/** Set after a successful Orgo ChatGPT login so finish can return to ChatGPT even if CDP lag. */
+export const CHATGPT_READY_COOKIE = "airsup_chatgpt_ready";
 const MAX_AGE_SEC = 30 * 60;
+const READY_MAX_AGE_SEC = 10 * 60;
 
 export type OauthSetupPayload = {
   v: 1;
@@ -84,4 +87,55 @@ export function finishRedirectUrl(payload: OauthSetupPayload): string {
   if (payload.state) redirect.searchParams.set("state", payload.state);
   redirect.searchParams.set("iss", payload.issuer);
   return redirect.toString();
+}
+
+type ChatgptReadyPayload = { v: 1; username: string; exp: number };
+
+export function packChatgptReady(username: string): string {
+  const full: ChatgptReadyPayload = {
+    v: 1,
+    username: username.trim().toLowerCase(),
+    exp: Math.floor(Date.now() / 1000) + READY_MAX_AGE_SEC,
+  };
+  const body = b64url(JSON.stringify(full));
+  return `${body}.${sign(body)}`;
+}
+
+export function unpackChatgptReady(raw: string | undefined | null): ChatgptReadyPayload | null {
+  if (!raw) return null;
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const expected = sign(body);
+  try {
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as ChatgptReadyPayload;
+    if (parsed.v !== 1 || !parsed.username) return null;
+    if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function chatgptReadyCookieHeader(username: string): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  const value = encodeURIComponent(packChatgptReady(username));
+  return `${CHATGPT_READY_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${READY_MAX_AGE_SEC}${secure}`;
+}
+
+export function clearChatgptReadyCookieHeader(): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${CHATGPT_READY_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+export function readChatgptReadyCookie(request: Request): ChatgptReadyPayload | null {
+  const header = request.headers.get("cookie") || "";
+  const match = header.match(new RegExp(`(?:^|;\\s*)${CHATGPT_READY_COOKIE}=([^;]+)`));
+  return unpackChatgptReady(match?.[1] ? decodeURIComponent(match[1]) : null);
 }
