@@ -435,23 +435,26 @@ export async function fillChatGptLoginOnDesktop(
   email: string,
   password: string
 ): Promise<void> {
-  // Focus Chrome + email field (layout from chatgpt.com/auth/login @ 1280x720)
-  await orgoClick(computerId, 640, 455);
+  // chatgpt.com/auth/login @ ~1280x720: social buttons, then email field, then Continue
+  // Avoid phone row (~y 420); email input sits lower (~y 545).
+  await orgoClick(computerId, 640, 545);
+  await localSleep(500);
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(150);
+  await orgoPressKey(computerId, "BackSpace");
+  await localSleep(150);
+  await orgoType(computerId, email.trim());
+  await localSleep(400);
+  await orgoPressKey(computerId, "Return");
+  await orgoWait(computerId, 4);
+
+  // Password step on auth.openai.com
+  await orgoClick(computerId, 640, 360);
   await localSleep(400);
   await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(120);
-  await orgoType(computerId, email.trim());
-  await localSleep(350);
-  await orgoPressKey(computerId, "Return");
-  await orgoWait(computerId, 3);
-
-  // Password step
-  await orgoClick(computerId, 640, 380);
-  await localSleep(350);
-  await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(120);
+  await localSleep(150);
   await orgoType(computerId, password);
-  await localSleep(350);
+  await localSleep(400);
   await orgoPressKey(computerId, "Return");
   await orgoWait(computerId, 2);
 }
