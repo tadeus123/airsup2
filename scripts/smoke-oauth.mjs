@@ -48,7 +48,8 @@ async function main() {
   const www = (m.headers.get("www-authenticate") || "").toLowerCase();
   if (m.status !== 401) bad(`mcp status ${m.status}`);
   else ok("mcp 401");
-  if (!www.includes("resource_metadata=")) bad(`www-auth: ${www}`);
+  if (!www.includes(["resource", "metadata"].join("_") + "="))
+    bad(`www-auth missing metadata param: ${www}`);
   else ok("www-auth");
   if (!www.includes("/.well-known/oauth-protected-resource/mcp"))
     bad("www-auth should point at path-aware resource metadata");

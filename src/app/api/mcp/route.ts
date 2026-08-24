@@ -1,6 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createAirsupMcpServer } from "@/lib/mcp-server";
-import { authMcpUser, mcpResourceUrl, publicOrigin } from "@/lib/oauth";
+import { authMcpUser, mcpWwwAuthenticate, publicOrigin } from "@/lib/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,10 +29,6 @@ function withCors(response: Response): Response {
 }
 
 function unauthorized(request: Request): Response {
-  const origin = publicOrigin(request);
-  // Path-aware metadata URL matches resource https://…/mcp (RFC 9728)
-  const resourceMetadata = `${origin}/.well-known/oauth-protected-resource/mcp`;
-  const resource = mcpResourceUrl(origin);
   return new Response(
     JSON.stringify({
       jsonrpc: "2.0",
@@ -47,7 +43,7 @@ function unauthorized(request: Request): Response {
       status: 401,
       headers: {
         "content-type": "application/json",
-        "WWW-Authenticate": `Bearer FAKESECRET_g3h4i5j6k7l8m9n0o1p2="${resourceMetadata}", resource="${resource}"`,
+        "WWW-Authenticate": mcpWwwAuthenticate(publicOrigin(request)),
       },
     }
   );

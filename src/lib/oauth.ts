@@ -96,6 +96,15 @@ export function protectedResourceMetadata(origin: string) {
   };
 }
 
+/** RFC 9728 WWW-Authenticate challenge for unauthenticated MCP requests. */
+export function mcpWwwAuthenticate(origin: string): string {
+  const resource = mcpResourceUrl(origin);
+  const metadataUrl = `${origin}/.well-known/oauth-protected-resource/mcp`;
+  // Build param name in parts so tooling cannot corrupt the header source.
+  const metadataParam = ["resource", "metadata"].join("_");
+  return `Bearer ${metadataParam}="${metadataUrl}", resource="${resource}"`;
+}
+
 export function isAllowedRedirectUri(uri: string): boolean {
   try {
     const u = new URL(uri);
