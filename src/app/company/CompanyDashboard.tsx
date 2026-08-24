@@ -36,7 +36,7 @@ export default function CompanyDashboard() {
   const token = String(params.token || "");
   const [company, setCompany] = useState<Company | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState("test:owner");
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [stance, setStance] = useState("");
   const [contextNotes, setContextNotes] = useState("");
@@ -45,13 +45,13 @@ export default function CompanyDashboard() {
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
   const [saving, setSaving] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
-    async (conversationId: string) => {
-      const qs = new URLSearchParams({ token, conversation: conversationId });
+    async (conversationId?: string) => {
+      const qs = new URLSearchParams({ token });
+      if (conversationId) qs.set("conversation", conversationId);
       const res = await fetch(`/api/company?${qs.toString()}`);
       const json = (await res.json()) as {
         company?: Company;
@@ -74,7 +74,7 @@ export default function CompanyDashboard() {
     let cancelled = false;
     void (async () => {
       try {
-        await load("test:owner");
+        await load();
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -88,7 +88,7 @@ export default function CompanyDashboard() {
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, simulating]);
+  }, [messages.length]);
 
   async function openThread(id: string) {
     setActiveId(id);
@@ -128,34 +128,6 @@ export default function CompanyDashboard() {
     }
   }
 
-  async function runTadeSim() {
-    if (simulating) return;
-    setSimulating(true);
-    setError("");
-    setMessages([]);
-    try {
-      const res = await fetch("/api/company/simulate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, turns: 3 }),
-      });
-      const json = (await res.json()) as {
-        conversationId?: string;
-        messages?: ChatMessage[];
-        conversations?: Conversation[];
-        error?: string;
-      };
-      if (!res.ok || !json.conversationId) throw new Error(json.error || "simulation failed");
-      setActiveId(json.conversationId);
-      setMessages(json.messages || []);
-      if (json.conversations) setConversations(json.conversations);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSimulating(false);
-    }
-  }
-
   if (loading) {
     return (
       <main className="ainet co-page">
@@ -175,12 +147,6 @@ export default function CompanyDashboard() {
   }
 
   const realTalks = conversations.filter((c) => !c.isTest);
-  const isSim = activeId.startsWith("test:");
-
-  function visitorLabel(username: string) {
-    if (username === "tade" || username === "_owner_") return "tade's ChatGPT";
-    return `${username} AI`;
-  }
 
   return (
     <main className="ainet co-page">
@@ -191,63 +157,19 @@ export default function CompanyDashboard() {
         <h1 className="co-live-name">{company.name}</h1>
       </header>
 
-      <section className="ainet-section" aria-label="simulate visitor AI">
-        <h2>
-          {isSim
-            ? "tade's ChatGPT × your company AI"
-            : `AI↔AI thread · ${activeId.slice(0, 8)}…`}
-        </h2>
-        <div className="co-chat" ref={scroller}>
-          {messages.length === 0 ? (
-            <p className="ainet-muted">
-              {isSim
-                ? "this is what actually happens: tade brainstorms a project in his chatgpt (tademehl.com). that personal AI finds your domain and negotiates with your endpoint — dense context, several turns, both sides pushing their interests. run it."
-                : "no messages in this thread."}
-            </p>
-          ) : (
-            messages.map((m) => (
-              <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
-                <span className="co-bubble-who">
-                  {m.role === "company"
-                    ? `${company.name} AI`
-                    : visitorLabel(m.visitorUsername)}
-                </span>
-                <p>{m.body}</p>
-              </div>
-            ))
-          )}
-          {simulating ? (
-            <p className="ainet-muted">two AIs negotiating — this takes a minute…</p>
-          ) : null}
-        </div>
-        {isSim ? (
-          <div className="co-chat-form">
-            {error ? <p className="ainet-note err">{error}</p> : null}
-            <button
-              type="button"
-              onClick={() => void runTadeSim()}
-              disabled={simulating}
-            >
-              {simulating ? "negotiating…" : "run tade's chatgpt against you"}
-            </button>
-          </div>
-        ) : (
-          <p className="ainet-muted">live AI↔AI talks are watch-only for now.</p>
-        )}
-      </section>
-
       <section className="ainet-section" aria-label="conversations">
         <h2>conversations</h2>
+        {error ? <p className="ainet-note err">{error}</p> : null}
         {realTalks.length === 0 ? (
           <p className="ainet-muted">
-            none yet. when another AI finds your domain and talks to your endpoint, the thread shows up here.
+            none yet. when a visitor AI finds your domain and talks_to_company, the thread shows up here.
           </p>
         ) : (
           <ul className="co-threads">
             {realTalks.map((c) => (
               <li key={c.conversationId}>
                 <button type="button" onClick={() => void openThread(c.conversationId)}>
-                  <strong>{visitorLabel(c.visitorUsername)}</strong>
+                  <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "visitor AI"}</strong>
                   <span>
                     {c.messageCount} turns · {c.lastBody}
                   </span>
@@ -256,12 +178,25 @@ export default function CompanyDashboard() {
             ))}
           </ul>
         )}
-        {activeId !== "test:owner" && !activeId.startsWith("test:tade:") ? (
-          <p className="ainet-actions" style={{ marginTop: "1rem" }}>
-            <button type="button" onClick={() => void openThread("test:owner")}>
-              back to tade sim
-            </button>
-          </p>
+
+        {activeId ? (
+          <div className="co-chat" ref={scroller} style={{ marginTop: "1.5rem" }}>
+            {messages.length === 0 ? (
+              <p className="ainet-muted">no messages in this thread.</p>
+            ) : (
+              messages.map((m) => (
+                <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
+                  <span className="co-bubble-who">
+                    {m.role === "company"
+                      ? `${company.name} AI`
+                      : `${m.visitorUsername || "visitor"} AI`}
+                  </span>
+                  <p>{m.body}</p>
+                </div>
+              ))
+            )}
+            <p className="ainet-muted">live AI↔AI talks are watch-only for now.</p>
+          </div>
         ) : null}
       </section>
 

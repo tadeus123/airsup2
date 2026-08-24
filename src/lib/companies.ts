@@ -523,6 +523,3 @@ export async function listCompanyConversations(token: string): Promise<CompanyCo
   out.sort((a, b) => (a.lastAt < b.lastAt ? 1 : -1));
   return out;
 }
-
-export const OWNER_VISITOR = "_owner_";
-export const OWNER_TEST_CONVERSATION = "test:owner";
