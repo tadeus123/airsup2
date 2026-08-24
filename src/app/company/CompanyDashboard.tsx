@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { BrandNav } from "@/components/BrandNav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { ChatMarkdown } from "@/components/ChatMarkdown";
 import { CompanyLoginDialog } from "./CompanyChrome";
 
 type Company = {
@@ -32,6 +33,23 @@ type ChatMessage = {
   visitorUsername: string;
   createdAt: string;
 };
+
+function formatTime(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
+function previewBody(body: string): string {
+  return body.replace(/\s+/g, " ").replace(/\*\*/g, "").trim().slice(0, 90);
+}
 
 export default function CompanyDashboard() {
   const params = useParams();
@@ -102,7 +120,7 @@ export default function CompanyDashboard() {
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, activeId]);
 
   async function openThread(id: string) {
     setActiveId(id);
@@ -181,6 +199,10 @@ export default function CompanyDashboard() {
   }
 
   const realTalks = conversations.filter((c) => !c.isTest);
+  const active = realTalks.find((c) => c.conversationId === activeId) || null;
+  const visitorLabel = active
+    ? `${active.visitorUsername || "visitor"} AI`
+    : "Visitor AI";
 
   return (
     <>
@@ -207,39 +229,80 @@ export default function CompanyDashboard() {
               appears here automatically.
             </p>
           ) : (
-            <ul className="co-threads">
-              {realTalks.map((c) => (
-                <li key={c.conversationId}>
-                  <button type="button" onClick={() => void openThread(c.conversationId)}>
-                    <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}</strong>
-                    <span>
-                      {c.messageCount} turns · {c.lastBody}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+            <div className="co-inbox">
+              <aside className="co-inbox-list" aria-label="Threads">
+                <ul className="co-threads">
+                  {realTalks.map((c) => {
+                    const on = c.conversationId === activeId;
+                    return (
+                      <li key={c.conversationId}>
+                        <button
+                          type="button"
+                          className={on ? "on" : undefined}
+                          onClick={() => void openThread(c.conversationId)}
+                        >
+                          <strong>
+                            {c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}
+                          </strong>
+                          <span className="co-thread-meta">
+                            {c.messageCount} turns
+                            {c.lastAt ? ` · ${formatTime(c.lastAt)}` : ""}
+                          </span>
+                          <span className="co-thread-preview">{previewBody(c.lastBody)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </aside>
 
-          {activeId ? (
-            <div className="co-chat" ref={scroller} style={{ marginTop: "1.5rem" }}>
-              {messages.length === 0 ? (
-                <p className="ainet-muted">No messages in this thread.</p>
-              ) : (
-                messages.map((m) => (
-                  <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
-                    <span className="co-bubble-who">
-                      {m.role === "company"
-                        ? `${company.name} AI`
-                        : `${m.visitorUsername || "visitor"} AI`}
-                    </span>
-                    <p>{m.body}</p>
+              <div className="co-inbox-chat" aria-label="Chat">
+                {activeId && active ? (
+                  <>
+                    <header className="co-chat-head">
+                      <div>
+                        <strong>{visitorLabel}</strong>
+                        <span> ↔ {company.name} AI</span>
+                      </div>
+                      <span className="co-chat-head-meta">{active.messageCount} turns</span>
+                    </header>
+                    <div className="co-chat" ref={scroller}>
+                      {messages.length === 0 ? (
+                        <p className="ainet-muted">No messages in this thread.</p>
+                      ) : (
+                        messages.map((m) => {
+                          const mine = m.role === "company";
+                          const who = mine
+                            ? `${company.name} AI`
+                            : `${m.visitorUsername || "visitor"} AI`;
+                          return (
+                            <div
+                              key={m.id}
+                              className={`co-bubble co-bubble--${m.role}${mine ? " co-bubble--mine" : ""}`}
+                            >
+                              <div className="co-bubble-meta">
+                                <span className="co-bubble-who">{who}</span>
+                                {m.createdAt ? (
+                                  <time dateTime={m.createdAt}>{formatTime(m.createdAt)}</time>
+                                ) : null}
+                              </div>
+                              <div className="co-bubble-body">
+                                <ChatMarkdown text={m.body} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="co-chat-empty">
+                    <p>Select a conversation to read the AI↔AI negotiation.</p>
                   </div>
-                ))
-              )}
-              <p className="ainet-muted">Live AI↔AI threads are visible here as they happen.</p>
+                )}
+              </div>
             </div>
-          ) : null}
+          )}
         </section>
 
         <section className="ainet-section" aria-label="settings">

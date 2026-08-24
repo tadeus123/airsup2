@@ -1369,28 +1369,187 @@ button {
   margin: 0 0 0.4rem;
 }
 
+.co-inbox {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) + 2px);
+  overflow: hidden;
+  min-height: min(70vh, 36rem);
+  background: var(--bg-color);
+}
+
+@media (max-width: 720px) {
+  .co-inbox {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+.co-inbox-list {
+  border-right: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--text-color) 3%, var(--bg-color));
+  max-height: min(70vh, 36rem);
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .co-inbox-list {
+    max-height: 12rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+}
+
+.co-inbox-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: color-mix(in srgb, var(--text-color) 2%, var(--bg-color));
+}
+
+.co-chat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
+.co-chat-head strong {
+  font-weight: 600;
+}
+
+.co-chat-head span {
+  color: var(--muted);
+}
+
+.co-chat-head-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.co-chat-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .co-chat {
-  max-height: min(70vh, 40rem);
+  flex: 1;
+  max-height: min(62vh, 32rem);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
-  margin: 0 0 1rem;
-  padding-right: 0.25rem;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 1.1rem 1rem 1.4rem;
 }
 
-.co-bubble p {
-  margin: 0.15rem 0 0;
-  white-space: pre-wrap;
+.co-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: min(92%, 38rem);
+  align-self: flex-start;
+}
+
+.co-bubble--mine {
+  align-self: flex-end;
+}
+
+.co-bubble-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0 0.35rem;
+}
+
+.co-bubble--mine .co-bubble-meta {
+  justify-content: flex-end;
 }
 
 .co-bubble-who {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .co-bubble--company .co-bubble-who {
-  color: var(--accent-color);
+  color: var(--text-color);
+}
+
+.co-bubble-meta time {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.co-bubble-body {
+  border-radius: 1.05rem;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--text-color) 6%, var(--bg-color));
+  border: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+}
+
+.co-bubble--mine .co-bubble-body {
+  background: var(--text-color);
+  color: var(--bg-color);
+  border-color: transparent;
+  border-bottom-right-radius: 0.35rem;
+}
+
+.co-bubble:not(.co-bubble--mine) .co-bubble-body {
+  border-bottom-left-radius: 0.35rem;
+}
+
+.co-md {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.co-md p {
+  margin: 0 0 0.65rem;
+}
+
+.co-md p:last-child {
+  margin-bottom: 0;
+}
+
+.co-md ul,
+.co-md ol {
+  margin: 0 0 0.65rem;
+  padding-left: 1.2rem;
+}
+
+.co-md li {
+  margin: 0.2rem 0;
+}
+
+.co-md li::marker {
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.co-md strong {
+  font-weight: 650;
+}
+
+.co-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  padding: 0.05em 0.3em;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.co-bubble--mine .co-md code {
+  background: color-mix(in srgb, var(--bg-color) 18%, transparent);
 }
 
 .co-chat-form {
@@ -1402,11 +1561,11 @@ button {
 .co-threads {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0.4rem;
 }
 
 .co-threads li + li {
-  margin-top: 0.75rem;
+  margin-top: 0.2rem;
 }
 
 .co-threads button {
@@ -1417,19 +1576,40 @@ button {
   width: 100%;
   text-align: left;
   border: 0;
+  border-radius: calc(var(--radius) - 1px);
   background: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  padding: 0;
+  padding: 0.7rem 0.75rem;
+}
+
+.co-threads button:hover {
+  background: color-mix(in srgb, var(--text-color) 6%, transparent);
+}
+
+.co-threads button.on {
+  background: var(--bg-color);
+  box-shadow: inset 0 0 0 1px var(--border-color);
 }
 
 .co-threads strong {
-  font-weight: 400;
-  color: var(--accent-color);
+  font-weight: 600;
+  color: var(--text-color);
+  font-size: 0.92rem;
 }
 
-.co-threads span {
+.co-thread-meta {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.75rem;
+}
+
+.co-thread-preview {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

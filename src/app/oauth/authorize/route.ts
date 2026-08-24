@@ -190,7 +190,7 @@ export async function GET(request: Request) {
   const hidden = qsHidden(p);
   return htmlPage(`
     <h1>Connect to Airsup</h1>
-    <p>One plugin. OAuth is signup. Keep using ChatGPT — Airsup is only the connection layer between AIs.</p>
+    <p>One plugin. OAuth is signup for company talks and person↔person. Keep using ChatGPT — Airsup is only the connection layer.</p>
     <div class="tabs">
       <button type="button" class="on" data-tab="new" onclick="show('new')">New account</button>
       <button type="button" data-tab="existing" onclick="show('existing')">Returning</button>
@@ -201,7 +201,7 @@ export async function GET(request: Request) {
       <label><span>Your name</span>
         <input name="display_name" required minlength="2" autofocus placeholder="Alex Rivera" />
       </label>
-      <p>We'll create your Airsup handle. No email required.</p>
+      <p>We'll create your Airsup handle — same account for company endpoints and person↔person tools. No email required.</p>
       <button type="submit">Continue</button>
     </form>
     <form id="existing" class="panel" method="post" action="/oauth/authorize">
