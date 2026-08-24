@@ -218,56 +218,66 @@ export default function CompanyDashboard() {
         </p>
       </header>
 
-      <section className="ainet-section" aria-label="test talk">
-        <h2>{isTest ? "test talk — play a buyer, hear your AI" : `talk with ${activeId.slice(0, 8)}…`}</h2>
+      <section className="ainet-section" aria-label="simulate visitor AI">
+        <h2>
+          {isTest
+            ? "simulate a visitor AI"
+            : `AI↔AI thread · ${activeId.slice(0, 8)}…`}
+        </h2>
         <div className="co-chat" ref={scroller}>
           {messages.length === 0 ? (
             <p className="ainet-muted">
               {isTest
-                ? "say what a buyer would say. this is a real negotiation with your company AI."
+                ? "humans don’t talk to this endpoint — other AIs do. paste what a visitor AI would send (dense context, fast turns). your company AI answers for real."
                 : "no messages in this thread."}
             </p>
           ) : (
             messages.map((m) => (
               <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
                 <span className="co-bubble-who">
-                  {m.role === "company" ? company.name : isTest ? "you as buyer" : m.visitorUsername}
+                  {m.role === "company"
+                    ? `${company.name} AI`
+                    : isTest
+                      ? "visitor AI"
+                      : `${m.visitorUsername} AI`}
                 </span>
                 <p>{m.body}</p>
               </div>
             ))
           )}
-          {chatting ? <p className="ainet-muted">your AI is thinking…</p> : null}
+          {chatting ? <p className="ainet-muted">company AI answering…</p> : null}
         </div>
         {isTest ? (
           <form className="co-chat-form" onSubmit={(e) => void sendTest(e)}>
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="we need 2k units of …"
-              rows={3}
+              placeholder="visitor AI: sourcing 2k units of … for a launch next month; constraints, budget band, delivery window…"
+              rows={4}
               disabled={chatting}
             />
             {error ? <p className="ainet-note err">{error}</p> : null}
             <button type="submit" disabled={chatting || !draft.trim()}>
-              {chatting ? "…" : "send"}
+              {chatting ? "…" : "send as visitor AI"}
             </button>
           </form>
         ) : (
-          <p className="ainet-muted">real talks are watch-only for now.</p>
+          <p className="ainet-muted">live AI↔AI talks are watch-only for now.</p>
         )}
       </section>
 
       <section className="ainet-section" aria-label="conversations">
         <h2>conversations</h2>
         {realTalks.length === 0 ? (
-          <p className="ainet-muted">none yet. when a ChatGPT finds your domain, the thread shows up here.</p>
+          <p className="ainet-muted">
+            none yet. when another AI finds your domain and talks to your endpoint, the thread shows up here.
+          </p>
         ) : (
           <ul className="co-threads">
             {realTalks.map((c) => (
               <li key={c.conversationId}>
                 <button type="button" onClick={() => void openThread(c.conversationId)}>
-                  <strong>{c.visitorUsername || "visitor"}</strong>
+                  <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "visitor AI"}</strong>
                   <span>
                     {c.messageCount} turns · {c.lastBody}
                   </span>
@@ -279,7 +289,7 @@ export default function CompanyDashboard() {
         {activeId !== "test:owner" ? (
           <p className="ainet-actions" style={{ marginTop: "1rem" }}>
             <button type="button" onClick={() => void openThread("test:owner")}>
-              back to test talk
+              back to visitor AI sim
             </button>
           </p>
         ) : null}
