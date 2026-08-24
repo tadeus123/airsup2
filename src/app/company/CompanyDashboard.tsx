@@ -86,6 +86,18 @@ export default function CompanyDashboard() {
     };
   }, [token, load]);
 
+  const live = Boolean(company);
+
+  useEffect(() => {
+    if (!token || !live) return;
+    const id = window.setInterval(() => {
+      void load(activeId || undefined).catch(() => {
+        /* keep last good state while polling */
+      });
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [token, live, activeId, load]);
+
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
@@ -162,7 +174,7 @@ export default function CompanyDashboard() {
         {error ? <p className="ainet-note err">{error}</p> : null}
         {realTalks.length === 0 ? (
           <p className="ainet-muted">
-            none yet. when a visitor AI finds your domain and talks_to_company, the thread shows up here.
+            none yet. when a visitor AI finds your domain and talk_to_company, the thread shows up here.
           </p>
         ) : (
           <ul className="co-threads">

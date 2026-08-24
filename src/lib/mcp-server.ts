@@ -206,13 +206,11 @@ export function createAirsupMcpServer(me: User): McpServer {
     idempotentHint: true,
   } as const;
 
-  const oauthMeta = {
-    securitySchemes: [
-      { type: "oauth2" as const, scopes: ["airsup"] },
-      { type: "noauth" as const },
-    ],
+  // Transport already requires OAuth (aso_) or legacy asp_ — do not advertise noauth
+  // or ChatGPT may skip the OAuth connect step on the universal /mcp URL.
+  const toolAuthMeta = {
+    securitySchemes: [{ type: "oauth2" as const, scopes: ["airsup"] }],
   };
-  const toolAuthMeta = oauthMeta;
 
   async function openIsolatedInbox(input: {
     fromRaw: string;

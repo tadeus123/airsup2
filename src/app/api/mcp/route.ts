@@ -30,7 +30,8 @@ function withCors(response: Response): Response {
 
 function unauthorized(request: Request): Response {
   const origin = publicOrigin(request);
-  const resourceMetadata = `${origin}/.well-known/oauth-protected-resource`;
+  // Path-aware metadata URL matches resource https://…/mcp (RFC 9728)
+  const resourceMetadata = `${origin}/.well-known/oauth-protected-resource/mcp`;
   const resource = mcpResourceUrl(origin);
   return new Response(
     JSON.stringify({

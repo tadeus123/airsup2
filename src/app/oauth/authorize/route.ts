@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
+  isAllowedMcpResource,
   isAllowedRedirectUri,
   loginWithAspToken,
   mcpResourceUrl,
+  normalizeMcpResource,
   publicOrigin,
   signupFromAuthorize,
   storeAuthCode,
@@ -11,6 +13,15 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function htmlPage(body: string, status = 200) {
   return new NextResponse(
@@ -38,6 +49,7 @@ function htmlPage(body: string, status = 200) {
     .tabs button.on { color:var(--accent); text-decoration:underline; }
     .panel { display:none; }
     .panel.on { display:block; }
+    a { color:var(--accent); }
   </style>
 </head>
 <body>
@@ -78,12 +90,8 @@ function validateAuthorize(p: ReturnType<typeof parseAuthorizeParams>, origin: s
   if (p.codeChallengeMethod && p.codeChallengeMethod !== "S256") {
     return "only S256 PKCE is supported";
   }
-  const expectedResource = mcpResourceUrl(origin);
-  if (p.resource && p.resource !== expectedResource && !p.resource.startsWith(origin)) {
-    // allow exact mcp resource
-    if (p.resource !== expectedResource) {
-      // soft: still allow if resource equals origin/mcp
-    }
+  if (p.resource && !isAllowedMcpResource(p.resource, origin)) {
+    return "resource does not match this MCP server";
   }
   return null;
 }
@@ -103,9 +111,36 @@ function qsHidden(p: ReturnType<typeof parseAuthorizeParams>) {
     .filter(([, v]) => v)
     .map(
       ([k, v]) =>
-        `<input type="hidden" name="${k}" value="${v.replace(/"/g, "&quot;")}" />`
+        `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}" />`
     )
     .join("\n");
+}
+
+function authorizeQuery(p: ReturnType<typeof parseAuthorizeParams>): string {
+  const q = new URLSearchParams();
+  if (p.responseType) q.set("response_type", p.responseType);
+  if (p.clientId) q.set("client_id", p.clientId);
+  if (p.redirectUri) q.set("redirect_uri", p.redirectUri);
+  if (p.state) q.set("state", p.state);
+  if (p.codeChallenge) q.set("code_challenge", p.codeChallenge);
+  if (p.codeChallengeMethod) q.set("code_challenge_method", p.codeChallengeMethod);
+  if (p.scope) q.set("scope", p.scope);
+  if (p.resource) q.set("resource", p.resource);
+  return q.toString();
+}
+
+function redirectWithCode(input: {
+  redirectUri: string;
+  code: string;
+  state: string;
+  issuer: string;
+}) {
+  const redirect = new URL(input.redirectUri);
+  redirect.searchParams.set("code", input.code);
+  if (input.state) redirect.searchParams.set("state", input.state);
+  // RFC 9207 — ChatGPT rejects the response if iss is advertised but missing
+  redirect.searchParams.set("iss", input.issuer);
+  return NextResponse.redirect(redirect.toString(), 302);
 }
 
 export async function GET(request: Request) {
@@ -113,8 +148,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const p = parseAuthorizeParams(url);
   if (!p.resource) p.resource = mcpResourceUrl(origin);
+  else p.resource = normalizeMcpResource(p.resource, origin);
   const err = validateAuthorize(p, origin);
-  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${err}</p>`, 400);
+  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const hidden = qsHidden(p);
   return htmlPage(`
@@ -157,10 +193,10 @@ export async function POST(request: Request) {
     codeChallenge: get("code_challenge"),
     codeChallengeMethod: get("code_challenge_method") || "S256",
     scope: get("scope") || OAUTH_SCOPE,
-    resource: get("resource") || mcpResourceUrl(origin),
+    resource: normalizeMcpResource(get("resource") || mcpResourceUrl(origin), origin),
   };
   const err = validateAuthorize(p, origin);
-  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${err}</p>`, 400);
+  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const mode = get("mode");
   try {
@@ -185,18 +221,21 @@ export async function POST(request: Request) {
       scopes: p.scope.includes(OAUTH_SCOPE) ? OAUTH_SCOPE : p.scope || OAUTH_SCOPE,
     });
 
-    const redirect = new URL(p.redirectUri);
-    redirect.searchParams.set("code", code);
-    if (p.state) redirect.searchParams.set("state", p.state);
-    return NextResponse.redirect(redirect.toString(), 302);
+    return redirectWithCode({
+      redirectUri: p.redirectUri,
+      code,
+      state: p.state,
+      issuer: origin,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     const hidden = qsHidden(p);
+    const retryQs = authorizeQuery(p);
     return htmlPage(
       `
       <h1>airsup</h1>
-      <p class="err">${message}</p>
-      <p><a href="/oauth/authorize?${new URL(request.url).searchParams.toString()}">try again</a></p>
+      <p class="err">${escapeHtml(message)}</p>
+      <p><a href="/oauth/authorize?${escapeHtml(retryQs)}">try again</a></p>
       <form method="post" action="/oauth/authorize" style="display:none">${hidden}</form>
     `,
       400

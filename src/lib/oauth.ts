@@ -54,6 +54,48 @@ export function mcpResourceUrl(origin: string): string {
   return `${origin.replace(/\/$/, "")}/mcp`;
 }
 
+/** Normalize / accept ChatGPT resource values for this MCP server. */
+export function normalizeMcpResource(resource: string, origin: string): string {
+  const expected = mcpResourceUrl(origin);
+  const r = resource.trim().replace(/\/$/, "");
+  if (!r) return expected;
+  if (r === expected || r === origin.replace(/\/$/, "")) return expected;
+  return r;
+}
+
+export function isAllowedMcpResource(resource: string, origin: string): boolean {
+  const r = resource.trim().replace(/\/$/, "");
+  if (!r) return true;
+  const expected = mcpResourceUrl(origin);
+  return r === expected || r === origin.replace(/\/$/, "");
+}
+
+export function authorizationServerMetadata(origin: string) {
+  return {
+    issuer: origin,
+    authorization_endpoint: `${origin}/oauth/authorize`,
+    token_endpoint: `${origin}/oauth/token`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+    scopes_supported: [OAUTH_SCOPE],
+    client_id_metadata_document_supported: true,
+    // RFC 9207 — required for ChatGPT's stable connector redirect URI
+    authorization_response_iss_parameter_supported: true,
+  };
+}
+
+export function protectedResourceMetadata(origin: string) {
+  return {
+    resource: mcpResourceUrl(origin),
+    authorization_servers: [origin],
+    scopes_supported: [OAUTH_SCOPE],
+    bearer_methods_supported: ["header"],
+    resource_documentation: `${origin}/airsup`,
+  };
+}
+
 export function isAllowedRedirectUri(uri: string): boolean {
   try {
     const u = new URL(uri);
@@ -169,8 +211,11 @@ export async function exchangeAuthCode(input: {
   const expected = pkceChallengeS256(input.codeVerifier);
   if (!safeEqualStr(expected, challenge)) throw new Error("invalid_grant");
   const storedResource = String(row.resource || "");
-  if (input.resource && storedResource && input.resource !== storedResource) {
-    throw new Error("invalid_target");
+  // Soft-match resource: stored may be empty (older codes) or normalized /mcp
+  if (input.resource && storedResource) {
+    const a = input.resource.replace(/\/$/, "");
+    const b = storedResource.replace(/\/$/, "");
+    if (a !== b) throw new Error("invalid_target");
   }
   return {
     username: String(row.username),

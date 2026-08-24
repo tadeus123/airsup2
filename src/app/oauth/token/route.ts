@@ -1,9 +1,11 @@
 import {
   ACCESS_TTL_SEC,
   exchangeAuthCode,
+  isAllowedMcpResource,
   isAllowedRedirectUri,
   issueTokens,
   mcpResourceUrl,
+  normalizeMcpResource,
   publicOrigin,
   refreshTokens,
   OAUTH_SCOPE,
@@ -64,13 +66,17 @@ export async function POST(request: Request) {
       const code = (body.code || "").trim();
       const redirectUri = (body.redirect_uri || "").trim();
       const codeVerifier = (body.code_verifier || "").trim();
-      const resource = (body.resource || defaultResource).trim();
+      const resourceRaw = (body.resource || defaultResource).trim();
       if (!code || !redirectUri || !codeVerifier) {
         return oauthError("invalid_request", 400, "code, redirect_uri, code_verifier required");
       }
       if (!isAllowedRedirectUri(redirectUri)) {
         return oauthError("invalid_request", 400, "redirect_uri not allowed");
       }
+      if (resourceRaw && !isAllowedMcpResource(resourceRaw, origin)) {
+        return oauthError("invalid_target", 400, "resource does not match this MCP server");
+      }
+      const resource = normalizeMcpResource(resourceRaw, origin);
       const exchanged = await exchangeAuthCode({
         code,
         redirectUri,
@@ -78,16 +84,20 @@ export async function POST(request: Request) {
         codeVerifier,
         resource,
       });
+      const tokenResource = normalizeMcpResource(
+        exchanged.resource || resource,
+        origin
+      );
       const tokens = await issueTokens({
         username: exchanged.username,
         clientId,
-        resource: exchanged.resource || resource,
+        resource: tokenResource,
         scopes: exchanged.scopes || OAUTH_SCOPE,
       });
       return Response.json(
         {
           ...tokens,
-          resource: exchanged.resource || resource,
+          resource: tokenResource,
         },
         { headers: corsHeaders() }
       );
@@ -95,8 +105,12 @@ export async function POST(request: Request) {
 
     if (grantType === "refresh_token") {
       const refreshToken = (body.refresh_token || "").trim();
-      const resource = (body.resource || defaultResource).trim();
+      const resourceRaw = (body.resource || defaultResource).trim();
       if (!refreshToken) return oauthError("invalid_request", 400, "refresh_token required");
+      if (resourceRaw && !isAllowedMcpResource(resourceRaw, origin)) {
+        return oauthError("invalid_target", 400, "resource does not match this MCP server");
+      }
+      const resource = normalizeMcpResource(resourceRaw, origin);
       const tokens = await refreshTokens({
         refreshToken,
         clientId,
