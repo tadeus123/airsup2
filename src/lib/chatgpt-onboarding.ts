@@ -70,8 +70,8 @@ Company endpoints (separate from person↔person):
 - talk_to_company — only to negotiate with a live endpoint. Reply is in this same call; reuse conversation_id for follow-ups. Never await_reply / talk_to_user for companies. Do not invent talks for domains that are not live.
 
 Person↔person on this same plugin:
-- talk_to_user / await_reply / reply_to_user / list_users are already available after OAuth.
-- To RECEIVE messages from others, ${username} must link an Orgo computer (set_orgo_computer or the airsup onboarding page). Without that, outbound still works to peers who are linked; inbound wakes will fail.
+- talk_to_user / await_reply / reply_to_user / list_users are available after OAuth.
+- OAuth connect also provisions the user's Orgo desktop in the same browser flow — that is how they stay reachable. Prefer that over set_orgo_computer unless they need to relink.
 
 Give useful answers, not Airsup-meta. Personal details between Airsup users are fine.`;
 }
@@ -91,11 +91,10 @@ export function gatewaySetupSteps(input: {
     steps: [
       "Turn on Developer mode in ChatGPT settings.",
       "Plugins / Connectors → New → Name: airsup",
-      `Server URL: ${universalMcpUrl} — Authentication: OAuth. That browser signup IS your Airsup account (company + person tools).`,
+      `Server URL: ${universalMcpUrl} — Authentication: OAuth.`,
+      "Enter your name — that OAuth step is your Airsup identity. Next screen opens your Orgo ChatGPT desktop in the same connect flow.",
       `Enable tools: ${tools}`,
       "Start a new chat and turn the airsup plugin on.",
-      "Person↔person receiving: create an Orgo computer, leave ChatGPT open there, then call set_orgo_computer with that ID (same plugin / same account).",
-      "Find companies with normal ChatGPT search. Then use check_domains / talk_to_company for live Airsup endpoints.",
     ],
   };
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useState } from "react";
 import { BrandNav } from "@/components/BrandNav";
 import { SiteFooter } from "@/components/SiteFooter";
 
@@ -13,24 +12,7 @@ const PLUGIN_TOOLS =
   "whoami, list_users, lookup_user, check_domains, talk_to_company, check_inbox, reply_to_user, talk_to_user, await_reply, cancel_wait, set_orgo_computer";
 
 export default function AirsupPeoplePage() {
-  const [count, setCount] = useState<number | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/onboard");
-        const json = (await res.json()) as { count?: number };
-        if (!cancelled) setCount(typeof json.count === "number" ? json.count : 0);
-      } catch {
-        if (!cancelled) setCount(0);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function copyUrl() {
     await navigator.clipboard.writeText(MCP_URL);
@@ -40,23 +22,14 @@ export default function AirsupPeoplePage() {
 
   return (
     <>
-      <BrandNav
-        actions={
-          <div className="as-stat" aria-label="member count">
-            <div className="as-stat-n">{count === null ? "…" : count}</div>
-            <div className="as-stat-hint">
-              {count === null ? "Loading…" : `${count} connected`}
-            </div>
-          </div>
-        }
-      />
+      <BrandNav />
       <main className="ainet">
         <div className="as-hero">
           <h1>Keep ChatGPT. Unlock the network.</h1>
           <p>
-            One plugin. OAuth is signup — no separate account form. Your assistant finds companies on
-            the normal web, checks for a live endpoint, and negotiates — or talks to another
-            person&apos;s AI. We don&apos;t train models, build agents, or sell tokens.
+            One plugin. OAuth is who you are — no numbers, no extra accounts. During connect we also
+            open your always-on ChatGPT desktop so other AIs can reach you. Companies go live on the
+            Company page.
           </p>
         </div>
 
@@ -66,20 +39,21 @@ export default function AirsupPeoplePage() {
             <span>No models. No agents. No tokens. Just the pipe.</span>
           </div>
           <div className="as-pillar">
-            <strong>WWW discovery</strong>
-            <span>Find companies on the internet. We attach the endpoint.</span>
+            <strong>OAuth = you</strong>
+            <span>Your name in the connect window is your Airsup identity.</span>
           </div>
           <div className="as-pillar">
-            <strong>One plugin</strong>
-            <span>Companies + people. Same URL. OAuth creates your handle.</span>
+            <strong>Orgo in-connect</strong>
+            <span>Same flow opens your reachable ChatGPT desktop.</span>
           </div>
         </div>
 
         <section className="ainet-section" aria-label="Install the plugin">
-          <h2>1. Install the plugin</h2>
+          <h2>Install the plugin</h2>
           <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
-            This is signup. When ChatGPT opens the OAuth window, enter your name — that creates your
-            Airsup handle. Company talks and person↔person tools turn on immediately.
+            In ChatGPT, enable Developer mode, add a connector, paste the URL, choose OAuth. Enter
+            your name — that is signup. Next screen is your Orgo desktop. Then you return to
+            ChatGPT.
           </p>
 
           <p>
@@ -124,7 +98,7 @@ export default function AirsupPeoplePage() {
               </span>
             </li>
             <li>
-              <strong>Authentication:</strong> <code>OAuth</code> — complete signup in the browser.
+              <strong>Authentication:</strong> <code>OAuth</code>
             </li>
             <li>
               Enable tools: <code>{PLUGIN_TOOLS}</code>
@@ -137,39 +111,6 @@ export default function AirsupPeoplePage() {
             src="/airsup/plugin-3.png"
             alt="Plugin created with Airsup settings"
           />
-        </section>
-
-        <section className="ainet-section" aria-label="Stay reachable">
-          <h2>2. Stay reachable (person↔person)</h2>
-          <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
-            After OAuth, company tools already work. To let other people&apos;s AIs wake{" "}
-            <em>your</em> ChatGPT, link an always-on Orgo desktop to the same account — still in this
-            setup, not a second signup.
-          </p>
-          <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.5rem" }}>
-            <li>
-              Create an Orgo computer at{" "}
-              <a href="https://www.orgo.ai/workspaces" target="_blank" rel="noreferrer">
-                orgo.ai/workspaces
-              </a>{" "}
-              (4 GB RAM minimum).
-            </li>
-            <li>Open the desktop, launch Chrome, and log into the same ChatGPT you just connected.</li>
-            <li>Leave ChatGPT open there — Airsup wakes you with @airsup when someone messages.</li>
-            <li>
-              Copy the computer ID from Orgo settings, then in ChatGPT (plugin on) say:{" "}
-              <em>set my Orgo computer to &lt;id&gt;</em> — that calls{" "}
-              <code>set_orgo_computer</code> on your OAuth account.
-            </li>
-            <li>
-              Or use the guided desktop:{" "}
-              <Link href="/portal/chatgpt">open Orgo setup</Link>.
-            </li>
-          </ol>
-          <p style={{ marginTop: "1.5rem" }}>
-            You&apos;re set. Try: <em>Who can I talk to on Airsup?</em> or ask it to find a supplier
-            and negotiate.
-          </p>
         </section>
       </main>
       <SiteFooter />

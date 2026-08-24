@@ -77,11 +77,34 @@ async function main() {
     body,
     redirect: "manual",
   });
-  const loc = authRes.headers.get("location") || "";
+  let loc = authRes.headers.get("location") || "";
   lines.push(`AUTH ${authRes.status} ${loc.slice(0, 200)}`);
   if (authRes.status !== 302 && authRes.status !== 303) {
     bad(`authorize ${(await authRes.text()).slice(0, 400)}`);
   } else {
+    // Orgo-in-OAuth: authorize may land on /oauth/setup with a cookie first.
+    if (loc.includes("/oauth/setup")) {
+      const setCookie = authRes.headers.getSetCookie?.() || [];
+      const cookieHeader =
+        setCookie
+          .map((c) => c.split(";")[0])
+          .filter(Boolean)
+          .join("; ") ||
+        (authRes.headers.get("set-cookie") || "").split(",").map((p) => p.split(";")[0].trim()).filter((p) => p.includes("=")).join("; ");
+      const finish = await fetch(`${BASE}/api/oauth/setup`, {
+        method: "POST",
+        headers: cookieHeader ? { cookie: cookieHeader } : {},
+        redirect: "manual",
+      });
+      const fj = await finish.json().catch(() => ({}));
+      lines.push(`SETUP_FINISH ${finish.status} ${JSON.stringify(fj).slice(0, 180)}`);
+      if (!finish.ok || !fj.redirect) bad("oauth setup finish");
+      else {
+        ok("oauth setup finish");
+        loc = fj.redirect;
+      }
+    }
+
     const u = new URL(loc);
     const code = u.searchParams.get("code");
     const iss = u.searchParams.get("iss");
@@ -189,7 +212,7 @@ async function main() {
       })
   );
   const allowText = await allow.text();
-  if (allow.ok && /new account/i.test(allowText)) ok("chatgpt redirect allowed");
+  if (allow.ok && /your name|connect to airsup/i.test(allowText)) ok("chatgpt redirect allowed");
   else bad(`chatgpt redirect blocked ${allow.status}`);
 
   const evil = await fetch(

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   isAllowedMcpResource,
   isAllowedRedirectUri,
-  loginWithAspToken,
   mcpResourceUrl,
   normalizeMcpResource,
   publicOrigin,
@@ -10,6 +9,12 @@ import {
   storeAuthCode,
   OAUTH_SCOPE,
 } from "@/lib/oauth";
+import {
+  finishRedirectUrl,
+  oauthSetupCookieHeader,
+  packOauthSetup,
+} from "@/lib/oauth-setup";
+import { orgoProvisionConfigured } from "@/lib/orgo-provision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,28 +80,12 @@ function htmlPage(body: string, status = 200) {
     }
     button[type="submit"]:hover { opacity:0.88; }
     .err { color:var(--danger); }
-    .tabs { display:flex; gap:1rem; margin:1.5rem 0 .5rem; }
-    .tabs button {
-      border:0; background:none; font:inherit; font-weight:600; color:var(--muted);
-      cursor:pointer; padding:0.35rem 0; border-bottom:2px solid transparent;
-    }
-    .tabs button.on { color:var(--fg); border-bottom-color:var(--fg); }
-    .panel { display:none; }
-    .panel.on { display:block; }
     a { color:inherit; }
   </style>
 </head>
 <body>
   <div class="top"><a class="mark" href="/airsup">AIRSUP</a></div>
   <main>${body}</main>
-  <script>
-    function show(id) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
-      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
-      document.getElementById(id)?.classList.add('on');
-      document.querySelector('[data-tab="'+id+'"]')?.classList.add('on');
-    }
-  </script>
 </body>
 </html>`,
     { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
@@ -170,12 +159,19 @@ function redirectWithCode(input: {
   state: string;
   issuer: string;
 }) {
-  const redirect = new URL(input.redirectUri);
-  redirect.searchParams.set("code", input.code);
-  if (input.state) redirect.searchParams.set("state", input.state);
-  // RFC 9207 — ChatGPT rejects the response if iss is advertised but missing
-  redirect.searchParams.set("iss", input.issuer);
-  return NextResponse.redirect(redirect.toString(), 302);
+  return NextResponse.redirect(
+    finishRedirectUrl({
+      v: 1,
+      username: "",
+      aspToken: "",
+      code: input.code,
+      redirectUri: input.redirectUri,
+      state: input.state,
+      issuer: input.issuer,
+      exp: 0,
+    }),
+    302
+  );
 }
 
 export async function GET(request: Request) {
@@ -190,27 +186,13 @@ export async function GET(request: Request) {
   const hidden = qsHidden(p);
   return htmlPage(`
     <h1>Connect to Airsup</h1>
-    <p>One plugin. OAuth is signup for company talks and person↔person. Keep using ChatGPT — Airsup is only the connection layer.</p>
-    <div class="tabs">
-      <button type="button" class="on" data-tab="new" onclick="show('new')">New account</button>
-      <button type="button" data-tab="existing" onclick="show('existing')">Returning</button>
-    </div>
-    <form id="new" class="panel on" method="post" action="/oauth/authorize">
+    <p>Your name is your identity. Next we open your always-on ChatGPT desktop so others can reach you — then you return to ChatGPT.</p>
+    <form method="post" action="/oauth/authorize">
       ${hidden}
       <input type="hidden" name="mode" value="signup" />
       <label><span>Your name</span>
         <input name="display_name" required minlength="2" autofocus placeholder="Alex Rivera" />
       </label>
-      <p>We'll create your Airsup handle — same account for company endpoints and person↔person tools. No email required.</p>
-      <button type="submit">Continue</button>
-    </form>
-    <form id="existing" class="panel" method="post" action="/oauth/authorize">
-      ${hidden}
-      <input type="hidden" name="mode" value="token" />
-      <label><span>Existing plugin token</span>
-        <input name="asp_token" required placeholder="asp_…" autocomplete="off" spellcheck="false" />
-      </label>
-      <p>Paste the asp_ token from an earlier Airsup setup.</p>
       <button type="submit">Continue</button>
     </form>
   `);
@@ -233,21 +215,11 @@ export async function POST(request: Request) {
   const err = validateAuthorize(p, origin);
   if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
-  const mode = get("mode");
   try {
-    let username = "";
-    if (mode === "signup") {
-      const { user } = await signupFromAuthorize({ displayName: get("display_name") });
-      username = user.username;
-    } else if (mode === "token") {
-      const user = await loginWithAspToken(get("asp_token"));
-      username = user.username;
-    } else {
-      return htmlPage(`<h1>Airsup</h1><p class="err">Unknown mode</p>`, 400);
-    }
+    const { user, aspToken } = await signupFromAuthorize({ displayName: get("display_name") });
 
     const code = await storeAuthCode({
-      username,
+      username: user.username,
       clientId: p.clientId,
       redirectUri: p.redirectUri,
       codeChallenge: p.codeChallenge,
@@ -256,22 +228,35 @@ export async function POST(request: Request) {
       scopes: p.scope.includes(OAUTH_SCOPE) ? OAUTH_SCOPE : p.scope || OAUTH_SCOPE,
     });
 
-    return redirectWithCode({
-      redirectUri: p.redirectUri,
+    // If Orgo isn't configured, finish OAuth immediately (company tools still work).
+    if (!orgoProvisionConfigured()) {
+      return redirectWithCode({
+        redirectUri: p.redirectUri,
+        code,
+        state: p.state,
+        issuer: origin,
+      });
+    }
+
+    const packed = packOauthSetup({
+      username: user.username,
+      aspToken,
       code,
+      redirectUri: p.redirectUri,
       state: p.state,
       issuer: origin,
     });
+    const res = NextResponse.redirect(`${origin}/oauth/setup`, 302);
+    res.headers.append("set-cookie", oauthSetupCookieHeader(packed));
+    return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    const hidden = qsHidden(p);
     const retryQs = authorizeQuery(p);
     return htmlPage(
       `
       <h1>Airsup</h1>
       <p class="err">${escapeHtml(message)}</p>
       <p><a href="/oauth/authorize?${escapeHtml(retryQs)}">Try again</a></p>
-      <form method="post" action="/oauth/authorize" style="display:none">${hidden}</form>
     `,
       400
     );
