@@ -43,6 +43,7 @@ export default function CompanyDashboard() {
   const [apiKey, setApiKey] = useState("");
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [chatting, setChatting] = useState(false);
@@ -108,7 +109,7 @@ export default function CompanyDashboard() {
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setSaveError("");
     try {
       const res = await fetch("/api/company", {
         method: "PATCH",
@@ -127,7 +128,7 @@ export default function CompanyDashboard() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -165,6 +166,7 @@ export default function CompanyDashboard() {
       setMessages(json.messages || []);
       await load("test:owner");
     } catch (err) {
+      setDraft(message);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setChatting(false);
@@ -246,6 +248,7 @@ export default function CompanyDashboard() {
               rows={3}
               disabled={chatting}
             />
+            {error ? <p className="ainet-note err">{error}</p> : null}
             <button type="submit" disabled={chatting || !draft.trim()}>
               {chatting ? "…" : "send"}
             </button>
@@ -303,7 +306,7 @@ export default function CompanyDashboard() {
               autoComplete="off"
             />
           </label>
-          {error ? <p className="ainet-note err">{error}</p> : null}
+          {saveError ? <p className="ainet-note err">{saveError}</p> : null}
           <button type="submit" className="co-go" disabled={saving}>
             {saved ? "saved." : saving ? "saving…" : "save"}
           </button>
