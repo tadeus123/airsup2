@@ -260,11 +260,11 @@ function launchChromeCdp(opts = {}) {
   return { profile, useCopy };
 }
 
-async function waitCdpUp(ms = 20000) {
+async function waitCdpUp(ms = 10000) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await cdpReady()) return true;
-    await sleep(400);
+    await sleep(300);
   }
   return false;
 }
@@ -272,24 +272,17 @@ async function waitCdpUp(ms = 20000) {
 async function ensureChromeCdp() {
   if (await cdpReady()) return { restarted: false, mode: "attach" };
 
+  // One relaunch only — Orgo bash aborts ~30–60s; no double seed path on wake.
   killChrome();
-  await sleep(1000);
-  let launched = launchChromeCdp({ useCopy: false });
-  if (await waitCdpUp(20000)) {
+  await sleep(600);
+  const launched = launchChromeCdp({ useCopy: false });
+  if (await waitCdpUp(10000)) {
     return { restarted: true, mode: "default_profile", profile: launched.profile };
-  }
-
-  // Default profile sometimes refuses a second CDP bind — seeded copy fallback.
-  killChrome();
-  await sleep(800);
-  launched = launchChromeCdp({ useCopy: true });
-  if (await waitCdpUp(20000)) {
-    return { restarted: true, mode: "seeded_copy", profile: launched.profile };
   }
 
   let log = "";
   try {
-    log = fs.readFileSync("/tmp/airsup-chrome.log", "utf8").slice(0, 500);
+    log = fs.readFileSync("/tmp/airsup-chrome.log", "utf8").slice(0, 400);
   } catch {}
   throw new Error("Chrome CDP did not come up on :" + CDP_PORT + (log ? " log=" + log : ""));
 }
@@ -313,7 +306,7 @@ function pickChatGptPage(pages) {
 
 async function waitForExecutionContext(send) {
   let lastErr = null;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 20; i++) {
     try {
       const r = await send("Runtime.evaluate", {
         expression: "document.readyState",
@@ -324,7 +317,7 @@ async function waitForExecutionContext(send) {
     } catch (e) {
       lastErr = e;
     }
-    await sleep(250);
+    await sleep(200);
   }
   throw new Error(
     "no execution context" + (lastErr ? ": " + (lastErr.message || lastErr) : "")
@@ -345,7 +338,7 @@ function connectWs(wsUrl) {
             const timer = setTimeout(() => {
               pending.delete(id);
               rej(new Error(`CDP timeout: ${method}`));
-            }, 25000);
+            }, 12000);
             pending.set(id, {
               resolve: (v) => {
                 clearTimeout(timer);
@@ -521,10 +514,10 @@ function pageInjectExpression(text, marker) {
       }
 
       let composer = null;
-      for (let i = 0; i < 32; i++) {
+      for (let i = 0; i < 12; i++) {
         composer = findComposer();
         if (composer) break;
-        await sleep(250);
+        await sleep(200);
       }
       if (!composer) return { ok: false, error: "composer_not_found", href: location.href };
 
@@ -532,7 +525,7 @@ function pageInjectExpression(text, marker) {
         return { ok: false, error: "set_text_failed", sample: (composer.innerText || "").slice(0, 80) };
       }
 
-      await sleep(200);
+      await sleep(150);
       const sendBtn = findSend();
       let method = "dom_enter";
       if (sendBtn && !sendBtn.disabled) {
@@ -548,15 +541,14 @@ function pageInjectExpression(text, marker) {
         );
       }
 
-      for (let i = 0; i < 20; i++) {
-        await sleep(300);
+      for (let i = 0; i < 8; i++) {
+        await sleep(250);
         if (markerInUserTurns(cfg.marker)) {
           const still = findComposer();
           const composerStill = still
             ? (still.innerText || still.textContent || "").includes(cfg.marker.slice(0, 20))
             : false;
-          // Prefer: visible in transcript. Accept if composer emptied after send.
-          if (!composerStill || i >= 4) {
+          if (!composerStill || i >= 2) {
             return {
               ok: true,
               method,
@@ -597,7 +589,7 @@ async function sendViaCdp(text, newChat) {
   let session = await attachPage();
   let { ws, send, page } = session;
 
-  const reconnect = async (waitMs = 1200) => {
+  const reconnect = async (waitMs = 800) => {
     try {
       ws.close();
     } catch {}
@@ -610,53 +602,34 @@ async function sendViaCdp(text, newChat) {
   };
 
   try {
-    if (!/chatgpt\.com|openai\.com/i.test(page.url || "")) {
+    // Always land on a fresh chat via navigate — faster/more reliable than UI clicks.
+    if (newChat || !/chatgpt\.com|openai\.com/i.test(page.url || "")) {
       try {
         await send("Page.navigate", { url: "https://chatgpt.com/" });
-      } catch {}
-      await reconnect(2200);
+      } catch (e) {
+        if (!isNavLossError(e.message)) throw e;
+      }
+      await reconnect(1400);
     } else {
       await waitForExecutionContext(send);
     }
 
-    if (newChat) {
-      try {
-        const prep = await evaluateValue(send, pagePrepareExpression(true));
-        if (prep && prep.error === "not_logged_in") return prep;
-      } catch (e) {
-        if (!isNavLossError(e.message)) throw e;
-      }
-      await reconnect(1600);
-    }
-
     let value = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         value = await evaluateValue(send, pageInjectExpression(text, marker));
         if (value && value.ok) break;
-        if (value && (value.error === "composer_not_found" || value.error === "not_verified_in_chat")) {
-          await reconnect(1000 + attempt * 400);
+        if (value && value.error === "not_logged_in") break;
+        if (attempt < 1) {
+          await reconnect(900);
           continue;
         }
-        if (value && value.error === "not_logged_in") break;
-        break;
       } catch (e) {
-        if (isNavLossError(e.message) && attempt < 3) {
-          await reconnect(1000 + attempt * 500);
+        if (isNavLossError(e.message) && attempt < 1) {
+          await reconnect(900);
           continue;
         }
         throw e;
-      }
-    }
-
-    if (value && value.ok) {
-      try {
-        const v = await evaluateValue(send, pageVerifyExpression(marker));
-        if (v && !v.ok) {
-          return { ok: false, error: "post_verify_failed", href: v.href, prior: value };
-        }
-      } catch {
-        /* inject already verified once */
       }
     }
 
@@ -682,9 +655,14 @@ async function main() {
     process.exit(2);
   }
 
-  const ensure = await ensureChromeCdp();
+  let ensure = { restarted: false, mode: "attach" };
   let value;
   if (mode === "verify") {
+    // Never relaunch Chrome just to verify — that blows Orgo's bash budget.
+    if (!(await cdpReady())) {
+      console.log(JSON.stringify({ ok: false, error: "cdp_down" }));
+      process.exit(1);
+    }
     const session = await attachPage();
     try {
       await waitForExecutionContext(session.send);
@@ -695,6 +673,7 @@ async function main() {
       } catch {}
     }
   } else {
+    ensure = await ensureChromeCdp();
     value = await sendViaCdp(text, newChat);
   }
   const out = { ...(value || { ok: false, error: "no_result" }), ensure, marker: wakeMarker(text) };

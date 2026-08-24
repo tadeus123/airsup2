@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -58,10 +59,16 @@ function loadVmSendScript(): string {
 
 async function deployVmSendScript(computerId: string): Promise<void> {
   const script = loadVmSendScript();
+  const hash = createHash("sha256").update(script).digest("hex").slice(0, 16);
   const b64 = Buffer.from(script, "utf8").toString("base64");
   const out = await orgoBash(
     computerId,
-    `python3 - <<'PY'
+    `f="${VM_SEND_PATH}"
+if [ -f "$f" ] && command -v sha256sum >/dev/null 2>&1; then
+  h=$(sha256sum "$f" | cut -c1-16)
+  if [ "$h" = "${hash}" ]; then echo ok cached ${hash}; exit 0; fi
+fi
+python3 - <<'PY'
 import base64, os
 raw = base64.b64decode("${b64}")
 open("${VM_SEND_PATH}", "wb").write(raw)
@@ -144,23 +151,11 @@ async function orgoSendChatViaCdp(
   text: string,
   newChat: boolean
 ): Promise<void> {
+  // Single attempt — Chrome recycle+retry blew Orgo's bash time limit (504).
   const first = await runVmSend(computerId, text, newChat, "send");
   if (first.ok) return;
-
-  // One hard Chrome recycle then retry — fixes stale CDP / navigated targets.
-  await orgoBash(
-    computerId,
-    `${DISPLAY_SETUP}
-pkill -9 -f '/opt/google/chrome/chrome' 2>/dev/null || true
-pkill -9 -f 'google-chrome' 2>/dev/null || true
-sleep 1
-echo KILLED`
-  );
-  await localSleep(1500);
-  const second = await runVmSend(computerId, text, newChat, "send");
-  if (second.ok) return;
   throw new Error(
-    `CDP send failed: ${(second.error || first.error || "unknown").slice(0, 240)}`
+    `CDP send failed: ${(first.error || first.raw || "unknown").slice(0, 240)}`
   );
 }
 
@@ -177,7 +172,7 @@ async function orgoSendChatViaXdotool(
   const spot = newChat ? { x: 720, y: 400 } : { x: 720, y: 650 };
   const openNew = newChat
     ? `xdotool key --clearmodifiers ctrl+shift+o
-sleep 1.0
+sleep 0.5
 `
     : "";
 
@@ -189,17 +184,16 @@ command -v xdotool >/dev/null || { echo "xdotool missing"; exit 1; }
 f=/tmp/airsup-send-clip.$$
 echo '${b64}' | base64 -d > "$f" || exit 1
 xclip -selection clipboard -i "$f" >/dev/null 2>&1 || xsel --clipboard --input < "$f"
-# Focus Chrome if present
 wid=$(xdotool search --class 'chrome|Chrome|google-chrome' 2>/dev/null | head -1 || true)
 if [ -n "$wid" ]; then xdotool windowactivate --sync "$wid" 2>/dev/null || true; fi
 xdotool keyup Shift_L Shift_R Control_L Control_R Alt_L Alt_R Meta_L Meta_R 2>/dev/null || true
 ${openNew}xdotool mousemove ${spot.x} ${spot.y} click 1
-sleep 0.25
+sleep 0.12
 xdotool key --clearmodifiers ctrl+a
 xdotool key --clearmodifiers ctrl+v
-sleep 0.45
+sleep 0.25
 xdotool key --clearmodifiers Return
-sleep 0.8
+sleep 0.35
 rm -f "$f"
 echo SENT`
   );
@@ -244,10 +238,10 @@ export async function orgoSendChat(
 
   try {
     await orgoSendChatViaXdotool(computerId, text, newChat);
-    await localSleep(800);
+    await localSleep(400);
     const verified = await verifyWakeInChat(computerId, text);
     if (!verified) {
-      // Last attempt: full CDP send after focusing UI
+      // Last attempt: CDP attach after focusing UI (no Chrome kill)
       await orgoSendChatViaCdp(computerId, text, newChat);
       logActivitySafe({
         kind: "orgo_send",
