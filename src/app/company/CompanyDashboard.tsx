@@ -59,7 +59,6 @@ export default function CompanyDashboard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [stance, setStance] = useState("");
-  const [contextNotes, setContextNotes] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -84,7 +83,6 @@ export default function CompanyDashboard() {
       if (!res.ok || !json.company) throw new Error(json.error || "could not load");
       setCompany(json.company);
       setStance(json.company.stance);
-      setContextNotes(json.company.contextNotes);
       setConversations(json.conversations || []);
       setMessages(json.messages || []);
     },
@@ -157,7 +155,6 @@ export default function CompanyDashboard() {
         body: JSON.stringify({
           token,
           stance,
-          contextNotes,
           apiKey: apiKey.trim() || undefined,
         }),
       });
@@ -332,16 +329,8 @@ export default function CompanyDashboard() {
           >
             <form className="co-form co-form-card co-form-card--flat" onSubmit={(e) => void saveSettings(e)}>
               <label className="co-field">
-                <span>Stance</span>
+                <span>How to negotiate</span>
                 <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
-              </label>
-              <label className="co-field">
-                <span>Notes</span>
-                <textarea
-                  value={contextNotes}
-                  onChange={(e) => setContextNotes(e.target.value)}
-                  rows={5}
-                />
               </label>
               <label className="co-field">
                 <span>New API key</span>

@@ -46,9 +46,12 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
         setError("");
         return;
       }
+      // Wrong password / other fail — stay on credentials so they can retry.
+      setPassword("");
       setError(result.message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "could not sign in");
+      setPassword("");
+      setError(err instanceof Error ? err.message : "could not connect");
     } finally {
       setBusy(false);
       onSigning?.(false);
@@ -77,7 +80,16 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
         setError(result.message);
         return;
       }
-      setError(result.message);
+      // Not a real ChatGPT authenticator prompt / invalid — go back to credentials.
+      const msg = result.message || "could not verify";
+      setCode("");
+      setThreadId("");
+      setStep("credentials");
+      setError(
+        /not a chatgpt authenticator|wrong password/i.test(msg)
+          ? msg
+          : `${msg} — try connecting again with email and password`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "could not verify code");
     } finally {
@@ -89,7 +101,7 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
   if (step === "done") {
     return (
       <div className="oauth-login-form oauth-login-form--done">
-        <p className="oauth-login-status">Signed in</p>
+        <p className="oauth-login-status">Connected</p>
       </div>
     );
   }
@@ -98,7 +110,7 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
     return (
       <form className="oauth-login-form" onSubmit={(e) => void onSubmitTotp(e)}>
         <label className="co-field">
-          <span>2FA code</span>
+          <span>ChatGPT authenticator code</span>
           <input
             type="text"
             name="totp"
@@ -118,6 +130,19 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
         <button type="submit" className="co-go co-go--wide" disabled={busy || code.length < 6}>
           {busy ? "…" : "Continue"}
         </button>
+        <button
+          type="button"
+          className="as-btn-ghost"
+          disabled={busy}
+          onClick={() => {
+            setStep("credentials");
+            setCode("");
+            setThreadId("");
+            setError("Try your ChatGPT email and password again");
+          }}
+        >
+          Back to email & password
+        </button>
       </form>
     );
   }
@@ -125,7 +150,7 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
   return (
     <form className="oauth-login-form" onSubmit={(e) => void onSubmitCredentials(e)}>
       <label className="co-field">
-        <span>Email</span>
+        <span>Your ChatGPT email</span>
         <input
           type="email"
           name="email"
@@ -135,11 +160,11 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
           value={email}
           disabled={busy}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@email.com"
+          placeholder="you@company.com"
         />
       </label>
       <label className="co-field">
-        <span>Password</span>
+        <span>Your ChatGPT password</span>
         <input
           type="password"
           name="password"
@@ -153,7 +178,7 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
       </label>
       {error ? <p className="ainet-note err">{error}</p> : null}
       <button type="submit" className="co-go co-go--wide" disabled={busy}>
-        {busy ? "…" : "Sign in"}
+        {busy ? "…" : "Connect"}
       </button>
     </form>
   );

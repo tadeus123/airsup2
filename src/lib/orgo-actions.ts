@@ -242,12 +242,10 @@ function parseOrgoAgentResponse(raw: string): {
 }
 
 function classifyLoginMessage(message: string): OrgoLoginAgentResult["status"] {
+  // Only trust explicit tokens — fuzzy "verification code" falsely matches Google SSO.
   if (/\bSIGNED_IN\b/i.test(message)) return "signed_in";
   if (/\bNEEDS_2FA\b/i.test(message)) return "needs_2fa";
   if (/\bFAILED\b/i.test(message)) return "failed";
-  if (/two[- ]factor|authenticator|totp|verification code|\b2fa\b/i.test(message)) {
-    return "needs_2fa";
-  }
   return "failed";
 }
 
@@ -267,16 +265,19 @@ export async function signInChatGptViaOrgoAgent(
     "Rules:",
     "- Be fast: no pauses, no extra browsing, no commentary on screen",
     "- Open Chrome if needed and go straight to https://chatgpt.com/auth/login",
-    "- Prefer email + password login (NOT phone, NOT Google, NOT Apple)",
-    "- If you see a phone number field or phone error, switch to email login immediately",
+    "- Prefer ChatGPT email + password if that option is available",
+    "- If ChatGPT only offers Google / Continue with Google (common for work emails on a custom domain, not only @gmail.com), use Google with THIS SAME email and password — that is correct, not a failure",
+    "- On Google screens: pick the matching account if shown, click Continue/Next when asked, enter password if asked",
+    "- Google phone / device prompts / 'approve on your phone' / account chooser / Continue buttons are NOT ChatGPT authenticator 2FA — click through them; do NOT reply NEEDS_2FA for those",
+    "- Only reply NEEDS_2FA if ChatGPT itself shows an authenticator / TOTP / 6-digit app code field (not Google, not SMS to a phone for Google)",
     "- Enter the email, continue, enter the password, continue/sign in",
     "- Handle Cloudflare/captcha if it appears (click the checkbox quickly)",
-    "- If ChatGPT asks for a two-factor / authenticator / TOTP code, STOP immediately and reply exactly: NEEDS_2FA",
-    "- Do not invent a code. Do not keep guessing.",
-    "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page), unless 2FA is required",
-    "- Keep trying until it works. Retry on mistakes immediately.",
+    "- If the password is rejected / wrong password / incorrect credentials, STOP and reply exactly: FAILED: wrong password",
+    "- Do not invent a code. Do not keep guessing passwords.",
+    "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page), unless ChatGPT authenticator 2FA is required",
+    "- Keep trying until it works. Retry on UI mistakes immediately.",
     "- When fully signed in, reply with exactly: SIGNED_IN",
-    "- If impossible after many attempts (and not 2FA), reply with: FAILED: <short reason>",
+    "- If impossible after many attempts (and not ChatGPT authenticator 2FA), reply with: FAILED: <short reason>",
   ].join("\n");
 
   const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {
@@ -311,14 +312,15 @@ export async function continueChatGptLoginWith2fa(
   const prompt = [
     "Continue signing into ChatGPT. Move fast.",
     "",
-    `The two-factor / authenticator code is: ${code.trim()}`,
+    `The ChatGPT authenticator / TOTP code is: ${code.trim()}`,
     "",
     "Rules:",
-    "- Enter this code into the 2FA / authenticator field now",
-    "- Submit / continue immediately",
+    "- Enter this code only into a ChatGPT authenticator / 2FA field",
+    "- If you are on a Google screen (Continue, account picker, phone prompt), do NOT treat that as this code — click Continue/Next instead, then reply FAILED: not a chatgpt authenticator prompt",
+    "- Submit / continue immediately after entering the code",
     "- If the code is rejected, reply: FAILED: invalid 2fa code",
     "- When ChatGPT main chat UI is visible, reply exactly: SIGNED_IN",
-    "- Do not ask for another code in prose — if another code is needed reply: NEEDS_2FA",
+    "- Do not ask for another code in prose — if another ChatGPT authenticator code is needed reply: NEEDS_2FA",
   ].join("\n");
 
   const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {

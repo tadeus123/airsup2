@@ -147,6 +147,11 @@ button {
   transition: background 0.18s var(--ease-out);
 }
 
+.oauth-login-form .as-btn-ghost {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
 .as-btn-ghost:hover {
   background: var(--bg-elevated);
   opacity: 1;

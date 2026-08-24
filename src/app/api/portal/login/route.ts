@@ -103,7 +103,9 @@ export async function POST(request: Request) {
         {
           ok: false,
           status: "failed",
-          message: continued.message.slice(0, 220) || "could not finish 2fa",
+          message: /wrong password/i.test(continued.message)
+            ? "wrong password — try again"
+            : continued.message.slice(0, 220) || "could not finish 2fa",
         },
         { status: 400 }
       );
@@ -155,7 +157,9 @@ export async function POST(request: Request) {
       {
         ok: false,
         status: "failed",
-        message: result.message.slice(0, 220) || "could not finish chatgpt login",
+        message: /wrong password/i.test(result.message)
+          ? "wrong password — try again"
+          : result.message.slice(0, 220) || "could not finish chatgpt login",
       },
       { status: 400 }
     );

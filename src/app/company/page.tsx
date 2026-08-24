@@ -11,7 +11,6 @@ export default function CompanyGoLivePage() {
   const [apiKey, setApiKey] = useState("");
   const [password, setPassword] = useState("");
   const [stance, setStance] = useState("");
-  const [contextNotes, setContextNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,7 +22,7 @@ export default function CompanyGoLivePage() {
       const res = await fetch("/api/company", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, domain, apiKey, password, stance, contextNotes }),
+        body: JSON.stringify({ name, domain, apiKey, password, stance }),
       });
       const json = (await res.json()) as {
         token?: string;
@@ -88,12 +87,12 @@ export default function CompanyGoLivePage() {
               </label>
 
               <label className="co-field">
-                <span>OpenAI key</span>
+                <span>API key</span>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-…"
+                  placeholder="sk-… or sk-ant-…"
                   required
                   disabled={busy}
                   autoComplete="off"
@@ -104,23 +103,12 @@ export default function CompanyGoLivePage() {
 
             <fieldset className="co-fieldset">
               <label className="co-field">
-                <span>Stance</span>
+                <span>How to negotiate</span>
                 <textarea
                   value={stance}
                   onChange={(e) => setStance(e.target.value)}
-                  placeholder="How your AI should negotiate"
+                  placeholder="How your AI should negotiate for the company"
                   rows={4}
-                  disabled={busy}
-                />
-              </label>
-
-              <label className="co-field">
-                <span>Notes</span>
-                <textarea
-                  value={contextNotes}
-                  onChange={(e) => setContextNotes(e.target.value)}
-                  placeholder="Optional context"
-                  rows={3}
                   disabled={busy}
                 />
               </label>

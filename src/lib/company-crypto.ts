@@ -103,15 +103,25 @@ export function mintCompanyToken(): { token: string; hash: string; prefix: strin
   };
 }
 
-export function assertOpenAiKey(raw: string): string {
+export function assertCompanyApiKey(raw: string): string {
   const key = raw.trim();
-  if (!key) throw new Error("paste your openai api key");
+  if (!key) throw new Error("paste your openai or claude api key");
   if (key.startsWith("sk-ant-")) {
-    throw new Error("claude keys come later — for now use an openai key (starts with sk-)");
+    if (key.length < 20) throw new Error("claude api key looks too short");
+    return key;
   }
-  if (!key.startsWith("sk-")) {
-    throw new Error("that does not look like an openai api key");
+  if (key.startsWith("sk-")) {
+    if (key.length < 20) throw new Error("openai api key looks too short");
+    return key;
   }
-  if (key.length < 20) throw new Error("api key looks too short");
-  return key;
+  throw new Error("use an openai key (sk-…) or a claude key (sk-ant-…)");
+}
+
+/** @deprecated use assertCompanyApiKey */
+export function assertOpenAiKey(raw: string): string {
+  return assertCompanyApiKey(raw);
+}
+
+export function companyApiProvider(apiKey: string): "openai" | "anthropic" {
+  return apiKey.trim().startsWith("sk-ant-") ? "anthropic" : "openai";
 }

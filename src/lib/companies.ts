@@ -191,6 +191,9 @@ export async function createCompany(input: {
   if (name.length < 2) throw new Error("company name required");
   const domain = assertDomain(input.domain);
   const apiKey = assertOpenAiKey(input.apiKey);
+  const model = apiKey.startsWith("sk-ant-")
+    ? "claude-sonnet-4-20250514"
+    : "gpt-4o";
   const passwordHash = hashCompanyPassword(input.password);
   const minted = mintCompanyToken();
   const apiKeyEnc = encryptCompanyApiKey(apiKey);
@@ -211,7 +214,7 @@ export async function createCompany(input: {
       p_key_last4: keyLast4,
       p_stance: stance,
       p_context_notes: contextNotes,
-      p_model: "gpt-4o",
+      p_model: model,
       p_password_hash: passwordHash,
       p_dashboard_token_enc: dashboardTokenEnc,
     });
@@ -230,7 +233,7 @@ export async function createCompany(input: {
     domain,
     tokenPrefix: minted.prefix,
     keyLast4,
-    model: "gpt-4o",
+    model,
     stance,
     contextNotes,
     apiKeyEnc,
@@ -359,10 +362,14 @@ export async function updateCompany(input: {
   const hash = hashCompanyToken(token);
   let apiKeyEnc: string | null = null;
   let keyLast4: string | null = null;
+  let model: string | null = null;
   if (input.apiKey != null && input.apiKey.trim()) {
     const apiKey = assertOpenAiKey(input.apiKey);
     apiKeyEnc = encryptCompanyApiKey(apiKey);
     keyLast4 = companyKeyLast4(apiKey);
+    model = apiKey.startsWith("sk-ant-")
+      ? "claude-sonnet-4-20250514"
+      : "gpt-4o";
   }
 
   const cfg = supabaseConfig();
@@ -375,6 +382,7 @@ export async function updateCompany(input: {
       p_context_notes: input.contextNotes ?? null,
       p_api_key_enc: apiKeyEnc,
       p_key_last4: keyLast4,
+      p_model: model,
     });
     if (!row?.id) throw new Error("company not found");
     return mapCompanyPublic(row);
@@ -390,6 +398,7 @@ export async function updateCompany(input: {
   if (apiKeyEnc) {
     c.apiKeyEnc = apiKeyEnc;
     c.keyLast4 = keyLast4 || c.keyLast4;
+    if (model) c.model = model;
   }
   c.updatedAt = new Date().toISOString();
   return publicOf(c);

@@ -167,7 +167,7 @@ export default function OauthSetupPage() {
         {phase === "login" && desktop ? (
           <section className="oauth-stage oauth-stage--wide">
             <div className="oauth-copy co-form-card co-form-card--enter">
-              <h1>{finishing ? "Returning to ChatGPT…" : "Sign into ChatGPT"}</h1>
+              <h1>{finishing ? "Returning to ChatGPT…" : "Connect ChatGPT"}</h1>
               {displayName ? <p className="oauth-name">{displayName}</p> : null}
               {!finishing ? (
                 <ChatGptNativeLoginForm
@@ -188,7 +188,7 @@ export default function OauthSetupPage() {
                   disabled={!canFinish}
                   onClick={() => void finish()}
                 >
-                  {loggedIn ? "Continue to ChatGPT" : "Sign in to continue"}
+                  {loggedIn ? "Continue to ChatGPT" : "Connect to continue"}
                 </button>
               ) : (
                 <span className="co-pulse" aria-hidden="true" />
