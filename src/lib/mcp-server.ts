@@ -345,11 +345,11 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Check company domains",
       description:
-        "After web search, pass company domains/URLs. Returns which already have a live Airsup company AI you can talk_to_company.",
+        "Check whether domains/URLs you already found (via your own search) have a live Airsup company endpoint. Not for discovering companies.",
       inputSchema: {
         domains: z
           .array(z.string())
-          .describe("Domains or URLs from web search, e.g. acme.com or https://acme.com"),
+          .describe("Domains or URLs you already found, e.g. acme.com"),
       },
       annotations: readOnlyTool,
       _meta: noauthMeta,
@@ -368,10 +368,6 @@ export function createAirsupMcpServer(me: User): McpServer {
       return jsonText({
         domains: list,
         live_count: live.length,
-        instructions:
-          live.length > 0
-            ? `Talk to live endpoints with talk_to_company(domain=...). Skip domains where live is false — do not pretend you negotiated.`
-            : "None of these domains have an Airsup company endpoint yet. Do not invent conversations.",
       });
     }
   );
@@ -381,7 +377,7 @@ export function createAirsupMcpServer(me: User): McpServer {
     {
       title: "Talk to company AI",
       description:
-        "Real negotiation with a company's Airsup AI (their model, their context). Returns their reply in this call. Pass conversation_id for follow-ups. Do not use talk_to_user or await_reply here.",
+        "Negotiate with a live company Airsup AI. Returns their reply in this call. Pass conversation_id for follow-ups. Not for finding companies; not talk_to_user / await_reply.",
       inputSchema: {
         domain: z.string().describe("Company domain, e.g. acme.com"),
         message: z.string().describe("What you say, negotiating as your user"),
@@ -426,8 +422,6 @@ export function createAirsupMcpServer(me: User): McpServer {
             live: false,
             domain: host,
             error: result.error,
-            instructions:
-              "No company endpoint on this domain. Do not invent a negotiation. Check other domains or tell the user this one is not on Airsup yet.",
           });
         }
         logActivitySafe({
@@ -447,8 +441,6 @@ export function createAirsupMcpServer(me: User): McpServer {
           conversation_id: result.conversationId,
           your_message: result.message,
           company_message: result.reply,
-          next_action: "continue or recap",
-          instructions: `This is a live negotiation with ${result.company.name}. To continue, talk_to_company(domain="${result.company.domain}", message=..., conversation_id="${result.conversationId}"). When done, recap usefully for ${me.username}.`,
         });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);

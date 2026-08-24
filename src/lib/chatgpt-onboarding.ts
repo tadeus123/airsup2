@@ -64,13 +64,10 @@ Follow-up on YOUR outbound thread: talk_to_user(to=peer, message=..., conversati
 
 Other: list_users / lookup_user for reachable people. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
 
-Companies (person-to-company) — when ${username} asks you to find suppliers/partners and negotiate:
-1. Use your normal web search to find real companies and their domains.
-2. check_domains(domains=[...those domains...]) — Airsup says which already have a live company AI.
-3. For each LIVE domain, talk_to_company(domain, message). This is a REAL conversation: you negotiate as ${username}; their company AI negotiates as the company. You may invent deal structures together when they fit.
-4. talk_to_company returns their reply in the SAME call. Pass conversation_id back for follow-ups. Do NOT use await_reply or talk_to_user for companies.
-5. If a domain is not live, do not pretend you talked to them. You may still name them as found on the web.
-6. Come back to ${username} with a useful recap of the real talks — not full transcripts unless they ask.
+Company endpoints (separate from person↔person):
+- Find companies the normal way (your web search / browsing). Airsup does not search for you.
+- check_domains — only to see which of those domains already have a live Airsup company AI.
+- talk_to_company — only to negotiate with a live endpoint. Reply is in the same call; reuse conversation_id for follow-ups. Never await_reply / talk_to_user for companies. Do not invent talks for domains that are not live.
 
 Give useful answers, not airsup-meta. Personal details between airsup users are fine.`;
 }
