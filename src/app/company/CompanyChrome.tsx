@@ -105,25 +105,3 @@ export function CompanyLoginDialog({
     </dialog>
   );
 }
-
-/** @deprecated Prefer BrandNav + CompanyLoginDialog */
-export function CompanyNav({
-  showLogin = false,
-}: {
-  subtitle?: string;
-  showLogin?: boolean;
-}) {
-  const [loginOpen, setLoginOpen] = useState(false);
-  return (
-    <>
-      {showLogin ? (
-        <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
-          Log in
-        </button>
-      ) : null}
-      {showLogin ? (
-        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-      ) : null}
-    </>
-  );
-}

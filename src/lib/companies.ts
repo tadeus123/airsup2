@@ -263,7 +263,7 @@ export async function loginCompany(input: {
     const passwordHash = String(row.passwordHash ?? "");
     const dashboardTokenEnc = String(row.dashboardTokenEnc ?? "");
     if (!passwordHash || !dashboardTokenEnc) {
-      throw new Error("this company has no password login yet — use your dashboard bookmark");
+      throw new Error("this company has no password set — go live again with a password");
     }
     if (!verifyCompanyPassword(input.password, passwordHash)) {
       throw new Error("wrong domain or password");
@@ -288,7 +288,7 @@ export async function loginCompany(input: {
   const c = id ? memory.byId.get(id) : undefined;
   if (!c) throw new Error("no company live on that domain");
   if (!c.passwordHash || !c.dashboardTokenEnc) {
-    throw new Error("this company has no password login yet — use your dashboard bookmark");
+    throw new Error("this company has no password set — go live again with a password");
   }
   if (!verifyCompanyPassword(input.password, c.passwordHash)) {
     throw new Error("wrong domain or password");
