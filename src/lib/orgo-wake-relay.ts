@@ -1,4 +1,4 @@
-import { orgoSendChat } from "./orgo-actions";
+import { getChatGptAuthState, orgoSendChat } from "./orgo-actions";
 import type { RelayStepReporter } from "./orgo-relay-progress";
 import { relayProgressMessage } from "./orgo-relay-progress";
 
@@ -86,6 +86,15 @@ export async function wakePeerViaOrgo(
   const wakeText = buildWakePrompt(input.fromUsername, input.messageId);
 
   await report?.(relayProgressMessage({ peer, phase: "new_chat" }), 30);
+  const auth = await getChatGptAuthState(computerId).catch(() => ({
+    loggedIn: false,
+    url: "",
+  }));
+  if (auth.url && /\/auth\/|\/log-in|\/login/i.test(auth.url)) {
+    throw new Error(
+      `${peer}'s Orgo ChatGPT is on the login page — reconnect/sign-in before wake can deliver`
+    );
+  }
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 55);
   await orgoSendChat(computerId, wakeText, true);
 

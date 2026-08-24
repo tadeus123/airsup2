@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Airsup ChatGPT sender for Orgo VMs — Chrome DevTools Protocol (DOM), not pixels.
- * Zero npm deps. Args: node airsup-chatgpt-send.js <textB64> [newChat=1|0]
+ * Zero npm deps. Args: node airsup-chatgpt-send.js <textB64> [newChat=1|0] [send|verify]
  *
- * Chrome refuses --remote-debugging-port on the default user-data-dir, so we use
- * a seeded copy at PROFILE_CDP (login cookies copied from the normal profile).
+ * Attaches to the same Chrome the human sees when possible (default profile + CDP).
+ * Success requires the wake marker to appear in ChatGPT's DOM — no blind "SENT".
  */
 "use strict";
 
@@ -16,11 +16,27 @@ const { EventEmitter } = require("events");
 const { spawn, execSync } = require("child_process");
 
 const CDP_PORT = 9222;
-const PROFILE_SRC = "/root/.config/google-chrome";
-const PROFILE_CDP = "/root/.config/google-chrome-airsup";
+const PROFILE_CDP = "/tmp/google-chrome-airsup";
 const CHROME_BIN = fs.existsSync("/opt/google/chrome/chrome")
   ? "/opt/google/chrome/chrome"
   : "google-chrome";
+
+function homeDir() {
+  return process.env.HOME || "/home/orgo";
+}
+
+/** Login Chrome uses the default profile; prefer that so VNC and CDP are the same window. */
+function defaultChromeProfile() {
+  const candidates = [
+    `${homeDir()}/.config/google-chrome`,
+    "/home/orgo/.config/google-chrome",
+    "/root/.config/google-chrome",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidates[0];
+}
 
 class MinimalWebSocket extends EventEmitter {
   constructor(url) {
@@ -194,36 +210,9 @@ async function cdpReady() {
   }
 }
 
-function seedProfile() {
-  if (!fs.existsSync(PROFILE_SRC)) {
-    throw new Error("missing chrome profile at " + PROFILE_SRC);
-  }
-  // Refresh seed when missing or older than 7 days so login stays usable.
-  const marker = PROFILE_CDP + "/.airsup_seeded";
-  let need = !fs.existsSync(marker);
-  if (!need) {
-    try {
-      const age = Date.now() - fs.statSync(marker).mtimeMs;
-      if (age > 7 * 24 * 3600 * 1000) need = true;
-    } catch {
-      need = true;
-    }
-  }
-  if (!need) return { seeded: false };
-  sh(`rm -rf '${PROFILE_CDP}'`);
-  sh(`cp -a '${PROFILE_SRC}' '${PROFILE_CDP}'`);
-  sh(
-    `rm -f '${PROFILE_CDP}/SingletonLock' '${PROFILE_CDP}/SingletonSocket' '${PROFILE_CDP}/SingletonCookie'`
-  );
-  fs.writeFileSync(marker, String(Date.now()));
-  clearCrashRestoreBubble();
-  return { seeded: true };
-}
-
-/** Stop Chrome's "Restore pages?" bubble from stealing focus. */
-function clearCrashRestoreBubble() {
+function clearCrashRestoreBubble(profileDir) {
   try {
-    const prefsPath = PROFILE_CDP + "/Default/Preferences";
+    const prefsPath = profileDir + "/Default/Preferences";
     if (!fs.existsSync(prefsPath)) return;
     const prefs = JSON.parse(fs.readFileSync(prefsPath, "utf8"));
     prefs.profile = prefs.profile || {};
@@ -238,35 +227,64 @@ function killChrome() {
   sh("pkill -9 -f 'google-chrome' || true");
 }
 
-function launchChromeCdp() {
-  const display = displayEnv();
+function unlockProfile(profileDir) {
   sh(
-    `rm -f '${PROFILE_CDP}/SingletonLock' '${PROFILE_CDP}/SingletonSocket' '${PROFILE_CDP}/SingletonCookie'`
+    `rm -f '${profileDir}/SingletonLock' '${profileDir}/SingletonSocket' '${profileDir}/SingletonCookie'`
   );
-  clearCrashRestoreBubble();
-  // Launch via setsid so Orgo bash teardown does not kill Chrome.
+  clearCrashRestoreBubble(profileDir);
+}
+
+/** Prefer default profile (same as OAuth login / VNC). Seeded copy only as last resort. */
+function launchChromeCdp(opts = {}) {
+  const display = displayEnv();
+  const useCopy = !!opts.useCopy;
+  const profile = useCopy ? PROFILE_CDP : defaultChromeProfile();
+  if (useCopy) {
+    const src = defaultChromeProfile();
+    if (!fs.existsSync(src)) throw new Error("missing chrome profile at " + src);
+    sh(`rm -rf '${PROFILE_CDP}'`);
+    sh(`cp -a '${src}' '${PROFILE_CDP}'`);
+  }
+  unlockProfile(profile);
+  const dataDirFlag = useCopy ? `--user-data-dir=${PROFILE_CDP} ` : "";
+  // Match oauth provision: same visible Chrome the human sees in Orgo.
   const cmd =
     `setsid env DISPLAY=${display} ${CHROME_BIN} ` +
     `--no-sandbox --disable-gpu --disable-dev-shm-usage ` +
     `--no-first-run --no-default-browser-check ` +
     `--hide-crash-restore-bubble --disable-session-crashed-bubble ` +
     `--remote-debugging-port=${CDP_PORT} --remote-allow-origins=* ` +
-    `--user-data-dir=${PROFILE_CDP} --window-size=1280,720 ` +
+    `${dataDirFlag}--window-size=1280,720 --start-maximized ` +
     `https://chatgpt.com/ >/tmp/airsup-chrome.log 2>&1 < /dev/null &`;
   execSync(cmd, { stdio: "ignore", shell: "/bin/bash" });
+  return { profile, useCopy };
+}
+
+async function waitCdpUp(ms = 20000) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await cdpReady()) return true;
+    await sleep(400);
+  }
+  return false;
 }
 
 async function ensureChromeCdp() {
-  if (await cdpReady()) return { restarted: false, seeded: false };
+  if (await cdpReady()) return { restarted: false, mode: "attach" };
 
-  const seed = seedProfile();
   killChrome();
   await sleep(1000);
-  launchChromeCdp();
+  let launched = launchChromeCdp({ useCopy: false });
+  if (await waitCdpUp(20000)) {
+    return { restarted: true, mode: "default_profile", profile: launched.profile };
+  }
 
-  for (let i = 0; i < 50; i++) {
-    await sleep(400);
-    if (await cdpReady()) return { restarted: true, ...seed };
+  // Default profile sometimes refuses a second CDP bind — seeded copy fallback.
+  killChrome();
+  await sleep(800);
+  launched = launchChromeCdp({ useCopy: true });
+  if (await waitCdpUp(20000)) {
+    return { restarted: true, mode: "seeded_copy", profile: launched.profile };
   }
 
   let log = "";
@@ -361,8 +379,88 @@ function connectWs(wsUrl) {
   });
 }
 
-function pageSendExpression(text, newChat) {
-  const payload = JSON.stringify({ text, newChat: !!newChat });
+function wakeMarker(text) {
+  const t = String(text || "").trim();
+  if (/@airsup/i.test(t)) {
+    const m = /@airsup[^\n]{0,48}/i.exec(t);
+    return (m ? m[0] : "@airsup").trim();
+  }
+  return t.slice(0, Math.min(48, t.length));
+}
+
+function isNavLossError(msg) {
+  return /Inspected target navigated or closed|execution context|Cannot find default|session closed|WebSocket/i.test(
+    String(msg || "")
+  );
+}
+
+async function attachPage() {
+  let pages = await listPages();
+  if (!pages.length) {
+    await sleep(1500);
+    pages = await listPages();
+  }
+  const page = pickChatGptPage(pages);
+  const { ws, send } = await connectWs(page.webSocketDebuggerUrl);
+  await send("Runtime.enable");
+  await send("Page.enable");
+  return { ws, send, page };
+}
+
+async function evaluateValue(send, expression) {
+  const result = await send("Runtime.evaluate", {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result?.result?.subtype === "error") {
+    throw new Error(result.result.description || "evaluate error");
+  }
+  return result?.result?.value;
+}
+
+/** Navigate / new-chat only — may destroy the execution context. */
+function pagePrepareExpression(newChat) {
+  const payload = JSON.stringify({ newChat: !!newChat });
+  return `(() => {
+    const cfg = ${payload};
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function findNewChat() {
+      return (
+        document.querySelector('[data-testid="create-new-chat-button"]') ||
+        document.querySelector('a[href="/"]') ||
+        Array.from(document.querySelectorAll("a,button")).find((el) =>
+          /^\\s*new chat\\s*$/i.test((el.textContent || "").trim())
+        )
+      );
+    }
+    return (async () => {
+      if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.pathname + location.href)) {
+        return { ok: false, error: "not_logged_in", href: location.href };
+      }
+      if (!/chatgpt\\.com|openai\\.com/i.test(location.hostname)) {
+        location.href = "https://chatgpt.com/";
+        return { ok: true, navigated: true, href: "https://chatgpt.com/" };
+      }
+      if (cfg.newChat) {
+        const nb = findNewChat();
+        if (nb) {
+          nb.click();
+          await sleep(400);
+          return { ok: true, clickedNewChat: true, href: location.href };
+        }
+        if (location.pathname && location.pathname !== "/" && !/^\\/?$/.test(location.pathname)) {
+          location.href = "https://chatgpt.com/";
+          return { ok: true, navigated: true, href: "https://chatgpt.com/" };
+        }
+      }
+      return { ok: true, ready: true, href: location.href };
+    })();
+  })()`;
+}
+
+function pageInjectExpression(text, marker) {
+  const payload = JSON.stringify({ text, marker });
   return `(() => {
     const cfg = ${payload};
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -388,23 +486,13 @@ function pageSendExpression(text, newChat) {
       );
     }
 
-    function findNewChat() {
-      return (
-        document.querySelector('[data-testid="create-new-chat-button"]') ||
-        document.querySelector('a[href="/"]') ||
-        Array.from(document.querySelectorAll("a,button")).find((el) =>
-          /^\\s*new chat\\s*$/i.test((el.textContent || "").trim())
-        )
-      );
-    }
-
     function setComposerText(el, text) {
       el.focus();
       try {
         document.execCommand("selectAll", false, null);
         document.execCommand("insertText", false, text);
       } catch {}
-      const got = (el.innerText || el.textContent || "").trim();
+      let got = (el.innerText || el.textContent || "").trim();
       if (got.includes(text.slice(0, Math.min(32, text.length)))) return true;
       try {
         el.textContent = "";
@@ -415,28 +503,25 @@ function pageSendExpression(text, newChat) {
           new InputEvent("input", { bubbles: true, cancelable: true, inputType: "insertText", data: text })
         );
       } catch {}
-      return (el.innerText || el.textContent || "").includes(text.slice(0, Math.min(24, text.length)));
+      got = (el.innerText || el.textContent || "").trim();
+      return got.includes(text.slice(0, Math.min(24, text.length)));
+    }
+
+    function markerInUserTurns(marker) {
+      const nodes = Array.from(
+        document.querySelectorAll('[data-message-author-role="user"], [data-testid*="user"]')
+      );
+      if (nodes.some((el) => (el.innerText || "").includes(marker))) return true;
+      return (document.body && document.body.innerText || "").includes(marker);
     }
 
     return (async () => {
-      if (!/chatgpt\\.com|openai\\.com/i.test(location.hostname)) {
-        location.href = "https://chatgpt.com/";
-        await sleep(2500);
-      }
-
-      if (cfg.newChat) {
-        const nb = findNewChat();
-        if (nb) {
-          nb.click();
-          await sleep(900);
-        } else if (location.pathname && location.pathname !== "/" && !/^\\/?$/.test(location.pathname)) {
-          location.href = "https://chatgpt.com/";
-          await sleep(2500);
-        }
+      if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.href)) {
+        return { ok: false, error: "not_logged_in", href: location.href };
       }
 
       let composer = null;
-      for (let i = 0; i < 24; i++) {
+      for (let i = 0; i < 32; i++) {
         composer = findComposer();
         if (composer) break;
         await sleep(250);
@@ -447,92 +532,146 @@ function pageSendExpression(text, newChat) {
         return { ok: false, error: "set_text_failed", sample: (composer.innerText || "").slice(0, 80) };
       }
 
-      await sleep(250);
-      const send = findSend();
-      if (send && !send.disabled) {
-        send.click();
-        await sleep(200);
-        return { ok: true, method: "dom_click_send", href: location.href };
+      await sleep(200);
+      const sendBtn = findSend();
+      let method = "dom_enter";
+      if (sendBtn && !sendBtn.disabled) {
+        sendBtn.click();
+        method = "dom_click_send";
+      } else {
+        composer.focus();
+        composer.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
+        );
+        composer.dispatchEvent(
+          new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
+        );
       }
 
-      composer.focus();
-      composer.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
-      );
-      composer.dispatchEvent(
-        new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
-      );
-      return { ok: true, method: "dom_enter", sendDisabled: !!(send && send.disabled), href: location.href };
+      for (let i = 0; i < 20; i++) {
+        await sleep(300);
+        if (markerInUserTurns(cfg.marker)) {
+          const still = findComposer();
+          const composerStill = still
+            ? (still.innerText || still.textContent || "").includes(cfg.marker.slice(0, 20))
+            : false;
+          // Prefer: visible in transcript. Accept if composer emptied after send.
+          if (!composerStill || i >= 4) {
+            return {
+              ok: true,
+              method,
+              verified: true,
+              href: location.href,
+              composerCleared: !composerStill,
+            };
+          }
+        }
+      }
+
+      return {
+        ok: false,
+        error: "not_verified_in_chat",
+        method,
+        href: location.href,
+        sample: (document.body && document.body.innerText || "").slice(0, 120),
+      };
     })();
   })()`;
 }
 
+function pageVerifyExpression(marker) {
+  const payload = JSON.stringify({ marker });
+  return `(() => {
+    const cfg = ${payload};
+    const nodes = Array.from(
+      document.querySelectorAll('[data-message-author-role="user"], [data-testid*="user"]')
+    );
+    const inTurns = nodes.some((el) => (el.innerText || "").includes(cfg.marker));
+    const inBody = (document.body && document.body.innerText || "").includes(cfg.marker);
+    return { ok: inTurns || inBody, inTurns, inBody, href: location.href };
+  })()`;
+}
+
 async function sendViaCdp(text, newChat) {
-  let pages = await listPages();
-  if (!pages.length) {
-    await sleep(1500);
-    pages = await listPages();
-  }
-  let page = pickChatGptPage(pages);
-  let { ws, send } = await connectWs(page.webSocketDebuggerUrl);
-  await send("Runtime.enable");
-  await send("Page.enable");
+  const marker = wakeMarker(text);
+  let session = await attachPage();
+  let { ws, send, page } = session;
 
-  if (!/chatgpt\.com|openai\.com/i.test(page.url || "")) {
-    await send("Page.navigate", { url: "https://chatgpt.com/" });
-    await sleep(2000);
-    await waitForExecutionContext(send);
-  } else {
-    await waitForExecutionContext(send);
-  }
-
-  let result;
-  let value;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const reconnect = async (waitMs = 1200) => {
     try {
-      result = await send("Runtime.evaluate", {
-        expression: pageSendExpression(text, newChat),
-        awaitPromise: true,
-        returnByValue: true,
-      });
-      value = result?.result?.value;
-      if (result?.result?.subtype === "error") {
-        throw new Error(result.result.description || "evaluate error");
-      }
-      if (value && value.ok) break;
-      if (value && value.error === "composer_not_found") {
-        await sleep(1200);
-        continue;
-      }
-      break;
-    } catch (e) {
-      const msg = String(e && e.message ? e.message : e);
-      if (/execution context|Cannot find default/i.test(msg) && attempt < 2) {
-        try {
-          ws.close();
-        } catch {}
-        await sleep(1000);
-        pages = await listPages();
-        page = pickChatGptPage(pages);
-        ({ ws, send } = await connectWs(page.webSocketDebuggerUrl));
-        await send("Runtime.enable");
-        await send("Page.enable");
-        await waitForExecutionContext(send);
-        continue;
-      }
-      throw e;
-    }
-  }
+      ws.close();
+    } catch {}
+    await sleep(waitMs);
+    session = await attachPage();
+    ws = session.ws;
+    send = session.send;
+    page = session.page;
+    await waitForExecutionContext(send);
+  };
 
   try {
-    ws.close();
-  } catch {}
-  return value;
+    if (!/chatgpt\.com|openai\.com/i.test(page.url || "")) {
+      try {
+        await send("Page.navigate", { url: "https://chatgpt.com/" });
+      } catch {}
+      await reconnect(2200);
+    } else {
+      await waitForExecutionContext(send);
+    }
+
+    if (newChat) {
+      try {
+        const prep = await evaluateValue(send, pagePrepareExpression(true));
+        if (prep && prep.error === "not_logged_in") return prep;
+      } catch (e) {
+        if (!isNavLossError(e.message)) throw e;
+      }
+      await reconnect(1600);
+    }
+
+    let value = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        value = await evaluateValue(send, pageInjectExpression(text, marker));
+        if (value && value.ok) break;
+        if (value && (value.error === "composer_not_found" || value.error === "not_verified_in_chat")) {
+          await reconnect(1000 + attempt * 400);
+          continue;
+        }
+        if (value && value.error === "not_logged_in") break;
+        break;
+      } catch (e) {
+        if (isNavLossError(e.message) && attempt < 3) {
+          await reconnect(1000 + attempt * 500);
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    if (value && value.ok) {
+      try {
+        const v = await evaluateValue(send, pageVerifyExpression(marker));
+        if (v && !v.ok) {
+          return { ok: false, error: "post_verify_failed", href: v.href, prior: value };
+        }
+      } catch {
+        /* inject already verified once */
+      }
+    }
+
+    return value || { ok: false, error: "no_result" };
+  } finally {
+    try {
+      ws.close();
+    } catch {}
+  }
 }
 
 async function main() {
   const textB64 = process.argv[2];
   const newChat = (process.argv[3] || "1") !== "0";
+  const mode = (process.argv[4] || "send").trim(); // send | verify
   if (!textB64) {
     console.log(JSON.stringify({ ok: false, error: "missing_text_b64" }));
     process.exit(2);
@@ -544,8 +683,21 @@ async function main() {
   }
 
   const ensure = await ensureChromeCdp();
-  const value = await sendViaCdp(text, newChat);
-  const out = { ...(value || { ok: false, error: "no_result" }), ensure };
+  let value;
+  if (mode === "verify") {
+    const session = await attachPage();
+    try {
+      await waitForExecutionContext(session.send);
+      value = await evaluateValue(session.send, pageVerifyExpression(wakeMarker(text)));
+    } finally {
+      try {
+        session.ws.close();
+      } catch {}
+    }
+  } else {
+    value = await sendViaCdp(text, newChat);
+  }
+  const out = { ...(value || { ok: false, error: "no_result" }), ensure, marker: wakeMarker(text) };
   console.log(JSON.stringify(out));
   process.exit(out.ok ? 0 : 1);
 }

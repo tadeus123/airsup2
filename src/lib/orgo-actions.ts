@@ -74,12 +74,22 @@ PY`
   }
 }
 
-function parseCdpResult(out: string): { ok?: boolean; error?: string } | null {
+function parseCdpResult(out: string): {
+  ok?: boolean;
+  error?: string;
+  verified?: boolean;
+  method?: string;
+} | null {
   const start = out.indexOf("{");
   const end = out.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
   try {
-    return JSON.parse(out.slice(start, end + 1)) as { ok?: boolean; error?: string };
+    return JSON.parse(out.slice(start, end + 1)) as {
+      ok?: boolean;
+      error?: string;
+      verified?: boolean;
+      method?: string;
+    };
   } catch {
     return null;
   }
@@ -107,24 +117,57 @@ export async function getChatGptAuthState(
   }
 }
 
-async function orgoSendChatViaCdp(
+async function runVmSend(
   computerId: string,
   text: string,
-  newChat: boolean
-): Promise<void> {
+  newChat: boolean,
+  mode: "send" | "verify" = "send"
+): Promise<{ ok: boolean; error?: string; raw: string; parsed: ReturnType<typeof parseCdpResult> }> {
   await deployVmSendScript(computerId);
   const textB64 = Buffer.from(text, "utf8").toString("base64");
   const flag = newChat ? "1" : "0";
   const out = await orgoBash(
     computerId,
-    `node ${VM_SEND_PATH} ${textB64} ${flag}`
+    `node ${VM_SEND_PATH} ${textB64} ${flag} ${mode}`
   );
   const parsed = parseCdpResult(out);
-  if (!parsed?.ok) {
-    throw new Error(`CDP send failed: ${(parsed?.error || out).slice(0, 240)}`);
-  }
+  return {
+    ok: !!parsed?.ok,
+    error: parsed?.error || (!parsed ? out.slice(0, 240) : undefined),
+    raw: out,
+    parsed,
+  };
 }
 
+async function orgoSendChatViaCdp(
+  computerId: string,
+  text: string,
+  newChat: boolean
+): Promise<void> {
+  const first = await runVmSend(computerId, text, newChat, "send");
+  if (first.ok) return;
+
+  // One hard Chrome recycle then retry — fixes stale CDP / navigated targets.
+  await orgoBash(
+    computerId,
+    `${DISPLAY_SETUP}
+pkill -9 -f '/opt/google/chrome/chrome' 2>/dev/null || true
+pkill -9 -f 'google-chrome' 2>/dev/null || true
+sleep 1
+echo KILLED`
+  );
+  await localSleep(1500);
+  const second = await runVmSend(computerId, text, newChat, "send");
+  if (second.ok) return;
+  throw new Error(
+    `CDP send failed: ${(second.error || first.error || "unknown").slice(0, 240)}`
+  );
+}
+
+/**
+ * Blind keystrokes only — must be verified via CDP afterwards.
+ * Never treat this alone as delivery success.
+ */
 async function orgoSendChatViaXdotool(
   computerId: string,
   text: string,
@@ -134,7 +177,7 @@ async function orgoSendChatViaXdotool(
   const spot = newChat ? { x: 720, y: 400 } : { x: 720, y: 650 };
   const openNew = newChat
     ? `xdotool key --clearmodifiers ctrl+shift+o
-sleep 0.6
+sleep 1.0
 `
     : "";
 
@@ -146,14 +189,17 @@ command -v xdotool >/dev/null || { echo "xdotool missing"; exit 1; }
 f=/tmp/airsup-send-clip.$$
 echo '${b64}' | base64 -d > "$f" || exit 1
 xclip -selection clipboard -i "$f" >/dev/null 2>&1 || xsel --clipboard --input < "$f"
+# Focus Chrome if present
+wid=$(xdotool search --class 'chrome|Chrome|google-chrome' 2>/dev/null | head -1 || true)
+if [ -n "$wid" ]; then xdotool windowactivate --sync "$wid" 2>/dev/null || true; fi
 xdotool keyup Shift_L Shift_R Control_L Control_R Alt_L Alt_R Meta_L Meta_R 2>/dev/null || true
 ${openNew}xdotool mousemove ${spot.x} ${spot.y} click 1
-sleep 0.15
+sleep 0.25
 xdotool key --clearmodifiers ctrl+a
 xdotool key --clearmodifiers ctrl+v
-sleep 0.35
+sleep 0.45
 xdotool key --clearmodifiers Return
-sleep 0.15
+sleep 0.8
 rm -f "$f"
 echo SENT`
   );
@@ -163,7 +209,12 @@ echo SENT`
   }
 }
 
-/** Send text into ChatGPT on an Orgo desktop (CDP preferred, xdotool fallback). */
+async function verifyWakeInChat(computerId: string, text: string): Promise<boolean> {
+  const v = await runVmSend(computerId, text, false, "verify");
+  return v.ok;
+}
+
+/** Send text into ChatGPT on an Orgo desktop. Success only if DOM verifies the wake. */
 export async function orgoSendChat(
   computerId: string,
   text: string,
@@ -175,9 +226,10 @@ export async function orgoSendChat(
       kind: "orgo_send",
       ok: true,
       computerId,
-      summary: `Orgo CDP send ok (newChat=${newChat})`,
-      detail: { method: "cdp", newChat, textLen: text.length },
+      summary: `Orgo CDP send verified (newChat=${newChat})`,
+      detail: { method: "cdp", newChat, textLen: text.length, verified: true },
     });
+    return;
   } catch (cdpErr) {
     const cdpMsg = cdpErr instanceof Error ? cdpErr.message : String(cdpErr);
     logActivitySafe({
@@ -185,35 +237,52 @@ export async function orgoSendChat(
       ok: false,
       severity: "warn",
       computerId,
-      summary: `Orgo CDP failed, trying xdotool: ${cdpMsg.slice(0, 120)}`,
+      summary: `Orgo CDP failed, trying xdotool+verify: ${cdpMsg.slice(0, 120)}`,
       detail: { method: "cdp", error: cdpMsg.slice(0, 240), newChat },
     });
-    try {
-      await orgoSendChatViaXdotool(computerId, text, newChat);
+  }
+
+  try {
+    await orgoSendChatViaXdotool(computerId, text, newChat);
+    await localSleep(800);
+    const verified = await verifyWakeInChat(computerId, text);
+    if (!verified) {
+      // Last attempt: full CDP send after focusing UI
+      await orgoSendChatViaCdp(computerId, text, newChat);
       logActivitySafe({
         kind: "orgo_send",
         ok: true,
         severity: "warn",
         computerId,
-        summary: `Orgo xdotool fallback send ok (newChat=${newChat})`,
-        detail: { method: "xdotool_fallback", newChat, textLen: text.length },
+        summary: `Orgo send recovered via CDP after xdotool (newChat=${newChat})`,
+        detail: { method: "xdotool_then_cdp", newChat, textLen: text.length, verified: true },
       });
-    } catch (xdoErr) {
-      const xdoMsg = xdoErr instanceof Error ? xdoErr.message : String(xdoErr);
-      logActivitySafe({
-        kind: "orgo_send",
-        ok: false,
-        computerId,
-        summary: `Orgo send failed (cdp+xdotool): ${xdoMsg.slice(0, 120)}`,
-        detail: {
-          method: "both_failed",
-          cdpError: cdpMsg.slice(0, 240),
-          xdotoolError: xdoMsg.slice(0, 240),
-          newChat,
-        },
-      });
-      throw xdoErr;
+      return;
     }
+    logActivitySafe({
+      kind: "orgo_send",
+      ok: true,
+      severity: "warn",
+      computerId,
+      summary: `Orgo xdotool send verified in ChatGPT (newChat=${newChat})`,
+      detail: { method: "xdotool_verified", newChat, textLen: text.length, verified: true },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logActivitySafe({
+      kind: "orgo_send",
+      ok: false,
+      computerId,
+      summary: `Orgo send failed (unverified): ${msg.slice(0, 120)}`,
+      detail: {
+        method: "both_failed",
+        error: msg.slice(0, 240),
+        newChat,
+      },
+    });
+    throw new Error(
+      `Could not inject into ChatGPT on Orgo (message stored, wake not delivered): ${msg.slice(0, 180)}`
+    );
   }
 }
 
