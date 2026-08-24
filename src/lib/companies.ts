@@ -15,7 +15,7 @@ async function companyRpc<T>(fn: string, body: Record<string, unknown>): Promise
     const msg = e instanceof Error ? e.message : String(e);
     if (/could not find the function|PGRST202|schema cache/i.test(msg)) {
       throw new Error(
-        "company tables are not on supabase yet — run supabase/migrations/012_companies.sql"
+        "company RPCs missing on this Supabase project — apply supabase/migrations/012_companies.sql to the same DB as SUPABASE_URL (airsup2)"
       );
     }
     throw e;
