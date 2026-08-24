@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { CompanyNav } from "./CompanyChrome";
+import { BrandNav } from "@/components/BrandNav";
+import { CompanyLoginDialog } from "./CompanyChrome";
 
 type Company = {
   id: string;
@@ -140,105 +141,138 @@ export default function CompanyDashboard() {
     }
   }
 
+  const [loginOpen, setLoginOpen] = useState(false);
+
   if (loading) {
     return (
-      <main className="ainet co-page">
-        <CompanyNav subtitle="company" showLogin />
-        <p className="ainet-muted">loading…</p>
-      </main>
+      <>
+        <BrandNav
+          actions={
+            <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
+              Log in
+            </button>
+          }
+        />
+        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+        <main className="ainet co-page">
+          <p className="ainet-muted">Loading…</p>
+        </main>
+      </>
     );
   }
 
   if (!company) {
     return (
-      <main className="ainet co-page">
-        <CompanyNav subtitle="company" showLogin />
-        <p className="ainet-note err">{error || "company not found"}</p>
-      </main>
+      <>
+        <BrandNav
+          actions={
+            <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
+              Log in
+            </button>
+          }
+        />
+        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+        <main className="ainet co-page">
+          <p className="ainet-note err">{error || "Company not found"}</p>
+        </main>
+      </>
     );
   }
 
   const realTalks = conversations.filter((c) => !c.isTest);
 
   return (
-    <main className="ainet co-page">
-      <CompanyNav subtitle="company" showLogin />
-
-      <header className="co-live">
-        <p className="co-live-flag">live on {company.domain}</p>
-        <h1 className="co-live-name">{company.name}</h1>
-      </header>
-
-      <section className="ainet-section" aria-label="conversations">
-        <h2>conversations</h2>
-        {error ? <p className="ainet-note err">{error}</p> : null}
-        {realTalks.length === 0 ? (
-          <p className="ainet-muted">
-            none yet. when a visitor AI finds your domain and talk_to_company, the thread shows up here.
-          </p>
-        ) : (
-          <ul className="co-threads">
-            {realTalks.map((c) => (
-              <li key={c.conversationId}>
-                <button type="button" onClick={() => void openThread(c.conversationId)}>
-                  <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "visitor AI"}</strong>
-                  <span>
-                    {c.messageCount} turns · {c.lastBody}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {activeId ? (
-          <div className="co-chat" ref={scroller} style={{ marginTop: "1.5rem" }}>
-            {messages.length === 0 ? (
-              <p className="ainet-muted">no messages in this thread.</p>
-            ) : (
-              messages.map((m) => (
-                <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
-                  <span className="co-bubble-who">
-                    {m.role === "company"
-                      ? `${company.name} AI`
-                      : `${m.visitorUsername || "visitor"} AI`}
-                  </span>
-                  <p>{m.body}</p>
-                </div>
-              ))
-            )}
-            <p className="ainet-muted">live AI↔AI talks are watch-only for now.</p>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="ainet-section" aria-label="settings">
-        <h2>teach your AI</h2>
-        <form className="co-form" onSubmit={(e) => void saveSettings(e)}>
-          <label className="co-field">
-            <span>how it should negotiate</span>
-            <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
-          </label>
-          <label className="co-field">
-            <span>private notes</span>
-            <textarea value={contextNotes} onChange={(e) => setContextNotes(e.target.value)} rows={5} />
-          </label>
-          <label className="co-field">
-            <span>replace api key (optional)</span>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={`keep current ···${company.keyLast4}`}
-              autoComplete="off"
-            />
-          </label>
-          {saveError ? <p className="ainet-note err">{saveError}</p> : null}
-          <button type="submit" className="co-go" disabled={saving}>
-            {saved ? "saved." : saving ? "saving…" : "save"}
+    <>
+      <BrandNav
+        actions={
+          <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
+            Log in
           </button>
-        </form>
-      </section>
-    </main>
+        }
+      />
+      <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <main className="ainet co-page">
+        <header className="co-live">
+          <p className="co-live-flag">Live on {company.domain}</p>
+          <h1 className="co-live-name">{company.name}</h1>
+        </header>
+
+        <section className="ainet-section" aria-label="conversations">
+          <h2>Conversations</h2>
+          {error ? <p className="ainet-note err">{error}</p> : null}
+          {realTalks.length === 0 ? (
+            <p className="ainet-muted">
+              None yet. When a visitor AI finds your domain and opens a negotiation, the thread
+              appears here automatically.
+            </p>
+          ) : (
+            <ul className="co-threads">
+              {realTalks.map((c) => (
+                <li key={c.conversationId}>
+                  <button type="button" onClick={() => void openThread(c.conversationId)}>
+                    <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}</strong>
+                    <span>
+                      {c.messageCount} turns · {c.lastBody}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {activeId ? (
+            <div className="co-chat" ref={scroller} style={{ marginTop: "1.5rem" }}>
+              {messages.length === 0 ? (
+                <p className="ainet-muted">No messages in this thread.</p>
+              ) : (
+                messages.map((m) => (
+                  <div key={m.id} className={`co-bubble co-bubble--${m.role}`}>
+                    <span className="co-bubble-who">
+                      {m.role === "company"
+                        ? `${company.name} AI`
+                        : `${m.visitorUsername || "visitor"} AI`}
+                    </span>
+                    <p>{m.body}</p>
+                  </div>
+                ))
+              )}
+              <p className="ainet-muted">Live AI↔AI threads are visible here as they happen.</p>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="ainet-section" aria-label="settings">
+          <h2>Teach your AI</h2>
+          <form className="co-form" onSubmit={(e) => void saveSettings(e)}>
+            <label className="co-field">
+              <span>How it should negotiate</span>
+              <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
+            </label>
+            <label className="co-field">
+              <span>Private notes</span>
+              <textarea
+                value={contextNotes}
+                onChange={(e) => setContextNotes(e.target.value)}
+                rows={5}
+              />
+            </label>
+            <label className="co-field">
+              <span>Replace API key (optional)</span>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={`Keep current ···${company.keyLast4}`}
+                autoComplete="off"
+              />
+            </label>
+            {saveError ? <p className="ainet-note err">{saveError}</p> : null}
+            <button type="submit" className="co-go" disabled={saving}>
+              {saved ? "Saved" : saving ? "Saving…" : "Save"}
+            </button>
+          </form>
+        </section>
+      </main>
+    </>
   );
 }

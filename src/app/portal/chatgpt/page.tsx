@@ -95,32 +95,28 @@ export default function PortalChatGptPage() {
 
       <header className="portal-connect-header">
         <Link href="/portal" className="portal-connect-back">
-          ← back
+          ← Back
         </Link>
       </header>
 
       {phase === "loading" ? (
         <section className="portal-connect-body">
           <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">preparing</p>
-            <h1 className="portal-connect-title">your chatgpt</h1>
-            <div className="portal-gate-rule" aria-hidden="true" />
+            <p className="portal-connect-eyebrow">Preparing</p>
+            <h1 className="portal-connect-title">Your ChatGPT session</h1>
           </div>
           <div className="portal-connect-frame portal-connect-frame--loading">
             <p className="portal-connect-frame-status">{loadingText}</p>
           </div>
-          <p className="portal-connect-note">
-            preparing your private computer…
-          </p>
+          <p className="portal-connect-note">Starting a private computer for this session…</p>
         </section>
       ) : null}
 
       {phase === "error" ? (
         <section className="portal-connect-body">
           <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">could not open</p>
-            <h1 className="portal-connect-title">the veil</h1>
-            <div className="portal-gate-rule" aria-hidden="true" />
+            <p className="portal-connect-eyebrow">Something went wrong</p>
+            <h1 className="portal-connect-title">Could not open ChatGPT</h1>
           </div>
           <div className="portal-connect-frame portal-connect-frame--failed">
             <p className="portal-connect-frame-error">{error}</p>
@@ -130,7 +126,7 @@ export default function PortalChatGptPage() {
             className="portal-connect-retry"
             onClick={() => window.location.reload()}
           >
-            try again
+            Try again
           </button>
         </section>
       ) : null}
@@ -138,11 +134,10 @@ export default function PortalChatGptPage() {
       {phase === "login" && desktop ? (
         <section className="portal-connect-body">
           <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">sign in here</p>
-            <h1 className="portal-connect-title">your chatgpt</h1>
-            <div className="portal-gate-rule" aria-hidden="true" />
+            <p className="portal-connect-eyebrow">Sign in</p>
+            <h1 className="portal-connect-title">Your ChatGPT</h1>
             <p className="portal-connect-note">
-              the window is only a preview — sign in on this page, not inside it.
+              Sign in on this page. The window below is a live preview only.
             </p>
           </div>
           <ChatGptNativeLoginForm onSigning={setSigning} />
@@ -152,7 +147,7 @@ export default function PortalChatGptPage() {
             <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             {signing ? (
               <p className="portal-connect-signing-overlay" aria-live="polite">
-                orgo is signing you in…
+                Signing you in…
               </p>
             ) : null}
           </div>

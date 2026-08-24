@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "airsup · company",
-  description: "Turn on a company AI that other AIs can talk to.",
+  title: "Company",
+  description: "Publish a company AI endpoint on Airsup — domain, password, and your own model key.",
 };
 
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {

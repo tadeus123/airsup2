@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CompanyNav } from "./CompanyChrome";
+import { BrandNav } from "@/components/BrandNav";
+import { CompanyLoginDialog } from "./CompanyChrome";
 
 export default function CompanyGoLivePage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function CompanyGoLivePage() {
   const [contextNotes, setContextNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loginOpen, setLoginOpen] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,101 +40,112 @@ export default function CompanyGoLivePage() {
   }
 
   return (
-    <main className="ainet co-page">
-      <CompanyNav subtitle="company" showLogin />
+    <>
+      <BrandNav
+        actions={
+          <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
+            Log in
+          </button>
+        }
+      />
+      <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <main className="ainet co-page">
+        <div className="as-hero">
+          <h1>Put your company on the network.</h1>
+          <p>
+            Publish an AI endpoint on your domain. Buyer AIs find you on the web; Airsup checks that
+            you are live and opens the negotiation.
+          </p>
+        </div>
 
-      <div className="ainet-tagline">
-        <p>turn on a counterpart other AIs can talk to.</p>
-        <p>no website install. just your domain and your key.</p>
-      </div>
+        <form className="co-form" onSubmit={(e) => void onSubmit(e)}>
+          <label className="co-field">
+            <span>Company name</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Acme Manufacturing"
+              autoFocus
+              required
+              minLength={2}
+              disabled={busy}
+            />
+          </label>
 
-      <form className="co-form" onSubmit={(e) => void onSubmit(e)}>
-        <label className="co-field">
-          <span>company name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Acme Manufacturing"
-            autoFocus
-            required
-            minLength={2}
-            disabled={busy}
-          />
-        </label>
+          <label className="co-field">
+            <span>Domain</span>
+            <input
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              placeholder="acme.com"
+              required
+              disabled={busy}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <em>No website install. Buyer AIs search the web; Airsup verifies this domain.</em>
+          </label>
 
-        <label className="co-field">
-          <span>domain</span>
-          <input
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="acme.com"
-            required
-            disabled={busy}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-          <em>buyer AIs find you on the web, then Airsup checks this domain.</em>
-        </label>
+          <label className="co-field">
+            <span>Dashboard password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              required
+              minLength={8}
+              disabled={busy}
+              autoComplete="new-password"
+            />
+            <em>Log in later with domain + password. No email required.</em>
+          </label>
 
-        <label className="co-field">
-          <span>password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="for your company home"
-            required
-            minLength={8}
-            disabled={busy}
-            autoComplete="new-password"
-          />
-          <em>later: login with domain + this password. no email.</em>
-        </label>
+          <label className="co-field">
+            <span>OpenAI API key</span>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-…"
+              required
+              disabled={busy}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <em>Your model, your bill. Airsup never uses this key to talk to visitors — only your company AI does.</em>
+          </label>
 
-        <label className="co-field">
-          <span>openai api key</span>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-..."
-            required
-            disabled={busy}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <em>your model, your bill. Airsup never talks to visitors with this key — only your company AI does.</em>
-        </label>
+          <label className="co-field">
+            <span>How should your AI negotiate?</span>
+            <textarea
+              value={stance}
+              onChange={(e) => setStance(e.target.value)}
+              placeholder="Who you are, what you want, what you never do, how creative deals may get, when a human must confirm…"
+              rows={6}
+              disabled={busy}
+            />
+          </label>
 
-        <label className="co-field">
-          <span>how should your AI negotiate?</span>
-          <textarea
-            value={stance}
-            onChange={(e) => setStance(e.target.value)}
-            placeholder="who you are, what you want, what you never do, how creative the deals may get, when a human must confirm…"
-            rows={6}
-            disabled={busy}
-          />
-        </label>
+          <label className="co-field">
+            <span>Private notes (optional)</span>
+            <textarea
+              value={contextNotes}
+              onChange={(e) => setContextNotes(e.target.value)}
+              placeholder="Products, typical terms, capacity — anything your AI should know and not dump as a brochure"
+              rows={5}
+              disabled={busy}
+            />
+          </label>
 
-        <label className="co-field">
-          <span>private notes (optional)</span>
-          <textarea
-            value={contextNotes}
-            onChange={(e) => setContextNotes(e.target.value)}
-            placeholder="products, typical terms, capacity, anything your AI should know and not dump as a brochure"
-            rows={5}
-            disabled={busy}
-          />
-        </label>
+          {error ? <p className="ainet-note err">{error}</p> : null}
 
-        {error ? <p className="ainet-note err">{error}</p> : null}
-
-        <button type="submit" className="co-go" disabled={busy}>
-          {busy ? "going live…" : "go live"}
-        </button>
-      </form>
-    </main>
+          <button type="submit" className="co-go" disabled={busy}>
+            {busy ? "Going live…" : "Go live"}
+          </button>
+        </form>
+      </main>
+    </>
   );
 }

@@ -30,29 +30,64 @@ function htmlPage(body: string, status = 200) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>airsup · connect</title>
+  <title>Connect · Airsup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#efe8dc; --fg:#1a1a1a; --accent:#a85a2a; --muted:#6b6560; --border:rgba(26,26,26,.18); }
+    :root {
+      --bg:#ffffff; --fg:#0a0a0a; --muted:rgba(10,10,10,.55);
+      --border:rgba(10,10,10,.12); --cta:#0a0a0a; --cta-fg:#fff; --danger:#b42318; --radius:6px;
+    }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; background:var(--bg); color:var(--fg); }
-    main { max-width: 28rem; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
-    h1 { font-weight:400; font-size:1.75rem; color:var(--accent); margin:0 0 .5rem; }
-    p { color:var(--muted); line-height:1.45; }
-    label { display:flex; flex-direction:column; gap:.35rem; margin:1.25rem 0; }
-    label span { color:var(--accent); }
-    input { border:0; border-bottom:1px solid var(--border); background:transparent; font:inherit; padding:.45rem 0; color:inherit; }
-    input:focus { outline:none; border-bottom-color:var(--accent); }
-    button { margin-top:1rem; border:0; background:none; font:inherit; color:var(--accent); text-decoration:underline; text-underline-offset:.18em; cursor:pointer; padding:0; }
-    .err { color:#8b1e1e; }
-    .tabs { display:flex; gap:1.25rem; margin:1.5rem 0 .5rem; }
-    .tabs button { text-decoration:none; color:var(--muted); }
-    .tabs button.on { color:var(--accent); text-decoration:underline; }
+    body {
+      margin:0;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+      background:var(--bg); color:var(--fg); line-height:1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .top {
+      border-bottom:1px solid var(--border);
+      padding:0.9rem 1.5rem;
+    }
+    .mark {
+      font-family: Syne, "Arial Narrow", sans-serif;
+      font-weight:800; letter-spacing:0.08em; text-transform:uppercase;
+      font-size:1.05rem; text-decoration:none; color:inherit;
+    }
+    main { max-width: 28rem; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    h1 {
+      font-family: Syne, sans-serif; font-weight:700; font-size:1.85rem;
+      letter-spacing:-0.03em; line-height:1.15; margin:0 0 .75rem;
+    }
+    p { color:var(--muted); margin:0 0 1rem; }
+    label { display:flex; flex-direction:column; gap:.4rem; margin:1.15rem 0; }
+    label span { color:var(--muted); font-size:0.82rem; font-weight:600; }
+    input {
+      border:1px solid var(--border); border-radius:var(--radius);
+      background:#fff; font:inherit; padding:.7rem .85rem; color:inherit;
+    }
+    input:focus { outline:2px solid var(--fg); outline-offset:1px; border-color:transparent; }
+    button[type="submit"] {
+      margin-top:0.75rem; border:0; border-radius:var(--radius);
+      background:var(--cta); color:var(--cta-fg); font:inherit; font-weight:600;
+      padding:.7rem 1.15rem; cursor:pointer;
+    }
+    button[type="submit"]:hover { opacity:0.88; }
+    .err { color:var(--danger); }
+    .tabs { display:flex; gap:1rem; margin:1.5rem 0 .5rem; }
+    .tabs button {
+      border:0; background:none; font:inherit; font-weight:600; color:var(--muted);
+      cursor:pointer; padding:0.35rem 0; border-bottom:2px solid transparent;
+    }
+    .tabs button.on { color:var(--fg); border-bottom-color:var(--fg); }
     .panel { display:none; }
     .panel.on { display:block; }
-    a { color:var(--accent); }
+    a { color:inherit; }
   </style>
 </head>
 <body>
+  <div class="top"><a class="mark" href="/airsup">AIRSUP</a></div>
   <main>${body}</main>
   <script>
     function show(id) {
@@ -150,33 +185,33 @@ export async function GET(request: Request) {
   if (!p.resource) p.resource = mcpResourceUrl(origin);
   else p.resource = normalizeMcpResource(p.resource, origin);
   const err = validateAuthorize(p, origin);
-  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
+  if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const hidden = qsHidden(p);
   return htmlPage(`
-    <h1>airsup</h1>
-    <p>connect ChatGPT to Airsup. this is your signup — one plugin for people and company talks.</p>
+    <h1>Connect ChatGPT to Airsup</h1>
+    <p>This is your signup. One plugin for people and company conversations.</p>
     <div class="tabs">
-      <button type="button" class="on" data-tab="new" onclick="show('new')">new account</button>
-      <button type="button" data-tab="existing" onclick="show('existing')">returning</button>
+      <button type="button" class="on" data-tab="new" onclick="show('new')">New account</button>
+      <button type="button" data-tab="existing" onclick="show('existing')">Returning</button>
     </div>
     <form id="new" class="panel on" method="post" action="/oauth/authorize">
       ${hidden}
       <input type="hidden" name="mode" value="signup" />
-      <label><span>your name</span>
-        <input name="display_name" required minlength="2" autofocus placeholder="Tade Mehl" />
+      <label><span>Your name</span>
+        <input name="display_name" required minlength="2" autofocus placeholder="Alex Rivera" />
       </label>
-      <p>we'll create your airsup handle. no email.</p>
-      <button type="submit">continue</button>
+      <p>We'll create your Airsup handle. No email required.</p>
+      <button type="submit">Continue</button>
     </form>
     <form id="existing" class="panel" method="post" action="/oauth/authorize">
       ${hidden}
       <input type="hidden" name="mode" value="token" />
-      <label><span>existing plugin token</span>
+      <label><span>Existing plugin token</span>
         <input name="asp_token" required placeholder="asp_…" autocomplete="off" spellcheck="false" />
       </label>
-      <p>paste the asp_ token from an earlier airsup setup.</p>
-      <button type="submit">continue</button>
+      <p>Paste the asp_ token from an earlier Airsup setup.</p>
+      <button type="submit">Continue</button>
     </form>
   `);
 }
@@ -196,7 +231,7 @@ export async function POST(request: Request) {
     resource: normalizeMcpResource(get("resource") || mcpResourceUrl(origin), origin),
   };
   const err = validateAuthorize(p, origin);
-  if (err) return htmlPage(`<h1>airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
+  if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const mode = get("mode");
   try {
@@ -208,7 +243,7 @@ export async function POST(request: Request) {
       const user = await loginWithAspToken(get("asp_token"));
       username = user.username;
     } else {
-      return htmlPage(`<h1>airsup</h1><p class="err">unknown mode</p>`, 400);
+      return htmlPage(`<h1>Airsup</h1><p class="err">Unknown mode</p>`, 400);
     }
 
     const code = await storeAuthCode({
@@ -233,9 +268,9 @@ export async function POST(request: Request) {
     const retryQs = authorizeQuery(p);
     return htmlPage(
       `
-      <h1>airsup</h1>
+      <h1>Airsup</h1>
       <p class="err">${escapeHtml(message)}</p>
-      <p><a href="/oauth/authorize?${escapeHtml(retryQs)}">try again</a></p>
+      <p><a href="/oauth/authorize?${escapeHtml(retryQs)}">Try again</a></p>
       <form method="post" action="/oauth/authorize" style="display:none">${hidden}</form>
     `,
       400
