@@ -35,7 +35,7 @@ function htmlPage(body: string, status = 200) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Connect - Airsup</title>
+  <title>Connect · Airsup</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
@@ -44,48 +44,72 @@ function htmlPage(body: string, status = 200) {
       --bg:#ffffff; --fg:#0a0a0a; --muted:rgba(10,10,10,.55);
       --border:rgba(10,10,10,.12); --cta:#0a0a0a; --cta-fg:#fff; --danger:#b42318; --radius:8px;
     }
-    * { box-sizing: border-box; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { min-height:100dvh; }
     body {
-      margin:0;
-      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-      background:var(--bg); color:var(--fg); line-height:1.5;
-      -webkit-font-smoothing: antialiased;
+      font-family:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+      background:
+        radial-gradient(ellipse 90% 55% at 50% -15%, rgba(10,10,10,.04), transparent),
+        var(--bg);
+      color:var(--fg); line-height:1.55;
+      -webkit-font-smoothing:antialiased;
+      display:flex; flex-direction:column;
     }
     .top {
       border-bottom:1px solid var(--border);
-      padding:0.9rem 1.5rem;
+      background:rgba(255,255,255,.88);
+      backdrop-filter:blur(10px);
+      padding:0.85rem 1.5rem;
+      position:sticky; top:0; z-index:10;
     }
     .mark {
-      font-family: Syne, "Arial Narrow", sans-serif;
+      font-family:Syne,"Arial Narrow",sans-serif;
       font-weight:800; letter-spacing:0.08em; text-transform:uppercase;
       font-size:1.05rem; text-decoration:none; color:inherit;
     }
-    main { max-width: 24rem; margin: 0 auto; padding: clamp(2rem, 8vh, 3.5rem) 1.5rem 4rem; }
-    h1 {
-      font-family: Syne, sans-serif; font-weight:700; font-size:1.5rem;
-      letter-spacing:-0.03em; line-height:1.15; margin:0 0 1.25rem;
+    main {
+      flex:1; display:flex; align-items:center; justify-content:center;
+      padding:clamp(1.5rem,4vh,2.5rem) 1.5rem;
     }
-    p { color:var(--muted); margin:0 0 1rem; line-height:1.55; font-size:0.98rem; }
-    label { display:flex; flex-direction:column; gap:.4rem; margin:1.15rem 0; }
+    .card {
+      width:min(24rem,100%);
+      border:1px solid var(--border);
+      border-radius:calc(var(--radius) + 4px);
+      background:var(--bg);
+      box-shadow:0 1px 2px rgba(10,10,10,.05), 0 16px 48px rgba(10,10,10,.06);
+      padding:1.65rem 1.5rem 1.75rem;
+    }
+    h1 {
+      font-family:Syne,sans-serif; font-weight:700; font-size:1.45rem;
+      letter-spacing:-0.02em; line-height:1.2; margin:0 0 1.25rem;
+    }
+    p { color:var(--muted); margin:0 0 1rem; line-height:1.55; font-size:0.95rem; }
+    label { display:flex; flex-direction:column; gap:.4rem; margin:0 0 1rem; }
     label span { color:var(--muted); font-size:0.82rem; font-weight:600; }
     input {
       border:1px solid var(--border); border-radius:var(--radius);
-      background:#fff; font:inherit; padding:.7rem .85rem; color:inherit;
+      background:#fff; font:inherit; padding:.7rem .85rem; color:inherit; width:100%;
     }
     input:focus { outline:2px solid var(--fg); outline-offset:1px; border-color:transparent; }
     button[type="submit"] {
-      width:100%; margin-top:0.75rem; border:0; border-radius:var(--radius);
+      width:100%; margin-top:0.25rem; border:0; border-radius:var(--radius);
       background:var(--cta); color:var(--cta-fg); font:inherit; font-weight:600;
       padding:.8rem 1.15rem; cursor:pointer; font-size:1rem;
     }
     button[type="submit"]:hover { opacity:0.88; }
     .err { color:var(--danger); }
+    footer {
+      border-top:1px solid var(--border);
+      padding:1.5rem; text-align:center;
+      font-size:0.82rem; color:var(--muted);
+    }
     a { color:inherit; }
   </style>
 </head>
 <body>
-  <div class="top"><a class="mark" href="/company">AIRSUP</a></div>
-  <main>${body}</main>
+  <header class="top"><a class="mark" href="/company">AIRSUP</a></header>
+  <main><div class="card">${body}</div></main>
+  <footer>Airsupply Technology LLC</footer>
 </body>
 </html>`,
     { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }

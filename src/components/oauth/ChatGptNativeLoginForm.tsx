@@ -9,11 +9,12 @@ import {
 
 type Props = {
   onSigning?: (busy: boolean) => void;
+  onSignedIn?: () => void;
 };
 
 type Step = "credentials" | "totp" | "done";
 
-export default function ChatGptNativeLoginForm({ onSigning }: Props) {
+export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -35,6 +36,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
       if (result.status === "signed_in") {
         setPassword("");
         setStep("done");
+        onSignedIn?.();
         return;
       }
       if (result.status === "needs_2fa") {
@@ -66,6 +68,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
       if (result.status === "signed_in") {
         setCode("");
         setStep("done");
+        onSignedIn?.();
         return;
       }
       if (result.status === "needs_2fa") {

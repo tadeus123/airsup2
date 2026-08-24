@@ -176,7 +176,7 @@ export default function CompanyDashboard() {
 
   if (loading) {
     return (
-      <CompanyPage>
+      <CompanyPage showLogin={false}>
         <CompanyLoading />
       </CompanyPage>
     );
@@ -184,7 +184,7 @@ export default function CompanyDashboard() {
 
   if (!company) {
     return (
-      <CompanyPage>
+      <CompanyPage showLogin={false}>
         <main className="ainet co-dashboard">
           <p className="ainet-note err">{error || "Company not found"}</p>
         </main>
@@ -199,7 +199,7 @@ export default function CompanyDashboard() {
     : "Visitor AI";
 
   return (
-    <CompanyPage>
+    <CompanyPage showLogin={false}>
       <main className="ainet co-dashboard">
         <header className="co-live">
           <div className="co-live-top">

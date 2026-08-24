@@ -9,7 +9,6 @@ import {
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
-import { registerPortalUser } from "@/lib/portal-user";
 import { listLinkedOrgoComputerIds, setOrgoComputerForToken, type User } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -63,22 +62,22 @@ export async function POST(request: Request) {
       );
     }
 
-    let token = bearerFromRequest(request);
-    let user: User | undefined;
-
-    if (token) {
-      try {
-        user = await authPortalUser(token);
-      } catch {
-        token = "";
-        user = undefined;
-      }
+    const token = bearerFromRequest(request);
+    if (!token) {
+      return NextResponse.json(
+        { error: "unauthorized", message: "Missing session — reconnect the plugin" },
+        { status: 401 }
+      );
     }
 
-    if (!token || !user) {
-      const created = await registerPortalUser();
-      user = created.user;
-      token = created.token;
+    let user: User;
+    try {
+      user = await authPortalUser(token);
+    } catch {
+      return NextResponse.json(
+        { error: "session_invalid", message: "Session expired — reconnect the plugin" },
+        { status: 401 }
+      );
     }
 
     let orgoComputerId = (user.orgoComputerId || "").trim();
@@ -138,13 +137,13 @@ export async function POST(request: Request) {
       username: user.username,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "portal_start_failed";
+    const message = error instanceof Error ? error.message : "desktop_start_failed";
     if (message.includes("Computer limit reached") || message.includes("VM_SLOT")) {
       return NextResponse.json(
         {
           error: "orgo_capacity",
           message:
-            "Portal is at capacity (Orgo computer limit). Delete unused computers in your Orgo workspace or add a slot.",
+            "At Orgo computer limit. Delete unused computers in your Orgo workspace or add a slot.",
         },
         { status: 503 }
       );

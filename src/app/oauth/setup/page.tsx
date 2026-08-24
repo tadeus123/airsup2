@@ -1,9 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BrandNav } from "@/components/BrandNav";
-import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
+import { SiteFooter } from "@/components/SiteFooter";
+import {
+  fetchPortalDesktop,
+  fetchPortalLoginStatus,
+  savePortalToken,
+  startPortalSession,
+} from "@/lib/portal-client";
 import ChatGptNativeLoginForm from "@/components/oauth/ChatGptNativeLoginForm";
 
 const ChatGptLoginFrame = dynamic(() => import("@/components/oauth/ChatGptLoginFrame"), {
@@ -19,12 +25,20 @@ type Phase = "loading" | "login" | "ready" | "error";
 
 export default function OauthSetupPage() {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [aspToken, setAspToken] = useState("");
   const [error, setError] = useState("");
   const [desktop, setDesktop] = useState<{ vncUrl: string; password: string } | null>(null);
   const [signing, setSigning] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState("Setting up…");
+
+  const refreshLogin = useCallback(async (token: string) => {
+    const { loggedIn: ok } = await fetchPortalLoginStatus(token);
+    setLoggedIn(ok);
+    return ok;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,25 +47,33 @@ export default function OauthSetupPage() {
         const me = await fetch("/api/oauth/setup");
         const mj = (await me.json()) as {
           username?: string;
+          displayName?: string;
           hasOrgo?: boolean;
+          loggedIn?: boolean;
           aspToken?: string;
           error?: string;
         };
         if (!me.ok || !mj.aspToken) throw new Error(mj.error || "setup session missing");
         if (cancelled) return;
-        setUsername(mj.username || "");
 
-        if (mj.hasOrgo) {
+        setAspToken(mj.aspToken);
+        savePortalToken(mj.aspToken);
+        setDisplayName(mj.displayName || mj.username || "");
+        setLoggedIn(Boolean(mj.loggedIn));
+
+        if (mj.loggedIn) {
           setPhase("ready");
           return;
         }
 
         setStatus("Starting desktop…");
-        const started = await startPortalSession(mj.aspToken);
+        if (!mj.hasOrgo) {
+          await startPortalSession(mj.aspToken);
+        }
         if (cancelled) return;
 
         setStatus("Opening ChatGPT…");
-        const desk = await fetchPortalDesktop(started.token, {
+        const desk = await fetchPortalDesktop(mj.aspToken, {
           launch: true,
           waitMs: 25000,
         });
@@ -70,7 +92,20 @@ export default function OauthSetupPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!aspToken || (phase !== "login" && phase !== "ready")) return;
+    void refreshLogin(aspToken);
+    const id = window.setInterval(() => {
+      void refreshLogin(aspToken);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [aspToken, phase, refreshLogin]);
+
   async function finish() {
+    if (!loggedIn) {
+      setError("Sign into ChatGPT first");
+      return;
+    }
     setFinishing(true);
     setError("");
     try {
@@ -83,6 +118,8 @@ export default function OauthSetupPage() {
       setFinishing(false);
     }
   }
+
+  const canFinish = loggedIn && !finishing;
 
   return (
     <div className="co-page oauth-page">
@@ -99,9 +136,7 @@ export default function OauthSetupPage() {
           <section className="oauth-stage co-form-card">
             <h1>Setup failed</h1>
             <p className="ainet-note err">{error}</p>
-            <button type="button" className="co-go co-go--wide" onClick={() => void finish()}>
-              Continue
-            </button>
+            <p className="ainet-muted oauth-hint">Reconnect the plugin in ChatGPT to try again.</p>
           </section>
         ) : null}
 
@@ -109,15 +144,22 @@ export default function OauthSetupPage() {
           <section className="oauth-stage oauth-stage--wide">
             <div className="oauth-copy co-form-card co-form-card--enter">
               <h1>Sign into ChatGPT</h1>
-              <ChatGptNativeLoginForm onSigning={setSigning} />
+              {displayName ? <p className="oauth-name">{displayName}</p> : null}
+              <ChatGptNativeLoginForm
+                onSigning={setSigning}
+                onSignedIn={() => {
+                  setLoggedIn(true);
+                  if (aspToken) void refreshLogin(aspToken);
+                }}
+              />
               {error ? <p className="ainet-note err">{error}</p> : null}
               <button
                 type="button"
                 className="co-go co-go--wide"
-                disabled={finishing}
+                disabled={!canFinish}
                 onClick={() => void finish()}
               >
-                {finishing ? "…" : "Done"}
+                {finishing ? "…" : loggedIn ? "Continue" : "Sign in to continue"}
               </button>
             </div>
             <div className={`oauth-vnc-wrap${signing ? " oauth-vnc-wrap--busy" : ""}`}>
@@ -128,19 +170,21 @@ export default function OauthSetupPage() {
 
         {phase === "ready" ? (
           <section className="oauth-stage co-form-card co-form-card--enter">
-            <h1>{username || "Ready"}</h1>
+            <h1>Ready</h1>
+            {displayName ? <p className="oauth-name">{displayName}</p> : null}
             {error ? <p className="ainet-note err">{error}</p> : null}
             <button
               type="button"
               className="co-go co-go--wide"
-              disabled={finishing}
+              disabled={!canFinish}
               onClick={() => void finish()}
             >
-              {finishing ? "…" : "Continue"}
+              {finishing ? "…" : "Continue to ChatGPT"}
             </button>
           </section>
         ) : null}
       </main>
+      <SiteFooter />
     </div>
   );
 }

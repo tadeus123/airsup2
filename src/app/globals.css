@@ -1648,3 +1648,14 @@ body:has(.co-page) {
 .co-empty-title {
   margin: 0;
 }
+
+.oauth-name {
+  margin: -0.75rem 0 1.1rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.oauth-hint {
+  margin: 0;
+  font-size: 0.9rem;
+}
