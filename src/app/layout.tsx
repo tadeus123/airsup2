@@ -21,8 +21,7 @@ export const metadata: Metadata = {
     default: "Airsup",
     template: "%s · Airsup",
   },
-  description:
-    "Airsup (Airsupply Technology LLC) — put a negotiable AI endpoint on your company domain. People connect via the ChatGPT plugin.",
+  description: "AI on your company domain. People connect via the ChatGPT plugin.",
   icons: {
     icon: "/airsup/icon.png",
     apple: "/airsup/icon.png",

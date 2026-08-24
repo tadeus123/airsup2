@@ -84,15 +84,13 @@ export default function ChatGptLoginFrame({ vncUrl, password }: Props) {
 
   return (
     <div
-      className={`portal-connect-frame${connected ? " portal-connect-frame--live" : ""}${failed ? " portal-connect-frame--failed" : ""}`}
+      className={`oauth-vnc-frame${connected ? " oauth-vnc-frame--live" : ""}${failed ? " oauth-vnc-frame--failed" : ""}`}
     >
-      {!connected && !failed ? (
-          <p className="portal-connect-frame-status">…</p>
-      ) : null}
+      {!connected && !failed ? <p className="oauth-vnc-frame-status">…</p> : null}
       {failed ? (
-        <p className="portal-connect-frame-error">Could not load — refresh to retry.</p>
+        <p className="oauth-vnc-frame-error">Could not load — refresh to retry.</p>
       ) : null}
-      <div ref={hostRef} className="portal-connect-vnc" tabIndex={0} aria-label="chatgpt login window" />
+      <div ref={hostRef} className="oauth-vnc-host" tabIndex={0} aria-label="ChatGPT login window" />
     </div>
   );
 }

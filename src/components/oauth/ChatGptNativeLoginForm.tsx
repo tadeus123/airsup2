@@ -85,19 +85,18 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
 
   if (step === "done") {
     return (
-      <div className="portal-login-form portal-login-form--done">
-        <p className="portal-login-status">Signed in</p>
+      <div className="oauth-login-form oauth-login-form--done">
+        <p className="oauth-login-status">Signed in</p>
       </div>
     );
   }
 
   if (step === "totp") {
     return (
-      <form className="portal-login-form" onSubmit={(e) => void onSubmitTotp(e)}>
-        <label className="portal-login-field">
-          <span className="portal-login-label">2FA code</span>
+      <form className="oauth-login-form" onSubmit={(e) => void onSubmitTotp(e)}>
+        <label className="co-field">
+          <span>2FA code</span>
           <input
-            className="portal-login-input"
             type="text"
             name="totp"
             inputMode="numeric"
@@ -112,8 +111,8 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
             placeholder="123456"
           />
         </label>
-        {error ? <p className="portal-login-error">{error}</p> : null}
-        <button type="submit" className="portal-login-submit" disabled={busy || code.length < 6}>
+        {error ? <p className="ainet-note err">{error}</p> : null}
+        <button type="submit" className="co-go co-go--wide" disabled={busy || code.length < 6}>
           {busy ? "…" : "Continue"}
         </button>
       </form>
@@ -121,11 +120,10 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   }
 
   return (
-    <form className="portal-login-form" onSubmit={(e) => void onSubmitCredentials(e)}>
-      <label className="portal-login-field">
-        <span className="portal-login-label">Email</span>
+    <form className="oauth-login-form" onSubmit={(e) => void onSubmitCredentials(e)}>
+      <label className="co-field">
+        <span>Email</span>
         <input
-          className="portal-login-input"
           type="email"
           name="email"
           autoComplete="username"
@@ -137,10 +135,9 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
           placeholder="you@email.com"
         />
       </label>
-      <label className="portal-login-field">
-        <span className="portal-login-label">Password</span>
+      <label className="co-field">
+        <span>Password</span>
         <input
-          className="portal-login-input"
           type="password"
           name="password"
           autoComplete="current-password"
@@ -151,8 +148,8 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
           placeholder="••••••••"
         />
       </label>
-      {error ? <p className="portal-login-error">{error}</p> : null}
-      <button type="submit" className="portal-login-submit" disabled={busy}>
+      {error ? <p className="ainet-note err">{error}</p> : null}
+      <button type="submit" className="co-go co-go--wide" disabled={busy}>
         {busy ? "…" : "Sign in"}
       </button>
     </form>

@@ -4,9 +4,9 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { BrandNav } from "@/components/BrandNav";
 import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
-import ChatGptNativeLoginForm from "@/app/portal/chatgpt/ChatGptNativeLoginForm";
+import ChatGptNativeLoginForm from "@/components/oauth/ChatGptNativeLoginForm";
 
-const ChatGptLoginFrame = dynamic(() => import("@/app/portal/chatgpt/ChatGptLoginFrame"), {
+const ChatGptLoginFrame = dynamic(() => import("@/components/oauth/ChatGptLoginFrame"), {
   ssr: false,
   loading: () => (
     <div className="oauth-vnc oauth-vnc--loading" aria-hidden="true">

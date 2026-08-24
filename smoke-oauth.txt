@@ -1,0 +1,30 @@
+OK /.well-known/oauth-protected-resource 200
+OK /.well-known/oauth-protected-resource/mcp 200
+OK /.well-known/oauth-authorization-server 200
+OK /.well-known/oauth-authorization-server/mcp 200
+AS {"issuer":"https://airsup2.vercel.app","authorization_endpoint":"https://airsup2.vercel.app/oauth/authorize","token_endpoint":"https://airsup2.vercel.app/oauth/token","response_types_supported":["code"],"grant_types_supported":["authorization_code","refresh_token"],"code_challenge_methods_supported":["S256"],"token_endpoint_auth_methods_supported":["none"],"scopes_supported":["airsup"],"client_id_metadata_document_supported":true,"authorization_response_iss_parameter_supported":true}
+OK iss parameter supported
+OK mcp 401
+OK www-auth
+OK www-auth path-aware
+AUTH 302 https://airsup2.vercel.app/oauth/setup
+SETUP_FINISH 200 {"ok":true,"redirect":"http://127.0.0.1:9/cb?code=ac_2ad5a4daaa35c66ae9284c0f0ba7dea776e3f545c65f0eea&state=st1&iss=https%3A%2F%2Fairsup2.vercel.app"}
+OK oauth setup finish
+OK code ac_2ad5a4daa
+OK iss https://airsup2.vercel.app
+TOKEN 200 {"access_token":"aso_f2a94cc7fface0de3d630d6fa802c3df3bf0eb7fe8da07e4","refresh_token":"asr_e3abc0826c3d1aacdc5e9de0e11f476772eb6e230879bf43","token_type":"Bearer","expires_in":86400,"scope":"airsup","resource":"https://airsup2.vercel.app/mcp"}
+OK tokens
+INIT 200 event: message
+data: {"result":{"protocolVersion":"2025-03-26","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"airsup","version":"3.3.0"},"instructions":"You are Supi — probe-mt7pdi9x's assistant on Airsup.\n\nAirsup 
+OK init
+TOOLS 200 check=true talk=true len=8159
+OK tools
+REFRESH 200 {"access_token":"aso_3cf1578fc2459cd1be8e3a6c921dbf54e67f255e37e9b183","refresh_token":"asr_40e146ef2e93c15c3f7082b116c4a6ed3924914e29ece548","token_type":"Bearer","expires_in":86400,"scope":"airsup",
+OK refresh
+OK chatgpt redirect allowed
+OK evil redirect blocked
+OK /
+OK /company
+OK portal redirects
+OK check_domains
+ERRORS 0
