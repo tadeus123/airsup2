@@ -380,6 +380,66 @@ export async function orgoSendChat(
   }
 }
 
+/** Ask Orgo's computer-use agent to sign into ChatGPT with the given credentials. */
+export async function signInChatGptViaOrgoAgent(
+  computerId: string,
+  email: string,
+  password: string
+): Promise<{ ok: boolean; message: string }> {
+  const prompt = [
+    "Sign the user into ChatGPT on this computer.",
+    "",
+    "Credentials:",
+    `email: ${email}`,
+    `password: ${password}`,
+    "",
+    "Rules:",
+    "- Open Chrome if needed and go to https://chatgpt.com/auth/login",
+    "- Prefer email + password login (NOT phone, NOT Google, NOT Apple)",
+    "- If you see a phone number field or phone error, switch to email login",
+    "- Enter the email, continue, enter the password, continue/sign in",
+    "- Handle Cloudflare/captcha if it appears (click the checkbox)",
+    "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page)",
+    "- Keep trying until it works. Retry on mistakes.",
+    "- When done, reply with exactly: SIGNED_IN",
+    "- If impossible after many attempts, reply with: FAILED: <short reason>",
+  ].join("\n");
+
+  const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${orgoApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.ORGO_LOGIN_MODEL?.trim() || "claude-sonnet-5",
+      computer_id: computerId,
+      max_steps: 60,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Orgo agent login failed (${res.status}): ${raw.slice(0, 240)}`
+    );
+  }
+
+  let message = "";
+  try {
+    const json = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    message = (json.choices?.[0]?.message?.content || "").trim();
+  } catch {
+    message = raw.slice(0, 400);
+  }
+
+  const ok = /\bSIGNED_IN\b/i.test(message) && !/\bFAILED\s*:/i.test(message);
+  return { ok, message };
+}
+
 export function localSleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, Math.max(0, ms)));
 }

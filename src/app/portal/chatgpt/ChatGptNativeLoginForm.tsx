@@ -37,8 +37,8 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   if (done) {
     return (
       <div className="portal-login-form portal-login-form--done">
-        <p className="portal-login-status">signing you in on your private computer…</p>
-        <p className="portal-connect-note">watch the window above — you should land in chatgpt.</p>
+        <p className="portal-login-status">orgo is signing you into chatgpt…</p>
+        <p className="portal-connect-note">this can take a minute — watch the preview above.</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   return (
     <form className="portal-login-form" onSubmit={(e) => void onSubmit(e)}>
       <p className="portal-login-hint">
-        type here — chatgpt is filled inside your private computer. do not type in the preview.
+        type here — orgo will open chatgpt and sign you in. do not type in the preview.
       </p>
       <label className="portal-login-field">
         <span className="portal-login-label">email</span>

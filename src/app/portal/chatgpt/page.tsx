@@ -152,7 +152,7 @@ export default function PortalChatGptPage() {
             <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             {signing ? (
               <p className="portal-connect-signing-overlay" aria-live="polite">
-                filling chatgpt in your private computer…
+                orgo is signing you in…
               </p>
             ) : null}
           </div>

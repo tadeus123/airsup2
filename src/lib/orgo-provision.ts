@@ -1,4 +1,9 @@
-import { fillChatGptLoginViaCdp, getChatGptAuthState, localSleep } from "./orgo-actions";
+import {
+  fillChatGptLoginViaCdp,
+  getChatGptAuthState,
+  localSleep,
+  signInChatGptViaOrgoAgent,
+} from "./orgo-actions";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -413,7 +418,10 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
   await openChromeToChatGpt(computerId);
 }
 
-/** Fill ChatGPT email + password via in-VM Chrome CDP (DOM). Never VNC, never pixel-type. */
+/**
+ * Sign into ChatGPT via Orgo's computer-use agent (one prompt, keep trying).
+ * Falls back to CDP DOM fill only if the agent call errors hard.
+ */
 export async function fillChatGptLoginOnDesktop(
   computerId: string,
   email: string,
@@ -422,10 +430,26 @@ export async function fillChatGptLoginOnDesktop(
   const already = await getChatGptAuthState(computerId);
   if (already.loggedIn) return;
 
-  const cdpUp = already.url.length > 0;
-  await openChromeToChatGpt(computerId, { force: !cdpUp });
-  await localSleep(cdpUp ? 400 : 2200);
-  await fillChatGptLoginViaCdp(computerId, email, password);
+  await openChromeToChatGpt(computerId, { force: false });
+  await localSleep(800);
+
+  const agent = await signInChatGptViaOrgoAgent(computerId, email, password);
+  if (agent.ok) {
+    const after = await getChatGptAuthState(computerId);
+    if (after.loggedIn || /\bSIGNED_IN\b/i.test(agent.message)) return;
+  }
+
+  // Soft verify failed — one CDP attempt, then surface agent message.
+  try {
+    await fillChatGptLoginViaCdp(computerId, email, password);
+    return;
+  } catch {
+    throw new Error(
+      agent.message
+        ? `could not finish chatgpt login: ${agent.message.slice(0, 180)}`
+        : "could not finish chatgpt login"
+    );
+  }
 }
 
 export { getChatGptAuthState };
