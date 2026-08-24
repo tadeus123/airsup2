@@ -41,12 +41,11 @@ export default function CompanyDashboard() {
   const [stance, setStance] = useState("");
   const [contextNotes, setContextNotes] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [chatting, setChatting] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const [saving, setSaving] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -89,7 +88,7 @@ export default function CompanyDashboard() {
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, chatting]);
+  }, [messages.length, simulating]);
 
   async function openThread(id: string) {
     setActiveId(id);
@@ -129,42 +128,31 @@ export default function CompanyDashboard() {
     }
   }
 
-  async function sendTest(e: React.FormEvent) {
-    e.preventDefault();
-    const message = draft.trim();
-    if (!message || chatting) return;
-    setChatting(true);
+  async function runTadeSim() {
+    if (simulating) return;
+    setSimulating(true);
     setError("");
-    setDraft("");
-    setActiveId("test:owner");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        role: "visitor",
-        body: message,
-        visitorUsername: "_owner_",
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    setMessages([]);
     try {
-      const res = await fetch("/api/company/chat", {
+      const res = await fetch("/api/company/simulate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, message, conversationId: "test:owner" }),
+        body: JSON.stringify({ token, turns: 3 }),
       });
       const json = (await res.json()) as {
+        conversationId?: string;
         messages?: ChatMessage[];
+        conversations?: Conversation[];
         error?: string;
       };
-      if (!res.ok) throw new Error(json.error || "chat failed");
+      if (!res.ok || !json.conversationId) throw new Error(json.error || "simulation failed");
+      setActiveId(json.conversationId);
       setMessages(json.messages || []);
-      await load("test:owner");
+      if (json.conversations) setConversations(json.conversations);
     } catch (err) {
-      setDraft(message);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setChatting(false);
+      setSimulating(false);
     }
   }
 
@@ -187,7 +175,12 @@ export default function CompanyDashboard() {
   }
 
   const realTalks = conversations.filter((c) => !c.isTest);
-  const isTest = activeId === "test:owner";
+  const isSim = activeId.startsWith("test:");
+
+  function visitorLabel(username: string) {
+    if (username === "tade" || username === "_owner_") return "tade's ChatGPT";
+    return `${username} AI`;
+  }
 
   return (
     <main className="ainet co-page">
@@ -200,15 +193,15 @@ export default function CompanyDashboard() {
 
       <section className="ainet-section" aria-label="simulate visitor AI">
         <h2>
-          {isTest
-            ? "simulate a visitor AI"
+          {isSim
+            ? "tade's ChatGPT × your company AI"
             : `AI↔AI thread · ${activeId.slice(0, 8)}…`}
         </h2>
         <div className="co-chat" ref={scroller}>
           {messages.length === 0 ? (
             <p className="ainet-muted">
-              {isTest
-                ? "humans don’t talk to this endpoint — other AIs do. paste what a visitor AI would send (dense context, fast turns). your company AI answers for real."
+              {isSim
+                ? "this is what actually happens: tade brainstorms a project in his chatgpt (tademehl.com). that personal AI finds your domain and negotiates with your endpoint — dense context, several turns, both sides pushing their interests. run it."
                 : "no messages in this thread."}
             </p>
           ) : (
@@ -217,30 +210,27 @@ export default function CompanyDashboard() {
                 <span className="co-bubble-who">
                   {m.role === "company"
                     ? `${company.name} AI`
-                    : isTest
-                      ? "visitor AI"
-                      : `${m.visitorUsername} AI`}
+                    : visitorLabel(m.visitorUsername)}
                 </span>
                 <p>{m.body}</p>
               </div>
             ))
           )}
-          {chatting ? <p className="ainet-muted">company AI answering…</p> : null}
+          {simulating ? (
+            <p className="ainet-muted">two AIs negotiating — this takes a minute…</p>
+          ) : null}
         </div>
-        {isTest ? (
-          <form className="co-chat-form" onSubmit={(e) => void sendTest(e)}>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="visitor AI: sourcing 2k units of … for a launch next month; constraints, budget band, delivery window…"
-              rows={4}
-              disabled={chatting}
-            />
+        {isSim ? (
+          <div className="co-chat-form">
             {error ? <p className="ainet-note err">{error}</p> : null}
-            <button type="submit" disabled={chatting || !draft.trim()}>
-              {chatting ? "…" : "send as visitor AI"}
+            <button
+              type="button"
+              onClick={() => void runTadeSim()}
+              disabled={simulating}
+            >
+              {simulating ? "negotiating…" : "run tade's chatgpt against you"}
             </button>
-          </form>
+          </div>
         ) : (
           <p className="ainet-muted">live AI↔AI talks are watch-only for now.</p>
         )}
@@ -257,7 +247,7 @@ export default function CompanyDashboard() {
             {realTalks.map((c) => (
               <li key={c.conversationId}>
                 <button type="button" onClick={() => void openThread(c.conversationId)}>
-                  <strong>{c.visitorUsername ? `${c.visitorUsername} AI` : "visitor AI"}</strong>
+                  <strong>{visitorLabel(c.visitorUsername)}</strong>
                   <span>
                     {c.messageCount} turns · {c.lastBody}
                   </span>
@@ -266,10 +256,10 @@ export default function CompanyDashboard() {
             ))}
           </ul>
         )}
-        {activeId !== "test:owner" ? (
+        {activeId !== "test:owner" && !activeId.startsWith("test:tade:") ? (
           <p className="ainet-actions" style={{ marginTop: "1rem" }}>
             <button type="button" onClick={() => void openThread("test:owner")}>
-              back to visitor AI sim
+              back to tade sim
             </button>
           </p>
         ) : null}

@@ -1769,11 +1769,11 @@ button {
 }
 
 .co-chat {
-  max-height: 28rem;
+  max-height: min(70vh, 40rem);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.15rem;
   margin: 0 0 1rem;
   padding-right: 0.25rem;
 }

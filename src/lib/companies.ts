@@ -162,14 +162,20 @@ function mapMessage(row: Record<string, unknown>): CompanyMessage {
 }
 
 function mapConversation(row: Record<string, unknown>): CompanyConversation {
+  const conversationId = String(row.conversationId ?? row.conversation_id ?? "");
+  const visitorUsername = String(row.visitorUsername ?? row.visitor_username ?? "");
   return {
-    conversationId: String(row.conversationId ?? row.conversation_id ?? ""),
-    visitorUsername: String(row.visitorUsername ?? row.visitor_username ?? ""),
+    conversationId,
+    visitorUsername,
     lastRole: row.lastRole === "company" || row.last_role === "company" ? "company" : "visitor",
     lastBody: String(row.lastBody ?? row.last_body ?? ""),
     lastAt: String(row.lastAt ?? row.last_at ?? ""),
     messageCount: Number(row.messageCount ?? row.message_count ?? 0),
-    isTest: Boolean(row.isTest ?? row.is_test),
+    isTest:
+      Boolean(row.isTest ?? row.is_test) ||
+      visitorUsername === "_owner_" ||
+      visitorUsername === "tade" ||
+      conversationId.startsWith("test:"),
   };
 }
 
