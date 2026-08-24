@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       httpStatus: 200,
       durationMs: Date.now() - started,
       summary: `registered ${user.username} (#${memberNumber})`,
-      detail: { mcpUrl: plugin.mcpUrl, memberNumber },
+      detail: { mcpUrl: plugin.mcpUrl, universalMcpUrl: plugin.universalMcpUrl, memberNumber },
       requestId,
     });
     return NextResponse.json({
@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       handle,
       token,
       mcpUrl: plugin.mcpUrl,
+      universalMcpUrl: plugin.universalMcpUrl,
       plugin,
       orgo,
       orgoComputerId: user.orgoComputerId ?? null,

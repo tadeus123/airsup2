@@ -206,7 +206,13 @@ export function createAirsupMcpServer(me: User): McpServer {
     idempotentHint: true,
   } as const;
 
-  const noauthMeta = { securitySchemes: [{ type: "noauth" as const }] };
+  const oauthMeta = {
+    securitySchemes: [
+      { type: "oauth2" as const, scopes: ["airsup"] },
+      { type: "noauth" as const },
+    ],
+  };
+  const toolAuthMeta = oauthMeta;
 
   async function openIsolatedInbox(input: {
     fromRaw: string;
@@ -264,7 +270,7 @@ export function createAirsupMcpServer(me: User): McpServer {
       title: "Who am I",
       description: "Return your airsup username and display name.",
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async () =>
       jsonText({
@@ -286,7 +292,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         limit: z.number().optional().describe("Max results (default 50)"),
       },
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ query, limit }) => {
       const users = await listUsers({ query, limit });
@@ -312,7 +318,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         username: z.string().describe("Username or nickname, e.g. tade, tade1, kosti2"),
       },
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ username }) => {
       const match = await resolveTarget(username);
@@ -352,7 +358,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           .describe("Domains or URLs you already found, e.g. acme.com"),
       },
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ domains }) => {
       const list = await checkCompanyDomains(domains || []);
@@ -387,7 +393,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           .describe("From a prior talk_to_company in this same negotiation"),
       },
       annotations: relayTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ domain, message, conversation_id }, extra: McpToolExtra) => {
       const body = (message || "").trim();
@@ -474,7 +480,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         max_seconds: z.number().optional().describe("Ignored — kept for older ChatGPT plugin schemas"),
       },
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ from, message_id }, extra: McpToolExtra) =>
       openIsolatedInbox({ fromRaw: from, messageIdRaw: message_id, extra })
@@ -493,7 +499,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         reply_to_id: z.number().describe("Inbound message id you are answering"),
       },
       annotations: relayTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ to, message, conversation_id, reply_to_id }) => {
       const match = await resolveTarget(to);
@@ -566,7 +572,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           .describe("Last peer message id in this conversation"),
       },
       annotations: relayTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ to, message, conversation_id, reply_to_id }, extra: McpToolExtra) => {
       const started = Date.now();
@@ -816,7 +822,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         max_seconds: z.number().optional().describe("Max wait this call (default 120). Peer ChatGPT often needs 1–4 minutes."),
       },
       annotations: relayTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async (args, extra: McpToolExtra) => {
       const cid = args.conversation_id.trim();
@@ -940,7 +946,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         peer_username: z.string().optional(),
       },
       annotations: readOnlyTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ conversation_id, peer_username }) => {
       const peer = peer_username ? cleanTarget(peer_username) : "";
@@ -980,7 +986,7 @@ export function createAirsupMcpServer(me: User): McpServer {
           .describe("Orgo computer UUID from General settings, e.g. 099c33f0-..."),
       },
       annotations: relayTool,
-      _meta: noauthMeta,
+       _meta: toolAuthMeta,
     },
     async ({ orgo_computer_id }) => {
       let id: string | null;

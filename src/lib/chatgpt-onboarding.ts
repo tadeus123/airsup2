@@ -76,19 +76,22 @@ export function gatewaySetupSteps(input: {
   username: string;
   origin: string;
   token: string;
-}): { mcpUrl: string; steps: string[] } {
-  // Token in path — ChatGPT may drop ?token= on later MCP requests.
+}): { mcpUrl: string; universalMcpUrl: string; steps: string[] } {
+  // Universal URL — OAuth signup in ChatGPT. Legacy per-user URL kept as fallback.
+  const universalMcpUrl = `${input.origin}/mcp`;
   const mcpUrl = `${input.origin}/mcp/${input.token}`;
   const tools = PLUGIN_TOOL_NAMES.join(", ");
   return {
     mcpUrl,
+    universalMcpUrl,
     steps: [
       "Turn on Developer mode in ChatGPT settings.",
-      `Plugins → New plugin → Name: airsup ${input.username}`,
-      "Connection: paste Server URL below. Authentication: No Auth → Create.",
+      "Plugins / Connectors → New → Name: airsup",
+      `Server URL (preferred): ${universalMcpUrl} — Authentication: OAuth. Complete signup in the browser.`,
+      `Legacy fallback Server URL: ${mcpUrl} — Authentication: No Auth (only if OAuth fails).`,
       `Enable tools: ${tools}`,
       "Start a new chat and turn the airsup plugin on.",
-      'Try: "who can I talk to?" then ask Supi to message someone.',
+      "Find companies with normal ChatGPT search. Then use check_domains / talk_to_company for live Airsup endpoints.",
     ],
   };
 }
@@ -98,14 +101,22 @@ export function pluginSetupInstructions(input: {
   username: string;
   token: string;
   user: User;
-}): { mcpUrl: string; token: string; username: string; steps: string[]; tools: string[] } {
-  const { mcpUrl, steps } = gatewaySetupSteps({
+}): {
+  mcpUrl: string;
+  universalMcpUrl: string;
+  token: string;
+  username: string;
+  steps: string[];
+  tools: string[];
+} {
+  const { mcpUrl, universalMcpUrl, steps } = gatewaySetupSteps({
     origin: input.origin,
     username: input.username,
     token: input.token,
   });
   return {
     mcpUrl,
+    universalMcpUrl,
     token: input.token,
     username: input.username,
     steps,

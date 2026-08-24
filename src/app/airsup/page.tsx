@@ -8,6 +8,7 @@ type OnboardResult = {
   memberNumber: number;
   handle: string;
   mcpUrl: string;
+  universalMcpUrl?: string;
   token?: string;
   orgoComputerId?: string | null;
   orgo?: { title: string; steps: string[] };
@@ -160,8 +161,7 @@ export default function AinetPage() {
   }
 
   async function copyUrl() {
-    if (!result?.mcpUrl) return;
-    await navigator.clipboard.writeText(result.mcpUrl);
+    await navigator.clipboard.writeText(universalMcpUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
   }
@@ -196,8 +196,9 @@ export default function AinetPage() {
     }
   }
 
-  const pluginName = result ? `airsup ${result.username}` : "airsup";
-  const pluginDescription = "talk to other peoples chatgpts.";
+  const pluginName = "airsup";
+  const pluginDescription = "talk to other peoples chatgpts and company AI endpoints.";
+  const universalMcpUrl = result?.universalMcpUrl || "https://airsup2.vercel.app/mcp";
   const mcpUrl = result?.mcpUrl || "enter your name above first";
 
   return (
@@ -339,8 +340,8 @@ export default function AinetPage() {
                 <strong>description:</strong> <code>{pluginDescription}</code>
               </li>
               <li>
-                <strong>connection:</strong> <code>{mcpUrl}</code>
-                <span className="hint">note: keep it on server url.</span>
+                <strong>connection (universal):</strong> <code>{universalMcpUrl}</code>
+                <span className="hint">one URL for everyone — OAuth = signup.</span>
                 <span className="ainet-actions" style={{ display: "block", marginTop: "0.35rem" }}>
                   <button type="button" onClick={() => void copyUrl()}>
                     {copiedUrl ? "copied." : "copy url"}
@@ -348,8 +349,12 @@ export default function AinetPage() {
                 </span>
               </li>
               <li>
-                <strong>authentication:</strong> select <code>No Auth</code>.
+                <strong>authentication:</strong> select <code>OAuth</code> (complete name signup in the browser).
               </li>
+              <li>
+                <strong>legacy fallback:</strong> <code>{mcpUrl}</code> with <code>No Auth</code> only if OAuth fails.
+              </li>
+              <li>enable tools including <code>check_domains</code> and <code>talk_to_company</code>.</li>
               <li>checkmark the safety warning..</li>
               <li>click create.</li>
             </ul>
