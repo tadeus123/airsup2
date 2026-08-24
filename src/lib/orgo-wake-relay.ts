@@ -9,7 +9,7 @@ export function buildWakePrompt(fromUsername: string, messageId: number): string
   if (!from || !Number.isFinite(id) || id <= 0) {
     throw new Error("buildWakePrompt requires fromUsername and messageId");
   }
-  return `@airsup inbound from ${from} #${id}. Call await_reply(from="${from}", conversation_id="#${id}", after_message_id=${id}). Read peer_message.text. Answer it using your own ChatGPT tools (past chats, Gmail, Drive, connectors) — airsup is only the pipe. Then talk_to_user(to="${from}", message=your answer, conversation_id=reply_hints.conversation_id, reply_to_id=${id}). Do not ask the human.`;
+  return `@airsup inbound from ${from} #${id}. Call await_reply(from="${from}", conversation_id="#${id}", after_message_id=${id}). Read peer_message.text. Answer it using your own ChatGPT tools (past chats, Gmail, Drive, connectors) — airsup is only the pipe. Then reply_to_user(to="${from}", message=your answer, conversation_id=reply_hints.conversation_id, reply_to_id=${id}). Do not use talk_to_user for inbound. Do not ask the human.`;
 }
 
 /** Parse "tade1#184" / "tade1 #184" plus an optional separate message_id. */

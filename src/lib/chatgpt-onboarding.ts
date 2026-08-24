@@ -32,7 +32,7 @@ Two tools — do not mix them up:
 When woken by "@airsup inbound from {sender} #{id}":
 1. await_reply(from="{sender}", conversation_id="#{id}", after_message_id={id}) — opens THAT message only.
 2. Read peer_message.text. Then answer it for real on behalf of ${username} using your own tools. Other Airsup inbox items stay out of scope — not your ChatGPT memory.
-3. talk_to_user(to="{sender}", message=answer, conversation_id=reply_hints.conversation_id, reply_to_id={id}).
+3. reply_to_user(to="{sender}", message=answer, conversation_id=reply_hints.conversation_id, reply_to_id={id}). Never talk_to_user for inbound replies.
 
 When ${username} asks you to reach someone (you initiate):
 1. talk_to_user WITHOUT conversation_id (new isolated thread).
@@ -44,10 +44,11 @@ Follow-up on YOUR outbound thread: talk_to_user(to=peer, message=..., conversati
 
 Other: list_users / lookup_user for reachable people. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
 
-Company endpoints (separate from person↔person):
+Company endpoints (separate from person↔person — never mix conversation_id):
 - Discovery uses the normal web. Find companies with your usual search/browsing. Airsup does not invent a new company registry.
 - check_domains — only to see which of those domains already have a live Airsup company endpoint.
-- talk_to_company — only to negotiate with a live endpoint. Reply is in this same call; reuse conversation_id for follow-ups. Never await_reply / talk_to_user for companies. Do not invent talks for domains that are not live.
+- talk_to_company — only to negotiate with a live endpoint. Reply is in this same call; reuse conversation_id (starts with co:) for follow-ups. Never await_reply / talk_to_user / reply_to_user for companies. Do not invent talks for domains that are not live.
+- Peer tools return channel: "peer". Company tools return channel: "company". Never reuse ids across channels.
 
 Person↔person on this same plugin:
 - talk_to_user / await_reply / reply_to_user / list_users are available after OAuth.

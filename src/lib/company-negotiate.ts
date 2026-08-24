@@ -7,7 +7,10 @@ import {
   type CompanyPublic,
   type CompanySecret,
 } from "./companies";
-import { randomUUID } from "node:crypto";
+import {
+  mintCompanyConversationId,
+  normalizeCompanyConversationId,
+} from "./conversation-scope";
 
 const DEFAULT_MODEL = "gpt-4o";
 const MAX_HISTORY = 40;
@@ -99,11 +102,12 @@ export type CompanyTalkResult =
   | {
       ok: true;
       live: true;
+      channel: "company";
       domain: string;
       company: Pick<CompanyPublic, "name" | "domain">;
-      conversationId: string;
-      message: string;
-      reply: string;
+      conversation_id: string;
+      your_message: string;
+      company_message: string;
     };
 
 export async function talkToCompanyEndpoint(input: {
@@ -121,11 +125,24 @@ export async function talkToCompanyEndpoint(input: {
       error: `no company endpoint for ${input.domain}`,
     };
   }
-  const conversationId = (input.conversationId || "").trim() || randomUUID();
+  const conversationId = input.conversationId
+    ? normalizeCompanyConversationId(input.conversationId)
+    : mintCompanyConversationId();
   const history = await listCompanyMessages({
     companyId: company.id,
     conversationId,
   });
+  if (history.length > 0) {
+    const owner = history[0]!.visitorUsername;
+    if (owner !== input.visitorUsername.toLowerCase()) {
+      return {
+        ok: false,
+        live: false,
+        domain: input.domain,
+        error: "conversation_id belongs to another visitor — start a new talk_to_company",
+      };
+    }
+  }
   await appendCompanyMessage({
     companyId: company.id,
     conversationId,
@@ -149,10 +166,11 @@ export async function talkToCompanyEndpoint(input: {
   return {
     ok: true,
     live: true,
+    channel: "company",
     domain: company.domain,
     company: { name: company.name, domain: company.domain },
-    conversationId,
-    message: input.message,
-    reply,
+    conversation_id: conversationId,
+    your_message: input.message,
+    company_message: reply,
   };
 }

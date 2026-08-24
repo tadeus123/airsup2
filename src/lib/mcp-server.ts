@@ -35,6 +35,11 @@ import {
   describePeerWait,
 } from "./peer-wait-status";
 import {
+  companyConversationGuard,
+  companyDomainGuard,
+  peerConversationGuard,
+} from "./conversation-scope";
+import {
   bindProgressReporter,
   formatProgressTiming,
   withProgressHeartbeat,
@@ -149,6 +154,7 @@ function inboundConversationMarker(conversationId: string): number | undefined {
 function isolatedInboxPayload(inbound: InboxMessage) {
   return {
     ok: true,
+    channel: "peer" as const,
     isolation: "strict",
     peer_message: {
       id: inbound.id,
@@ -164,8 +170,8 @@ function isolatedInboxPayload(inbound: InboxMessage) {
     },
     scope:
       "Answer peer_message.text only (ignore other airsup inbox items). Use your own ChatGPT tools — past chats, Gmail, Drive, connectors — to actually answer. Airsup is just the send/receive pipe.",
-    next_action: "talk_to_user",
-    instructions: `Use your own tools to answer, then talk_to_user(to="${inbound.fromUsername}", message=your answer, conversation_id="${inbound.conversationId}", reply_to_id=${inbound.id}). Do not start a new airsup thread.`,
+    next_action: "reply_to_user",
+    instructions: `Use your own tools to answer, then reply_to_user(to="${inbound.fromUsername}", message=your answer, conversation_id="${inbound.conversationId}", reply_to_id=${inbound.id}). Do not use talk_to_user for inbound replies.`,
   };
 }
 
@@ -176,6 +182,7 @@ function formatWakeSent(
 ) {
   return jsonText({
     ok: true,
+    channel: "peer",
     message: msg,
     via: "wake",
     next_action: "await_reply",
@@ -188,7 +195,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.3.0" },
+    { name: "airsup", version: "3.4.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 
@@ -319,6 +326,10 @@ export function createAirsupMcpServer(me: User): McpServer {
        _meta: toolAuthMeta,
     },
     async ({ username }) => {
+      const domainErr = companyDomainGuard(username, "lookup_user");
+      if (domainErr) {
+        return jsonText({ found: false, query: username, error: domainErr });
+      }
       const match = await resolveTarget(username);
       if (!match.ok) {
         return jsonText({ found: false, query: username, error: match.error });
@@ -398,6 +409,8 @@ export function createAirsupMcpServer(me: User): McpServer {
       const host = normalizeDomain(domain || "");
       if (!host) return errorText("domain is required");
       if (!body) return errorText("message is required");
+      const convErr = companyConversationGuard(conversation_id);
+      if (convErr) return errorText(convErr);
       const report = bindProgressReporter(extra, 100);
       try {
         const result = await withProgressHeartbeat(
@@ -435,16 +448,18 @@ export function createAirsupMcpServer(me: User): McpServer {
           peerUsername: result.company.domain,
           httpStatus: 200,
           summary: `${me.username} ↔ ${result.company.domain}`,
-          detail: { conversationId: result.conversationId },
+          detail: { conversationId: result.conversation_id },
         });
         await report(`${result.company.name} replied.`, 95);
         return jsonText({
           ok: true,
           live: true,
+          channel: "company",
           company: result.company,
-          conversation_id: result.conversationId,
-          your_message: result.message,
-          company_message: result.reply,
+          domain: result.domain,
+          conversation_id: result.conversation_id,
+          your_message: result.your_message,
+          company_message: result.company_message,
         });
       } catch (e) {
         const err = e instanceof Error ? e.message : String(e);
@@ -500,6 +515,10 @@ export function createAirsupMcpServer(me: User): McpServer {
        _meta: toolAuthMeta,
     },
     async ({ to, message, conversation_id, reply_to_id }) => {
+      const domainErr = companyDomainGuard(to, "reply_to_user");
+      if (domainErr) return errorText(domainErr);
+      const convErr = peerConversationGuard(conversation_id, "reply_to_user");
+      if (convErr) return errorText(convErr);
       const match = await resolveTarget(to);
       if (!match.ok) return errorText(match.error);
       const target = match.username;
@@ -537,6 +556,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         });
         return jsonText({
           ok: true,
+          channel: "peer",
           message: combined.message,
           acked_inbound_id: inboundId,
           via: "api",
@@ -579,11 +599,19 @@ export function createAirsupMcpServer(me: User): McpServer {
       const text = message.trim();
       if (!text) return errorText("message is required");
 
+      const domainErr = companyDomainGuard(to, "talk_to_user");
+      if (domainErr) return errorText(domainErr);
+      const convErr = peerConversationGuard(conversation_id, "talk_to_user");
+      if (convErr) return errorText(convErr);
+
       await report("Starting airsup message…", 1);
       await report(`Looking up ${to}…`, 5);
       const match = await resolveTarget(to);
       if (!match.ok) return errorText(match.error);
       const peer = match.user;
+      if (peer.username === me.username) {
+        return errorText("Cannot message yourself on Airsup.");
+      }
       if (match.fuzzy) {
         await report(`Resolved "${match.resolvedFrom}" → ${peer.username}`, 8);
       }
@@ -691,6 +719,7 @@ export function createAirsupMcpServer(me: User): McpServer {
             });
             return jsonText({
               ok: true,
+              channel: "peer",
               isolation: "strict",
               message: combined.message,
               acked_inbound_id: inbound.id,
@@ -825,6 +854,10 @@ export function createAirsupMcpServer(me: User): McpServer {
     async (args, extra: McpToolExtra) => {
       const cid = args.conversation_id.trim();
       if (!cid) return errorText("conversation_id is required");
+      const convErr = peerConversationGuard(cid, "await_reply");
+      if (convErr) return errorText(convErr);
+      const domainErr = companyDomainGuard(args.from, "await_reply");
+      if (domainErr) return errorText(domainErr);
       const afterId = Number(args.after_message_id);
       const markerId = inboundConversationMarker(cid);
       const hashed = parseInboxRef(args.from);
@@ -909,6 +942,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         : null;
       return jsonText({
         ok: true,
+        channel: "peer",
         isolation: "strict",
         conversation_id: cid,
         peer_username: from,
@@ -947,6 +981,8 @@ export function createAirsupMcpServer(me: User): McpServer {
        _meta: toolAuthMeta,
     },
     async ({ conversation_id, peer_username }) => {
+      const convErr = peerConversationGuard(conversation_id, "cancel_wait");
+      if (convErr) return errorText(convErr);
       const peer = peer_username ? cleanTarget(peer_username) : "";
       const wait = await cancelConversationWait({
         username: me.username,
