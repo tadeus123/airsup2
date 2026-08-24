@@ -28,6 +28,8 @@ import { normalizeOrgoComputerId, orgoRelayEnabled } from "./orgo-routing";
 import { runOrgoRelayCoordinated } from "./orgo-relay-coordinator";
 import { wakePeerViaOrgo, parseInboxRef } from "./orgo-wake-relay";
 import { pluginMcpInstructions } from "./chatgpt-onboarding";
+import { checkCompanyDomains, normalizeDomain } from "./companies";
+import { talkToCompanyEndpoint } from "./company-negotiate";
 import {
   awaitInstructionsForPeerStatus,
   describePeerWait,
@@ -335,6 +337,131 @@ export function createAirsupMcpServer(me: User): McpServer {
         bio: user.bio,
         talkPhrase: `talk to ${user.username}`,
       });
+    }
+  );
+
+  server.registerTool(
+    "check_domains",
+    {
+      title: "Check company domains",
+      description:
+        "After web search, pass company domains/URLs. Returns which already have a live Airsup company AI you can talk_to_company.",
+      inputSchema: {
+        domains: z
+          .array(z.string())
+          .describe("Domains or URLs from web search, e.g. acme.com or https://acme.com"),
+      },
+      annotations: readOnlyTool,
+      _meta: noauthMeta,
+    },
+    async ({ domains }) => {
+      const list = await checkCompanyDomains(domains || []);
+      const live = list.filter((d) => d.live);
+      logActivitySafe({
+        kind: "check_domains",
+        ok: true,
+        username: me.username,
+        httpStatus: 200,
+        summary: `${me.username} checked ${list.length} domain(s), ${live.length} live`,
+        detail: { count: list.length, live: live.length },
+      });
+      return jsonText({
+        domains: list,
+        live_count: live.length,
+        instructions:
+          live.length > 0
+            ? `Talk to live endpoints with talk_to_company(domain=...). Skip domains where live is false — do not pretend you negotiated.`
+            : "None of these domains have an Airsup company endpoint yet. Do not invent conversations.",
+      });
+    }
+  );
+
+  server.registerTool(
+    "talk_to_company",
+    {
+      title: "Talk to company AI",
+      description:
+        "Real negotiation with a company's Airsup AI (their model, their context). Returns their reply in this call. Pass conversation_id for follow-ups. Do not use talk_to_user or await_reply here.",
+      inputSchema: {
+        domain: z.string().describe("Company domain, e.g. acme.com"),
+        message: z.string().describe("What you say, negotiating as your user"),
+        conversation_id: z
+          .string()
+          .optional()
+          .describe("From a prior talk_to_company in this same negotiation"),
+      },
+      annotations: relayTool,
+      _meta: noauthMeta,
+    },
+    async ({ domain, message, conversation_id }, extra: McpToolExtra) => {
+      const body = (message || "").trim();
+      const host = normalizeDomain(domain || "");
+      if (!host) return errorText("domain is required");
+      if (!body) return errorText("message is required");
+      const report = bindProgressReporter(extra, 100);
+      try {
+        const result = await withProgressHeartbeat(
+          () =>
+            talkToCompanyEndpoint({
+              domain: host,
+              visitorUsername: me.username,
+              message: body,
+              conversationId: conversation_id,
+            }),
+          report,
+          {
+            startMessage: `Talking to ${host}'s company AI…`,
+            tickMessage: (timing) =>
+              `Still in negotiation with ${host}… ${formatProgressTiming(timing)}`,
+            startProgress: 15,
+            endProgress: 88,
+            typicalMinSec: 8,
+            typicalMaxSec: 45,
+            intervalMs: 4000,
+          }
+        );
+        if (!result.ok) {
+          return jsonText({
+            ok: false,
+            live: false,
+            domain: host,
+            error: result.error,
+            instructions:
+              "No company endpoint on this domain. Do not invent a negotiation. Check other domains or tell the user this one is not on Airsup yet.",
+          });
+        }
+        logActivitySafe({
+          kind: "talk_to_company",
+          ok: true,
+          username: me.username,
+          peerUsername: result.company.domain,
+          httpStatus: 200,
+          summary: `${me.username} ↔ ${result.company.domain}`,
+          detail: { conversationId: result.conversationId },
+        });
+        await report(`${result.company.name} replied.`, 95);
+        return jsonText({
+          ok: true,
+          live: true,
+          company: result.company,
+          conversation_id: result.conversationId,
+          your_message: result.message,
+          company_message: result.reply,
+          next_action: "continue or recap",
+          instructions: `This is a live negotiation with ${result.company.name}. To continue, talk_to_company(domain="${result.company.domain}", message=..., conversation_id="${result.conversationId}"). When done, recap usefully for ${me.username}.`,
+        });
+      } catch (e) {
+        const err = e instanceof Error ? e.message : String(e);
+        logActivitySafe({
+          kind: "talk_to_company",
+          ok: false,
+          username: me.username,
+          peerUsername: host,
+          httpStatus: 500,
+          summary: `talk_to_company ${host} failed: ${err}`,
+        });
+        return errorText(err);
+      }
     }
   );
 

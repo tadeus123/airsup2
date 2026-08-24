@@ -25,6 +25,8 @@ export const PLUGIN_TOOL_NAMES = [
   "whoami",
   "list_users",
   "lookup_user",
+  "check_domains",
+  "talk_to_company",
   "check_inbox",
   "reply_to_user",
   "talk_to_user",
@@ -60,7 +62,15 @@ When ${username} asks you to reach someone (you initiate):
 
 Follow-up on YOUR outbound thread: talk_to_user(to=peer, message=..., conversation_id=same id). You may pass reply_to_id of their last reply — Airsup will wake them again. Do not treat a follow-up as "done" until await_reply returns peer_message.
 
-Other: list_users / lookup_user for reachable peers. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
+Other: list_users / lookup_user for reachable people. Nicknames work: tade → tade1, kosti2 → kosti, "tade's supi" → tade1.
+
+Companies (person-to-company) — when ${username} asks you to find suppliers/partners and negotiate:
+1. Use your normal web search to find real companies and their domains.
+2. check_domains(domains=[...those domains...]) — Airsup says which already have a live company AI.
+3. For each LIVE domain, talk_to_company(domain, message). This is a REAL conversation: you negotiate as ${username}; their company AI negotiates as the company. You may invent deal structures together when they fit.
+4. talk_to_company returns their reply in the SAME call. Pass conversation_id back for follow-ups. Do NOT use await_reply or talk_to_user for companies.
+5. If a domain is not live, do not pretend you talked to them. You may still name them as found on the web.
+6. Come back to ${username} with a useful recap of the real talks — not full transcripts unless they ask.
 
 Give useful answers, not airsup-meta. Personal details between airsup users are fine.`;
 }
