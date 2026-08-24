@@ -9,8 +9,6 @@
   --cta-fg: #ffffff;
   --danger: #b42318;
   --radius: 6px;
-  --font-brand: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
-  --font-sans: var(--font-sans), "Segoe UI", system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
@@ -38,7 +36,7 @@ body {
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-color);
   line-height: 1.55;
@@ -80,7 +78,7 @@ button {
 }
 
 .as-mark {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-weight: 800;
   font-size: 1.05rem;
   letter-spacing: 0.08em;
@@ -236,7 +234,7 @@ button {
 }
 
 .as-hero h1 {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-weight: 700;
   font-size: clamp(1.85rem, 4vw, 2.45rem);
   letter-spacing: -0.03em;
@@ -261,7 +259,7 @@ button {
 }
 
 .as-stat-n {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-weight: 700;
   font-size: 1.65rem;
   line-height: 1;
@@ -290,7 +288,7 @@ button {
 }
 
 .ainet-title {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -415,7 +413,7 @@ button {
 }
 
 .ainet-section h2 {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -565,7 +563,7 @@ button {
   min-height: 100dvh;
   background-color: var(--bg-color);
   color: var(--text-color);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   position: relative;
@@ -600,7 +598,7 @@ button {
   position: static;
   transform: none;
   margin: 0 0 1rem;
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -621,7 +619,7 @@ button {
 
 .portal-gate-eyebrow {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -632,7 +630,7 @@ button {
 
 .portal-gate-title {
   margin: 0;
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: clamp(2.2rem, 6vw, 3rem);
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -648,7 +646,7 @@ button {
 
 .portal-gate-whisper {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   font-size: 1.05rem;
   font-weight: 400;
   font-style: normal;
@@ -688,7 +686,7 @@ button {
 }
 
 .portal-gate-path-label {
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: 0;
@@ -698,7 +696,7 @@ button {
 
 .portal-gate-path-meta {
   flex-shrink: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   font-size: 0.85rem;
   font-weight: 500;
   letter-spacing: 0;
@@ -745,7 +743,7 @@ button {
   position: static;
   transform: none;
   margin: 0.5rem 0 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   font-size: 0.9rem;
   font-weight: 400;
   letter-spacing: 0;
@@ -1847,7 +1845,7 @@ button {
 
 .co-login-panel h2 {
   margin: 0;
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
   color: var(--text-color);
@@ -1958,7 +1956,7 @@ button {
 }
 
 .co-live-name {
-  font-family: var(--font-brand);
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
   font-size: clamp(1.75rem, 4vw, 2.25rem);
   font-weight: 700;
   letter-spacing: -0.03em;
