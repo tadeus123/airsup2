@@ -113,6 +113,7 @@ echo ok`
 }
 
 const VM_SEND_PATH = "/tmp/airsup-chatgpt-send.js";
+const VM_LOGIN_PATH = "/tmp/airsup-chatgpt-login.js";
 
 function loadVmSendScript(): string {
   const candidates = [
@@ -130,21 +131,78 @@ function loadVmSendScript(): string {
   throw new Error("airsup-chatgpt-send.js missing from deployment bundle");
 }
 
-async function deployVmSendScript(computerId: string): Promise<void> {
-  const script = loadVmSendScript();
+function loadVmLoginScript(): string {
+  const candidates = [
+    join(process.cwd(), "scripts/airsup-chatgpt-login.js"),
+    join(process.cwd(), "src/lib/vm/airsup-chatgpt-login.js"),
+    join(__dirname, "vm/airsup-chatgpt-login.js"),
+  ];
+  for (const p of candidates) {
+    try {
+      return readFileSync(p, "utf8");
+    } catch {
+      /* try next */
+    }
+  }
+  throw new Error("airsup-chatgpt-login.js missing from deployment bundle");
+}
+
+async function deployVmScript(
+  computerId: string,
+  path: string,
+  script: string
+): Promise<void> {
   const b64 = Buffer.from(script, "utf8").toString("base64");
   const out = await orgoBash(
     computerId,
     `python3 - <<'PY'
 import base64, os
 raw = base64.b64decode("${b64}")
-open("${VM_SEND_PATH}", "wb").write(raw)
-os.chmod("${VM_SEND_PATH}", 0o755)
+open("${path}", "wb").write(raw)
+os.chmod("${path}", 0o755)
 print("ok", len(raw))
 PY`
   );
   if (!/\bok\b/.test(out)) {
-    throw new Error(`deployVmSendScript failed: ${out.slice(0, 200)}`);
+    throw new Error(`deployVmScript ${path} failed: ${out.slice(0, 200)}`);
+  }
+}
+
+async function deployVmSendScript(computerId: string): Promise<void> {
+  await deployVmScript(computerId, VM_SEND_PATH, loadVmSendScript());
+}
+
+async function deployVmLoginScript(computerId: string): Promise<void> {
+  await deployVmScript(computerId, VM_LOGIN_PATH, loadVmLoginScript());
+}
+
+/**
+ * Fill ChatGPT login via Chrome CDP on the VM (reliable DOM fill, not VNC/pixels).
+ */
+export async function fillChatGptLoginViaCdp(
+  computerId: string,
+  email: string,
+  password: string
+): Promise<void> {
+  await deployVmLoginScript(computerId);
+  const emailB64 = Buffer.from(email, "utf8").toString("base64");
+  const passB64 = Buffer.from(password, "utf8").toString("base64");
+  const out = await orgoBash(
+    computerId,
+    `node ${VM_LOGIN_PATH} ${emailB64} ${passB64}`
+  );
+  const start = out.lastIndexOf("{");
+  const json = start >= 0 ? out.slice(start) : out;
+  let parsed: { ok?: boolean; error?: string } | null = null;
+  try {
+    parsed = JSON.parse(json) as { ok?: boolean; error?: string };
+  } catch {
+    parsed = null;
+  }
+  if (!parsed?.ok) {
+    throw new Error(
+      `CDP login failed: ${(parsed?.error || out).slice(0, 240)}`
+    );
   }
 }
 

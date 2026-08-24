@@ -1,4 +1,4 @@
-import { localSleep, orgoClick, orgoPressKey, orgoType } from "./orgo-actions";
+import { fillChatGptLoginViaCdp, localSleep, orgoClick, orgoPressKey, orgoType } from "./orgo-actions";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -429,14 +429,19 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
   await focusChatGptEmailForm(computerId);
 }
 
-/** Fill ChatGPT email + password on the VM via Orgo desktop APIs (not VNC typing). */
+/** Fill ChatGPT email + password on the VM (CDP DOM fill, pixel click fallback). */
 export async function fillChatGptLoginOnDesktop(
   computerId: string,
   email: string,
   password: string
 ): Promise<void> {
-  // chatgpt.com/auth/login @ ~1280x720: social buttons, then email field, then Continue
-  // Avoid phone row (~y 420); email input sits lower (~y 545).
+  try {
+    await fillChatGptLoginViaCdp(computerId, email, password);
+    return;
+  } catch {
+    // Fallback: Orgo click/type APIs if CDP path fails
+  }
+
   await orgoClick(computerId, 640, 545);
   await localSleep(500);
   await orgoPressKey(computerId, "ctrl+a");
@@ -448,7 +453,6 @@ export async function fillChatGptLoginOnDesktop(
   await orgoPressKey(computerId, "Return");
   await orgoWait(computerId, 4);
 
-  // Password step on auth.openai.com
   await orgoClick(computerId, 640, 360);
   await localSleep(400);
   await orgoPressKey(computerId, "ctrl+a");
