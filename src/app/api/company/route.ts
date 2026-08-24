@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       name?: string;
       domain?: string;
       apiKey?: string;
+      password?: string;
       stance?: string;
       contextNotes?: string;
     };
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
       name: body.name || "",
       domain: body.domain || "",
       apiKey: body.apiKey || "",
+      password: body.password || "",
       stance: body.stance,
       contextNotes: body.contextNotes,
     });

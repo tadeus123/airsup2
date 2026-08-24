@@ -9,6 +9,7 @@ export default function CompanyGoLivePage() {
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [password, setPassword] = useState("");
   const [stance, setStance] = useState("");
   const [contextNotes, setContextNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,7 +23,7 @@ export default function CompanyGoLivePage() {
       const res = await fetch("/api/company", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, domain, apiKey, stance, contextNotes }),
+        body: JSON.stringify({ name, domain, apiKey, password, stance, contextNotes }),
       });
       const json = (await res.json()) as {
         token?: string;
@@ -38,7 +39,7 @@ export default function CompanyGoLivePage() {
 
   return (
     <main className="ainet co-page">
-      <CompanyNav subtitle="company" />
+      <CompanyNav subtitle="company" showLogin />
 
       <div className="ainet-tagline">
         <p>turn on a counterpart other AIs can talk to.</p>
@@ -72,6 +73,21 @@ export default function CompanyGoLivePage() {
             spellCheck={false}
           />
           <em>buyer AIs find you on the web, then Airsup checks this domain.</em>
+        </label>
+
+        <label className="co-field">
+          <span>password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="for your company home"
+            required
+            minLength={8}
+            disabled={busy}
+            autoComplete="new-password"
+          />
+          <em>later: login with domain + this password. no email.</em>
         </label>
 
         <label className="co-field">

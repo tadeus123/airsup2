@@ -1,10 +1,15 @@
 import { randomUUID } from "node:crypto";
 import {
   encryptCompanyApiKey,
+  encryptDashboardToken,
+  decryptDashboardToken,
   hashCompanyToken,
   mintCompanyToken,
   companyKeyLast4,
   assertOpenAiKey,
+  assertCompanyPassword,
+  hashCompanyPassword,
+  verifyCompanyPassword,
 } from "./company-crypto";
 import { supabaseConfig, supabaseRpc } from "./users";
 
@@ -58,7 +63,11 @@ export type CompanyConversation = {
   isTest: boolean;
 };
 
-type MemoryCompany = CompanySecret & { tokenHash: string };
+type MemoryCompany = CompanySecret & {
+  tokenHash: string;
+  passwordHash: string;
+  dashboardTokenEnc: string;
+};
 type MemoryStore = {
   byId: Map<string, MemoryCompany>;
   byDomain: Map<string, string>;
@@ -168,6 +177,7 @@ export async function createCompany(input: {
   name: string;
   domain: string;
   apiKey: string;
+  password: string;
   stance?: string;
   contextNotes?: string;
 }): Promise<{ company: CompanyPublic; token: string }> {
@@ -175,8 +185,10 @@ export async function createCompany(input: {
   if (name.length < 2) throw new Error("company name required");
   const domain = assertDomain(input.domain);
   const apiKey = assertOpenAiKey(input.apiKey);
+  const passwordHash = hashCompanyPassword(input.password);
   const minted = mintCompanyToken();
   const apiKeyEnc = encryptCompanyApiKey(apiKey);
+  const dashboardTokenEnc = encryptDashboardToken(minted.token);
   const keyLast4 = companyKeyLast4(apiKey);
   const stance = (input.stance || "").trim();
   const contextNotes = (input.contextNotes || "").trim();
@@ -194,6 +206,8 @@ export async function createCompany(input: {
       p_stance: stance,
       p_context_notes: contextNotes,
       p_model: "gpt-4o",
+      p_password_hash: passwordHash,
+      p_dashboard_token_enc: dashboardTokenEnc,
     });
     if (!row?.id) throw new Error("failed to create company");
     return { company: mapCompanyPublic(row), token: minted.token };
@@ -215,6 +229,8 @@ export async function createCompany(input: {
     contextNotes,
     apiKeyEnc,
     tokenHash: minted.hash,
+    passwordHash,
+    dashboardTokenEnc,
     createdAt: now,
     updatedAt: now,
   };
@@ -222,6 +238,56 @@ export async function createCompany(input: {
   memory.byDomain.set(domain, id);
   memory.byHash.set(minted.hash, id);
   return { company: publicOf(company), token: minted.token };
+}
+
+export async function loginCompany(input: {
+  domain: string;
+  password: string;
+}): Promise<{ company: CompanyPublic; token: string }> {
+  const domain = assertDomain(input.domain);
+  assertCompanyPassword(input.password);
+
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const row = await companyRpc<Record<string, unknown> | null>("company_login_secrets", {
+      p_token: cfg.token,
+      p_domain: domain,
+    });
+    if (!row) throw new Error("no company live on that domain");
+    const passwordHash = String(row.passwordHash ?? "");
+    const dashboardTokenEnc = String(row.dashboardTokenEnc ?? "");
+    if (!passwordHash || !dashboardTokenEnc) {
+      throw new Error("this company has no password login yet — use your dashboard bookmark");
+    }
+    if (!verifyCompanyPassword(input.password, passwordHash)) {
+      throw new Error("wrong domain or password");
+    }
+    const token = decryptDashboardToken(dashboardTokenEnc);
+    return {
+      company: {
+        id: String(row.id ?? ""),
+        name: String(row.name ?? ""),
+        domain: String(row.domain ?? domain),
+        tokenPrefix: "",
+        keyLast4: "",
+        model: "gpt-4o",
+        stance: "",
+        contextNotes: "",
+      },
+      token,
+    };
+  }
+
+  const id = memory.byDomain.get(domain);
+  const c = id ? memory.byId.get(id) : undefined;
+  if (!c) throw new Error("no company live on that domain");
+  if (!c.passwordHash || !c.dashboardTokenEnc) {
+    throw new Error("this company has no password login yet — use your dashboard bookmark");
+  }
+  if (!verifyCompanyPassword(input.password, c.passwordHash)) {
+    throw new Error("wrong domain or password");
+  }
+  return { company: publicOf(c), token: decryptDashboardToken(c.dashboardTokenEnc) };
 }
 
 export async function getCompanyByToken(token: string): Promise<CompanyPublic | null> {

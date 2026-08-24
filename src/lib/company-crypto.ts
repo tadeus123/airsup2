@@ -1,29 +1,88 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from "node:crypto";
 
-function keyMaterial(): Buffer {
+function keyMaterial(purpose: string): Buffer {
   const secret = process.env.AIRSUP_DB_TOKEN || "airsup-local-company-key";
-  return createHash("sha256").update(`${secret}:company-api-keys`).digest();
+  return createHash("sha256").update(`${secret}:${purpose}`).digest();
 }
 
-export function encryptCompanyApiKey(plain: string): string {
+function packAes(plain: string, purpose: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", keyMaterial(), iv);
+  const cipher = createCipheriv("aes-256-gcm", keyMaterial(purpose), iv);
   const enc = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `v1:${iv.toString("hex")}:${tag.toString("hex")}:${enc.toString("hex")}`;
 }
 
-export function decryptCompanyApiKey(packed: string): string {
+function unpackAes(packed: string, purpose: string): string {
   const parts = packed.split(":");
   if (parts[0] !== "v1" || parts.length !== 4) {
-    throw new Error("company api key is not readable");
+    throw new Error("company secret is not readable");
   }
   const iv = Buffer.from(parts[1], "hex");
   const tag = Buffer.from(parts[2], "hex");
   const enc = Buffer.from(parts[3], "hex");
-  const decipher = createDecipheriv("aes-256-gcm", keyMaterial(), iv);
+  const decipher = createDecipheriv("aes-256-gcm", keyMaterial(purpose), iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString("utf8");
+}
+
+export function encryptCompanyApiKey(plain: string): string {
+  return packAes(plain, "company-api-keys");
+}
+
+export function decryptCompanyApiKey(packed: string): string {
+  try {
+    return unpackAes(packed, "company-api-keys");
+  } catch {
+    throw new Error("company api key is not readable");
+  }
+}
+
+export function encryptDashboardToken(token: string): string {
+  return packAes(token, "company-dashboard-tokens");
+}
+
+export function decryptDashboardToken(packed: string): string {
+  try {
+    return unpackAes(packed, "company-dashboard-tokens");
+  } catch {
+    throw new Error("dashboard login is not readable");
+  }
+}
+
+export function assertCompanyPassword(raw: string): string {
+  const password = raw.trim();
+  if (password.length < 8) throw new Error("password must be at least 8 characters");
+  if (password.length > 128) throw new Error("password is too long");
+  return password;
+}
+
+export function hashCompanyPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(assertCompanyPassword(password), salt, 32);
+  return `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
+
+export function verifyCompanyPassword(password: string, packed: string): boolean {
+  if (!packed || !packed.startsWith("scrypt:")) return false;
+  const parts = packed.split(":");
+  if (parts.length !== 3) return false;
+  try {
+    const salt = Buffer.from(parts[1], "hex");
+    const expected = Buffer.from(parts[2], "hex");
+    const actual = scryptSync(password.trim(), salt, expected.length);
+    if (actual.length !== expected.length) return false;
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
 
 export function companyKeyLast4(apiKey: string): string {
