@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { CompanyNav } from "./CompanyChrome";
 
@@ -48,12 +48,7 @@ export default function CompanyDashboard() {
   const [loading, setLoading] = useState(true);
   const [chatting, setChatting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  const dashboardUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return `${window.location.origin}/company/d/${token}`;
-  }, [token]);
 
   const load = useCallback(
     async (conversationId: string) => {
@@ -173,17 +168,10 @@ export default function CompanyDashboard() {
     }
   }
 
-  async function copyLink() {
-    if (!dashboardUrl) return;
-    await navigator.clipboard.writeText(dashboardUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   if (loading) {
     return (
       <main className="ainet co-page">
-        <CompanyNav subtitle="company" />
+        <CompanyNav subtitle="company" showLogin />
         <p className="ainet-muted">loading…</p>
       </main>
     );
@@ -192,7 +180,7 @@ export default function CompanyDashboard() {
   if (!company) {
     return (
       <main className="ainet co-page">
-        <CompanyNav subtitle="company" />
+        <CompanyNav subtitle="company" showLogin />
         <p className="ainet-note err">{error || "company not found"}</p>
       </main>
     );
@@ -203,19 +191,11 @@ export default function CompanyDashboard() {
 
   return (
     <main className="ainet co-page">
-      <CompanyNav subtitle="company" />
+      <CompanyNav subtitle="company" showLogin />
 
       <header className="co-live">
         <p className="co-live-flag">live on {company.domain}</p>
         <h1 className="co-live-name">{company.name}</h1>
-        <p className="ainet-muted">
-          bookmark this page — it is your login. key ···{company.keyLast4}
-        </p>
-        <p className="ainet-actions">
-          <button type="button" onClick={() => void copyLink()}>
-            {copied ? "copied." : "copy dashboard link"}
-          </button>
-        </p>
       </header>
 
       <section className="ainet-section" aria-label="simulate visitor AI">
