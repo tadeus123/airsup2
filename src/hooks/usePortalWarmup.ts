@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { NOVNC_URL } from "@/app/portal/chatgpt/ChatGptLoginFrame";
-import { startPortalSession } from "@/lib/portal-client";
+import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
 
-/** Start VM provisioning + preload noVNC while on the portal landing. */
+/** Start VM + Chrome while the user is still on the portal landing. */
 export function usePortalWarmup() {
   const started = useRef(false);
 
@@ -14,8 +14,17 @@ export function usePortalWarmup() {
 
     void import(/* webpackIgnore: true */ NOVNC_URL).catch(() => {});
 
-    void startPortalSession().catch(() => {
-      // Best-effort — chatgpt page retries.
-    });
+    void (async () => {
+      try {
+        const startedSession = await startPortalSession();
+        // Prefetch desktop + kick Chrome so /portal/chatgpt is near-instant.
+        await fetchPortalDesktop(startedSession.token, {
+          launch: true,
+          waitMs: 20000,
+        });
+      } catch {
+        // Best-effort — chatgpt page retries.
+      }
+    })();
   }, []);
 }

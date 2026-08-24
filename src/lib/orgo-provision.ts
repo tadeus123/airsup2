@@ -395,38 +395,16 @@ export async function openChromeToChatGpt(computerId: string): Promise<void> {
     "elif [ -x /opt/google/chrome/google-chrome ]; then CHROME=/opt/google/chrome/google-chrome",
     "else CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1); fi",
     "if [ -z \"$CHROME\" ]; then echo NO_CHROME; exit 1; fi",
-    "setsid env DISPLAY=\"$DISPLAY\" \"$CHROME\" --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --no-default-browser-check --hide-crash-restore-bubble --disable-session-crashed-bubble --window-size=1280,720 --start-maximized 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 < /dev/null &",
-    "sleep 2",
-    "pgrep -af chrome | head -2 || cat /tmp/airsup-chrome.log",
+    "if pgrep -f '/opt/google/chrome/chrome' >/dev/null 2>&1; then echo ALREADY; exit 0; fi",
+    "setsid env DISPLAY=\"$DISPLAY\" \"$CHROME\" --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --no-default-browser-check --hide-crash-restore-bubble --disable-session-crashed-bubble --remote-debugging-port=9222 --remote-allow-origins=* --window-size=1280,720 --start-maximized 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 < /dev/null &",
     "echo LAUNCHED",
   ].join("\n");
   await orgoBash(computerId, cmd);
 }
 
-async function focusChatGptEmailForm(computerId: string): Promise<void> {
-  const cmd = [
-    "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
-    "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
-    "else export DISPLAY=:99",
-    "fi",
-    "command -v xdotool >/dev/null || { echo NO_XDOTOOL; exit 0; }",
-    "W=$(xdotool search --class 'chrome' 2>/dev/null | tail -1)",
-    "if [ -n \"$W\" ]; then xdotool windowactivate --sync \"$W\" 2>/dev/null || true; fi",
-    "sleep 0.5",
-    "xdotool mousemove 640 478 click 1",
-    "sleep 2",
-    "xdotool mousemove 640 520 click 1",
-    "sleep 1",
-    "echo FOCUSED",
-  ].join("\n");
-  await orgoBash(computerId, cmd);
-}
-
-/** Launch Chrome and tab to the email login form (runs on the VM, not via VNC). */
+/** Launch Chrome quickly — no long sleeps; form fill handles the rest. */
 export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<void> {
   await openChromeToChatGpt(computerId);
-  await orgoWait(computerId, 12);
-  await focusChatGptEmailForm(computerId);
 }
 
 /** Fill ChatGPT email + password on the VM (CDP DOM fill, pixel click fallback). */
@@ -443,24 +421,23 @@ export async function fillChatGptLoginOnDesktop(
   }
 
   await orgoClick(computerId, 640, 545);
-  await localSleep(500);
+  await localSleep(300);
   await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(150);
+  await localSleep(80);
   await orgoPressKey(computerId, "BackSpace");
-  await localSleep(150);
+  await localSleep(80);
   await orgoType(computerId, email.trim());
-  await localSleep(400);
-  await orgoPressKey(computerId, "Return");
-  await orgoWait(computerId, 4);
-
-  await orgoClick(computerId, 640, 360);
-  await localSleep(400);
-  await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(150);
-  await orgoType(computerId, password);
-  await localSleep(400);
+  await localSleep(200);
   await orgoPressKey(computerId, "Return");
   await orgoWait(computerId, 2);
+
+  await orgoClick(computerId, 640, 360);
+  await localSleep(250);
+  await orgoPressKey(computerId, "ctrl+a");
+  await localSleep(80);
+  await orgoType(computerId, password);
+  await localSleep(200);
+  await orgoPressKey(computerId, "Return");
 }
 
 /** Launch ChatGPT login — await this before returning from serverless handlers. */

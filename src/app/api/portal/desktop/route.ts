@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import {
   launchChatGptLoginWithRetries,
@@ -40,8 +41,8 @@ export async function GET(request: Request) {
     const shouldWait = url.searchParams.get("wait") === "1";
     const shouldLaunch = url.searchParams.get("launch") === "1";
     const waitMs = Math.min(
-      58000,
-      Math.max(3000, Number(url.searchParams.get("waitMs") || 55000))
+      45000,
+      Math.max(3000, Number(url.searchParams.get("waitMs") || 25000))
     );
 
     if (!shouldWait) {
@@ -54,18 +55,16 @@ export async function GET(request: Request) {
       );
     }
 
-    const launchBudget = shouldLaunch ? 35_000 : 0;
-    const sessionWaitMs = Math.max(3000, waitMs - launchBudget);
-
     const session = await resolveOrgoDesktopSession(user.orgoComputerId, {
-      waitMs: sessionWaitMs,
+      waitMs,
     });
 
+    // Don't block the user on Chrome — open it after we return VNC.
     if (shouldLaunch) {
-      await Promise.race([
-        launchChatGptLoginWithRetries(user.orgoComputerId!),
-        new Promise((r) => setTimeout(r, launchBudget)),
-      ]).catch(() => {});
+      const computerId = user.orgoComputerId;
+      after(() => {
+        void launchChatGptLoginWithRetries(computerId).catch(() => {});
+      });
     }
 
     return NextResponse.json(

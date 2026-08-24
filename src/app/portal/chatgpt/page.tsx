@@ -43,7 +43,7 @@ export default function PortalChatGptPage() {
     stageTimer = setInterval(() => {
       stageIndex = Math.min(stageIndex + 1, LOADING_STAGES.length - 1);
       if (!cancelled) setLoadingText(LOADING_STAGES[stageIndex]);
-    }, 6000);
+    }, 3500);
 
     void (async () => {
       try {
@@ -51,12 +51,12 @@ export default function PortalChatGptPage() {
         if (cancelled) return;
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 90000);
+        const timeout = setTimeout(() => controller.abort(), 45000);
 
         try {
           const desk = await fetchPortalDesktop(started.token, {
             launch: true,
-            waitMs: 52000,
+            waitMs: 25000,
             signal: controller.signal,
           });
           if (!cancelled) {

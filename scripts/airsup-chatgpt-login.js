@@ -190,12 +190,17 @@ function launchChromeCdp(url) {
 
 async function ensureChromeCdp() {
   if (await cdpReady()) return;
+  // Prefer attaching to already-open chrome (launched with --remote-debugging-port).
+  for (let i = 0; i < 15; i++) {
+    await sleep(300);
+    if (await cdpReady()) return;
+  }
   seedProfile();
   sh("pkill -9 -f '/opt/google/chrome/chrome' || true; pkill -9 -f 'google-chrome' || true");
-  await sleep(1000);
+  await sleep(600);
   launchChromeCdp("https://chatgpt.com/auth/login");
-  for (let i = 0; i < 50; i++) {
-    await sleep(400);
+  for (let i = 0; i < 40; i++) {
+    await sleep(300);
     if (await cdpReady()) return;
   }
   throw new Error("Chrome CDP did not come up");
