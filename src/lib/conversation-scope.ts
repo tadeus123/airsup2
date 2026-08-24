@@ -7,9 +7,8 @@ export function looksLikeDomain(raw: string): boolean {
   const s = raw.trim().toLowerCase().replace(/^@+/, "");
   const host = s.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || "";
   if (!host.includes(".")) return false;
-  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.[a-z]{2,}$/i.test(
-    host
-  );
+  // label.label… with a 2+ letter final segment (acme.com, blackbird.care, sub.acme.co.uk)
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(host);
 }
 
 export function isCompanyConversationId(id: string): boolean {

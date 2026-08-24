@@ -167,7 +167,10 @@ async function testThreadIsolation() {
 
 function testWakePrompt() {
   const wake = buildWakePrompt("tade1", 140);
-  assert(wake.includes('await_reply(from="tade1", conversation_id="#140", after_message_id=140)'), "wake prompt tools");
+  assert(wake.includes('await_reply(from="tade1", conversation_id="#140", after_message_id=140)'), "wake prompt await_reply");
+  assert(wake.includes("reply_to_user"), "wake mentions reply_to_user");
+  assert(wake.includes("Do not use talk_to_user"), "wake warns against talk_to_user");
+  assert(!wake.includes("Then talk_to_user("), "wake must not say talk_to_user for inbound");
   assert(wake.includes("#140"), "wake prompt id");
   const parsed = parseWakePrompt(wake);
   assert(parsed.fromUsername === "tade1" && parsed.messageId === 140, "parse tagged wake");

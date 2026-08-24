@@ -753,7 +753,7 @@ export function createAirsupMcpServer(me: User): McpServer {
         });
         if (mustReply) {
           return errorText(
-            `This conversation is an inbound thread from ${peer.username}. Reply with talk_to_user using reply_to_id of that inbound message. Do not start a new thread.`
+            `This conversation is an inbound thread from ${peer.username}. Reply with reply_to_user using reply_to_id of that inbound message. Do not start a new thread.`
           );
         }
       }
