@@ -1,9 +1,12 @@
 import {
-  fillChatGptLoginViaCdp,
+  continueChatGptLoginWith2fa,
   getChatGptAuthState,
   localSleep,
   signInChatGptViaOrgoAgent,
+  type OrgoLoginAgentResult,
 } from "./orgo-actions";
+
+export type PortalLoginResult = OrgoLoginAgentResult;
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -419,37 +422,44 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
 }
 
 /**
- * Sign into ChatGPT via Orgo's computer-use agent (one prompt, keep trying).
- * Falls back to CDP DOM fill only if the agent call errors hard.
+ * Sign into ChatGPT via Orgo computer-use agent.
+ * May return needs_2fa so the UI can collect a TOTP code and continue the thread.
  */
 export async function fillChatGptLoginOnDesktop(
   computerId: string,
   email: string,
   password: string
-): Promise<void> {
+): Promise<PortalLoginResult> {
   const already = await getChatGptAuthState(computerId);
-  if (already.loggedIn) return;
+  if (already.loggedIn) return { status: "signed_in", message: "SIGNED_IN" };
 
   await openChromeToChatGpt(computerId, { force: false });
   await localSleep(800);
 
   const agent = await signInChatGptViaOrgoAgent(computerId, email, password);
-  if (agent.ok) {
+  if (agent.status === "signed_in") {
     const after = await getChatGptAuthState(computerId);
-    if (after.loggedIn || /\bSIGNED_IN\b/i.test(agent.message)) return;
+    if (after.loggedIn || /\bSIGNED_IN\b/i.test(agent.message)) {
+      return { status: "signed_in", message: "SIGNED_IN", threadId: agent.threadId };
+    }
   }
+  return agent;
+}
 
-  // Soft verify failed — one CDP attempt, then surface agent message.
-  try {
-    await fillChatGptLoginViaCdp(computerId, email, password);
-    return;
-  } catch {
-    throw new Error(
-      agent.message
-        ? `could not finish chatgpt login: ${agent.message.slice(0, 180)}`
-        : "could not finish chatgpt login"
-    );
+/** Continue after the user enters a 2FA / authenticator code. */
+export async function continueChatGptLoginOnDesktop(
+  computerId: string,
+  threadId: string,
+  code: string
+): Promise<PortalLoginResult> {
+  const agent = await continueChatGptLoginWith2fa(computerId, threadId, code);
+  if (agent.status === "signed_in") {
+    const after = await getChatGptAuthState(computerId);
+    if (after.loggedIn || /\bSIGNED_IN\b/i.test(agent.message)) {
+      return { status: "signed_in", message: "SIGNED_IN", threadId: agent.threadId };
+    }
   }
+  return agent;
 }
 
 export { getChatGptAuthState };

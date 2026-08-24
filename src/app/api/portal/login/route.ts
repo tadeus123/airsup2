@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  continueChatGptLoginOnDesktop,
   fillChatGptLoginOnDesktop,
   getChatGptAuthState,
   orgoProvisionConfigured,
@@ -53,7 +54,55 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       email?: string;
       password?: string;
+      code?: string;
+      threadId?: string;
     };
+
+    // Step 2: continue with authenticator / 2FA code
+    const code = (body.code || "").replace(/\s+/g, "").trim();
+    const threadId = (body.threadId || "").trim();
+    if (code || threadId) {
+      if (!/^\d{6,8}$/.test(code)) {
+        return NextResponse.json(
+          { error: "invalid_code", message: "enter the 6-digit authenticator code" },
+          { status: 400 }
+        );
+      }
+      if (!threadId) {
+        return NextResponse.json(
+          { error: "missing_thread", message: "2fa session expired — sign in again" },
+          { status: 400 }
+        );
+      }
+      const continued = await continueChatGptLoginOnDesktop(computerId, threadId, code);
+      if (continued.status === "signed_in") {
+        return NextResponse.json(
+          { ok: true, status: "signed_in" },
+          { headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      if (continued.status === "needs_2fa") {
+        return NextResponse.json(
+          {
+            ok: false,
+            status: "needs_2fa",
+            threadId: continued.threadId || threadId,
+            message: "that code did not work — try the next code from your authenticator app",
+          },
+          { status: 200, headers: { "Cache-Control": "no-store" } }
+        );
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          status: "failed",
+          message: continued.message.slice(0, 220) || "could not finish 2fa",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Step 1: email + password
     const email = (body.email || "").trim();
     const password = body.password || "";
     if (!email || !password) {
@@ -66,11 +115,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "invalid_credentials" }, { status: 400 });
     }
 
-    await fillChatGptLoginOnDesktop(computerId, email, password);
+    const result = await fillChatGptLoginOnDesktop(computerId, email, password);
+
+    if (result.status === "signed_in") {
+      return NextResponse.json(
+        { ok: true, status: "signed_in" },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    if (result.status === "needs_2fa") {
+      if (!result.threadId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            status: "failed",
+            message:
+              "chatgpt asked for 2fa but the login session could not continue — try sign-in again",
+          },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          status: "needs_2fa",
+          threadId: result.threadId,
+          message: "chatgpt wants your authenticator code",
+        },
+        { status: 200, headers: { "Cache-Control": "no-store" } }
+      );
+    }
 
     return NextResponse.json(
-      { ok: true },
-      { headers: { "Cache-Control": "no-store" } }
+      {
+        ok: false,
+        status: "failed",
+        message: result.message.slice(0, 220) || "could not finish chatgpt login",
+      },
+      { status: 400 }
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "login_failed";

@@ -380,12 +380,47 @@ export async function orgoSendChat(
   }
 }
 
+export type OrgoLoginAgentResult = {
+  status: "signed_in" | "needs_2fa" | "failed";
+  message: string;
+  threadId?: string;
+};
+
+function parseOrgoAgentResponse(raw: string): {
+  message: string;
+  threadId?: string;
+} {
+  try {
+    const json = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      orgo?: { thread_id?: string };
+    };
+    return {
+      message: (json.choices?.[0]?.message?.content || "").trim(),
+      threadId: json.orgo?.thread_id?.trim() || undefined,
+    };
+  } catch {
+    return { message: raw.slice(0, 400) };
+  }
+}
+
+function classifyLoginMessage(message: string): OrgoLoginAgentResult["status"] {
+  if (/\bSIGNED_IN\b/i.test(message)) return "signed_in";
+  if (/\bNEEDS_2FA\b/i.test(message)) return "needs_2fa";
+  // Explicit agent failure wins over generic 2FA wording in the reason text.
+  if (/\bFAILED\b/i.test(message)) return "failed";
+  if (/two[- ]factor|authenticator|totp|verification code|\b2fa\b/i.test(message)) {
+    return "needs_2fa";
+  }
+  return "failed";
+}
+
 /** Ask Orgo's computer-use agent to sign into ChatGPT with the given credentials. */
 export async function signInChatGptViaOrgoAgent(
   computerId: string,
   email: string,
   password: string
-): Promise<{ ok: boolean; message: string }> {
+): Promise<OrgoLoginAgentResult> {
   const prompt = [
     "Sign the user into ChatGPT on this computer. Move fast.",
     "",
@@ -400,10 +435,12 @@ export async function signInChatGptViaOrgoAgent(
     "- If you see a phone number field or phone error, switch to email login immediately",
     "- Enter the email, continue, enter the password, continue/sign in",
     "- Handle Cloudflare/captcha if it appears (click the checkbox quickly)",
-    "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page)",
+    "- If ChatGPT asks for a two-factor / authenticator / TOTP code, STOP immediately and reply exactly: NEEDS_2FA",
+    "- Do not invent a code. Do not keep guessing.",
+    "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page), unless 2FA is required",
     "- Keep trying until it works. Retry on mistakes immediately.",
-    "- When done, reply with exactly: SIGNED_IN",
-    "- If impossible after many attempts, reply with: FAILED: <short reason>",
+    "- When fully signed in, reply with exactly: SIGNED_IN",
+    "- If impossible after many attempts (and not 2FA), reply with: FAILED: <short reason>",
   ].join("\n");
 
   const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {
@@ -427,18 +464,57 @@ export async function signInChatGptViaOrgoAgent(
     );
   }
 
-  let message = "";
-  try {
-    const json = JSON.parse(raw) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    message = (json.choices?.[0]?.message?.content || "").trim();
-  } catch {
-    message = raw.slice(0, 400);
+  const { message, threadId } = parseOrgoAgentResponse(raw);
+  return { status: classifyLoginMessage(message), message, threadId };
+}
+
+/** Continue Orgo login thread after the user provides a 2FA / TOTP code. */
+export async function continueChatGptLoginWith2fa(
+  computerId: string,
+  threadId: string,
+  code: string
+): Promise<OrgoLoginAgentResult> {
+  const prompt = [
+    "Continue signing into ChatGPT. Move fast.",
+    "",
+    `The two-factor / authenticator code is: ${code.trim()}`,
+    "",
+    "Rules:",
+    "- Enter this code into the 2FA / authenticator field now",
+    "- Submit / continue immediately",
+    "- If the code is rejected, reply: FAILED: invalid 2fa code",
+    "- When ChatGPT main chat UI is visible, reply exactly: SIGNED_IN",
+    "- Do not ask for another code in prose — if another code is needed reply: NEEDS_2FA",
+  ].join("\n");
+
+  const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${orgoApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.ORGO_LOGIN_MODEL?.trim() || "claude-sonnet-5",
+      computer_id: computerId,
+      thread_id: threadId,
+      max_steps: 40,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Orgo 2FA continue failed (${res.status}): ${raw.slice(0, 240)}`
+    );
   }
 
-  const ok = /\bSIGNED_IN\b/i.test(message) && !/\bFAILED\s*:/i.test(message);
-  return { ok, message };
+  const parsed = parseOrgoAgentResponse(raw);
+  return {
+    status: classifyLoginMessage(parsed.message),
+    message: parsed.message,
+    threadId: parsed.threadId || threadId,
+  };
 }
 
 export function localSleep(ms: number): Promise<void> {

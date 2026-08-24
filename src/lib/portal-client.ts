@@ -83,11 +83,16 @@ export async function fetchPortalLoginStatus(
   return { loggedIn: Boolean(json.loggedIn) };
 }
 
+export type PortalLoginSubmitResult =
+  | { status: "signed_in" }
+  | { status: "needs_2fa"; threadId: string; message: string }
+  | { status: "failed"; message: string };
+
 export async function submitPortalLogin(
   token: string,
   email: string,
   password: string
-): Promise<void> {
+): Promise<PortalLoginSubmitResult> {
   const res = await fetch("/api/portal/login", {
     method: "POST",
     headers: {
@@ -98,10 +103,61 @@ export async function submitPortalLogin(
   });
   const json = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
+    status?: string;
+    threadId?: string | null;
     error?: string;
     message?: string;
   };
-  if (!res.ok || !json.ok) {
-    throw new Error(json.message || json.error || "could not sign in");
+
+  if (json.status === "needs_2fa" && json.threadId) {
+    return {
+      status: "needs_2fa",
+      threadId: json.threadId,
+      message: json.message || "chatgpt wants your authenticator code",
+    };
   }
+  if (json.status === "signed_in" || (res.ok && json.ok)) {
+    return { status: "signed_in" };
+  }
+  return {
+    status: "failed",
+    message: json.message || json.error || "could not sign in",
+  };
+}
+
+export async function submitPortalLogin2fa(
+  token: string,
+  threadId: string,
+  code: string
+): Promise<PortalLoginSubmitResult> {
+  const res = await fetch("/api/portal/login", {
+    method: "POST",
+    headers: {
+      ...authHeaders(token),
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ threadId, code }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    status?: string;
+    threadId?: string | null;
+    error?: string;
+    message?: string;
+  };
+
+  if (json.status === "needs_2fa" && (json.threadId || threadId)) {
+    return {
+      status: "needs_2fa",
+      threadId: json.threadId || threadId,
+      message: json.message || "try the next authenticator code",
+    };
+  }
+  if (json.status === "signed_in" || (res.ok && json.ok)) {
+    return { status: "signed_in" };
+  }
+  return {
+    status: "failed",
+    message: json.message || json.error || "could not verify code",
+  };
 }
