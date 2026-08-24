@@ -1613,3 +1613,282 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* —— Company site (professional shell) —— */
+.co-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  gap: 3rem 4rem;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .co-shell {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding-top: 1.75rem;
+  }
+}
+
+.co-shell-intro {
+  padding-top: 0.25rem;
+}
+
+.co-eyebrow {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.co-hero {
+  max-width: none;
+  margin-bottom: 2rem;
+}
+
+.co-features {
+  list-style: none;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.co-features li {
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.co-features strong {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 650;
+  margin-bottom: 0.15rem;
+}
+
+.co-features span {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.co-aside-note {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-radius: calc(var(--radius) + 2px);
+  background: color-mix(in srgb, var(--text-color) 4%, var(--bg-color));
+  border: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 28rem;
+}
+
+.co-shell-form {
+  position: sticky;
+  top: 5.5rem;
+}
+
+@media (max-width: 960px) {
+  .co-shell-form {
+    position: static;
+  }
+}
+
+.co-form-card {
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--bg-color);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--text-color) 6%, transparent),
+    0 12px 40px color-mix(in srgb, var(--text-color) 4%, transparent);
+  padding: 1.75rem 1.65rem 1.85rem;
+}
+
+.co-form-head {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.co-form-head h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.co-form-head p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.co-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.co-fieldset + .co-fieldset {
+  margin-top: 1.35rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+}
+
+.co-fieldset legend {
+  padding: 0;
+  margin-bottom: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.co-form {
+  max-width: none;
+  gap: 0;
+}
+
+.co-form .co-field + .co-field {
+  margin-top: 1rem;
+}
+
+.co-go--wide {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.85rem 1.2rem;
+  font-size: 1rem;
+}
+
+.co-login-dialog::backdrop {
+  background: rgba(10, 10, 10, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.co-login-panel {
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 20px 50px color-mix(in srgb, var(--text-color) 12%, transparent);
+}
+
+/* —— Company dashboard —— */
+.co-dashboard {
+  max-width: 960px;
+  padding-top: 2rem;
+}
+
+.co-live-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.co-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #16a34a 12%, var(--bg-color));
+  border: 1px solid color-mix(in srgb, #16a34a 35%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, #16a34a 85%, var(--text-color));
+}
+
+[data-theme="dark"] .co-live-badge {
+  background: color-mix(in srgb, #4ade80 14%, var(--bg-color));
+  border-color: color-mix(in srgb, #4ade80 35%, transparent);
+  color: #86efac;
+}
+
+.co-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: co-live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes co-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.co-live-domain {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.co-panel {
+  margin-top: 2.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.co-panel-head {
+  margin-bottom: 1.25rem;
+}
+
+.co-panel-head h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.co-panel-head p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.co-empty {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  border: 1px dashed var(--border-color);
+  border-radius: calc(var(--radius) + 2px);
+  background: color-mix(in srgb, var(--text-color) 2%, var(--bg-color));
+}
+
+.co-empty-title {
+  margin: 0 0 0.5rem;
+  font-weight: 650;
+  font-size: 1rem;
+}
+
+.co-empty .ainet-muted {
+  margin: 0 auto;
+  max-width: 22rem;
+  font-size: 0.92rem;
+}
+
+body:has(.co-shell) {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--text-color) 5%, transparent), transparent),
+    var(--bg-color);
+}

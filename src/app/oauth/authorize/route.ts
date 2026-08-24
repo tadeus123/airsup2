@@ -42,7 +42,7 @@ function htmlPage(body: string, status = 200) {
   <style>
     :root {
       --bg:#ffffff; --fg:#0a0a0a; --muted:rgba(10,10,10,.55);
-      --border:rgba(10,10,10,.12); --cta:#0a0a0a; --cta-fg:#fff; --danger:#b42318; --radius:6px;
+      --border:rgba(10,10,10,.12); --cta:#0a0a0a; --cta-fg:#fff; --danger:#b42318; --radius:8px;
     }
     * { box-sizing: border-box; }
     body {
@@ -60,12 +60,12 @@ function htmlPage(body: string, status = 200) {
       font-weight:800; letter-spacing:0.08em; text-transform:uppercase;
       font-size:1.05rem; text-decoration:none; color:inherit;
     }
-    main { max-width: 28rem; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+    main { max-width: 26rem; margin: 0 auto; padding: 2.75rem 1.5rem 4rem; }
     h1 {
-      font-family: Syne, sans-serif; font-weight:700; font-size:1.85rem;
+      font-family: Syne, sans-serif; font-weight:700; font-size:1.75rem;
       letter-spacing:-0.03em; line-height:1.15; margin:0 0 .75rem;
     }
-    p { color:var(--muted); margin:0 0 1rem; }
+    p { color:var(--muted); margin:0 0 1rem; line-height:1.55; font-size:0.98rem; }
     label { display:flex; flex-direction:column; gap:.4rem; margin:1.15rem 0; }
     label span { color:var(--muted); font-size:0.82rem; font-weight:600; }
     input {
@@ -74,9 +74,9 @@ function htmlPage(body: string, status = 200) {
     }
     input:focus { outline:2px solid var(--fg); outline-offset:1px; border-color:transparent; }
     button[type="submit"] {
-      margin-top:0.75rem; border:0; border-radius:var(--radius);
+      width:100%; margin-top:0.75rem; border:0; border-radius:var(--radius);
       background:var(--cta); color:var(--cta-fg); font:inherit; font-weight:600;
-      padding:.7rem 1.15rem; cursor:pointer;
+      padding:.8rem 1.15rem; cursor:pointer; font-size:1rem;
     }
     button[type="submit"]:hover { opacity:0.88; }
     .err { color:var(--danger); }

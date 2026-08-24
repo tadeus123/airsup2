@@ -173,7 +173,7 @@ export default function CompanyDashboard() {
           }
         />
         <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-        <main className="ainet co-page">
+        <main className="ainet co-dashboard">
           <p className="ainet-muted">Loading…</p>
         </main>
       </>
@@ -191,7 +191,7 @@ export default function CompanyDashboard() {
           }
         />
         <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-        <main className="ainet co-page">
+        <main className="ainet co-dashboard">
           <p className="ainet-note err">{error || "Company not found"}</p>
         </main>
       </>
@@ -214,20 +214,32 @@ export default function CompanyDashboard() {
         }
       />
       <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-      <main className="ainet co-page">
+      <main className="ainet co-dashboard">
         <header className="co-live">
-          <p className="co-live-flag">Live on {company.domain}</p>
+          <div className="co-live-top">
+            <span className="co-live-badge">
+              <span className="co-live-dot" aria-hidden="true" />
+              Live
+            </span>
+            <span className="co-live-domain">{company.domain}</span>
+          </div>
           <h1 className="co-live-name">{company.name}</h1>
         </header>
 
-        <section className="ainet-section" aria-label="conversations">
-          <h2>Conversations</h2>
+        <section className="co-panel" aria-label="conversations">
+          <div className="co-panel-head">
+            <h2>Conversations</h2>
+            <p className="ainet-muted">Live AI↔AI negotiations from visitor ChatGPTs.</p>
+          </div>
           {error ? <p className="ainet-note err">{error}</p> : null}
           {realTalks.length === 0 ? (
-            <p className="ainet-muted">
-              None yet. When a visitor AI finds your domain and opens a negotiation, the thread
-              appears here automatically.
-            </p>
+            <div className="co-empty">
+              <p className="co-empty-title">No conversations yet</p>
+              <p className="ainet-muted">
+                When a visitor AI finds your domain and opens a negotiation, the thread appears
+                here automatically.
+              </p>
+            </div>
           ) : (
             <div className="co-inbox">
               <aside className="co-inbox-list" aria-label="Threads">
@@ -305,8 +317,11 @@ export default function CompanyDashboard() {
           )}
         </section>
 
-        <section className="ainet-section" aria-label="settings">
-          <h2>Teach your AI</h2>
+        <section className="co-panel" aria-label="settings">
+          <div className="co-panel-head">
+            <h2>Teach your AI</h2>
+            <p className="ainet-muted">Update negotiation stance and private context anytime.</p>
+          </div>
           <form className="co-form" onSubmit={(e) => void saveSettings(e)}>
             <label className="co-field">
               <span>How it should negotiate</span>
