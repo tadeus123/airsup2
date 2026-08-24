@@ -468,8 +468,14 @@ export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResul
   const hint = parsePeerHint(raw);
   if (!hint) return { ok: false, error: "Empty username" };
 
+  // Exact username only if they still have a live Orgo link — stale accounts
+  // (e.g. "maurice" after re-onboarding as maurice3) must fall through to fuzzy.
   const exact = await getUserByUsername(hint);
-  if (exact && !isEphemeralTestUsername(exact.username)) {
+  if (
+    exact &&
+    !isEphemeralTestUsername(exact.username) &&
+    exact.orgoComputerId
+  ) {
     return { ok: true, user: exact, hint, resolvedFrom: raw.trim(), fuzzy: false };
   }
 
@@ -486,6 +492,12 @@ export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResul
     );
 
   if (!scored.length) {
+    if (exact && !exact.orgoComputerId) {
+      return {
+        ok: false,
+        error: `"${exact.username}" exists but has no Orgo desktop linked — they need to reconnect`,
+      };
+    }
     return { ok: false, error: `No user matching "${raw.trim()}"` };
   }
 
@@ -504,7 +516,7 @@ export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResul
   }
 
   const user = await getUserByUsername(scored[0].u.username);
-  if (!user || isEphemeralTestUsername(user.username)) {
+  if (!user || isEphemeralTestUsername(user.username) || !user.orgoComputerId) {
     return { ok: false, error: "User not found" };
   }
   return { ok: true, user, hint, resolvedFrom: raw.trim(), fuzzy: true };

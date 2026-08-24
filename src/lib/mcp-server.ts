@@ -827,8 +827,11 @@ export function createAirsupMcpServer(me: User): McpServer {
           detail: { error: err, messageId: msg.id },
           requestId,
         });
+        const hint = /Desktop not found|computer ids are not stable/i.test(err)
+          ? ` Their Orgo desktop id looks stale — ${peer.username} should reconnect Airsup so the live computer is linked.`
+          : "";
         return errorText(
-          `Orgo wake to ${peer.username} failed: ${err}. Message is stored — retry talk_to_user with conversation_id="${msg.conversationId}" or use await_reply if they may have already replied.`
+          `Orgo wake to ${peer.username} failed: ${err}.${hint} Message is stored — retry talk_to_user with conversation_id="${msg.conversationId}" or use await_reply if they may have already replied.`
         );
       }
     }
