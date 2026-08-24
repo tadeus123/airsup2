@@ -91,10 +91,10 @@ export function gatewaySetupSteps(input: {
     steps: [
       "Turn on Developer mode in ChatGPT settings.",
       "Plugins / Connectors → New → Name: airsup",
-      `Server URL (preferred): ${universalMcpUrl} — Authentication: OAuth. Complete signup in the browser.`,
-      `Legacy fallback Server URL: ${mcpUrl} — Authentication: No Auth (only if OAuth fails).`,
+      `Server URL: ${universalMcpUrl} — Authentication: OAuth. That browser signup IS your Airsup account (company + person tools).`,
       `Enable tools: ${tools}`,
       "Start a new chat and turn the airsup plugin on.",
+      "Person↔person receiving: create an Orgo computer, leave ChatGPT open there, then call set_orgo_computer with that ID (same plugin / same account).",
       "Find companies with normal ChatGPT search. Then use check_domains / talk_to_company for live Airsup endpoints.",
     ],
   };

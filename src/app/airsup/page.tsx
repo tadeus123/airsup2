@@ -1,75 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { BrandNav } from "@/components/BrandNav";
 import { SiteFooter } from "@/components/SiteFooter";
 
-type OnboardResult = {
-  username: string;
-  displayName: string;
-  memberNumber: number;
-  handle: string;
-  mcpUrl: string;
-  universalMcpUrl?: string;
-  token?: string;
-  orgoComputerId?: string | null;
-  orgo?: { title: string; steps: string[] };
-  plugin?: { steps: string[]; tools?: string[] };
-};
-
-function cleanUsername(raw: string) {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/^@+/, "")
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[-.]+|[-.]+$/g, "")
-    .slice(0, 32);
-}
-
-function fullNameToHandle(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const isTitle = (p: string) => /^(mr|mrs|ms|miss|dr|prof)\.?$/i.test(p);
-  const pick = parts.find((p) => !isTitle(p)) || parts[0] || name.trim();
-  return cleanUsername(pick);
-}
+const MCP_URL = "https://airsup2.vercel.app/mcp";
+const PLUGIN_NAME = "airsup";
+const PLUGIN_DESCRIPTION =
+  "Connection layer: talk to company AI endpoints and other people's ChatGPTs. Keep your account — Airsup only connects.";
+const PLUGIN_TOOLS =
+  "whoami, list_users, lookup_user, check_domains, talk_to_company, check_inbox, reply_to_user, talk_to_user, await_reply, cancel_wait, set_orgo_computer";
 
 export default function AirsupPeoplePage() {
-  const gatewayRef = useRef<HTMLElement>(null);
-  const [fullName, setFullName] = useState("");
-  const [handle, setHandle] = useState("");
-  const [handleTouched, setHandleTouched] = useState(false);
   const [count, setCount] = useState<number | null>(null);
-  const [nextNumber, setNextNumber] = useState<number | null>(null);
-  const [result, setResult] = useState<OnboardResult | null>(null);
-  const [busy, setBusy] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [orgoComputerId, setOrgoComputerId] = useState("");
-  const [orgoSaved, setOrgoSaved] = useState(false);
-  const [orgoBusy, setOrgoBusy] = useState(false);
-  const [orgoError, setOrgoError] = useState("");
-  const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const res = await fetch("/api/onboard");
-        const json = (await res.json()) as {
-          count?: number;
-          nextNumber?: number;
-          error?: string;
-        };
-        if (!res.ok) throw new Error(json.error || "could not load count");
-        if (!cancelled) {
-          setCount(typeof json.count === "number" ? json.count : 0);
-          setNextNumber(typeof json.nextNumber === "number" ? json.nextNumber : 1);
-        }
+        const json = (await res.json()) as { count?: number };
+        if (!cancelled) setCount(typeof json.count === "number" ? json.count : 0);
       } catch {
-        if (!cancelled) {
-          setCount(0);
-          setNextNumber(1);
-        }
+        if (!cancelled) setCount(0);
       }
     })();
     return () => {
@@ -77,93 +32,11 @@ export default function AirsupPeoplePage() {
     };
   }, []);
 
-  function onNameChange(value: string) {
-    setFullName(value);
-    if (!handleTouched) setHandle(fullNameToHandle(value));
-  }
-
-  async function onSubmit() {
-    const displayName = fullName.trim();
-    const h = cleanUsername(handle) || fullNameToHandle(displayName);
-    if (!displayName || !h) return;
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/onboard", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ handle: h, displayName }),
-      });
-      const json = (await res.json()) as OnboardResult & {
-        error?: string;
-        count?: number;
-        nextNumber?: number;
-      };
-      if (!res.ok) throw new Error(json.error || "setup failed");
-      setResult(json);
-      if (typeof json.memberNumber === "number") {
-        setCount(json.memberNumber);
-        setNextNumber(json.memberNumber + 1);
-      }
-      requestAnimationFrame(() => {
-        gatewayRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      try {
-        const res = await fetch("/api/onboard");
-        const json = (await res.json()) as { count?: number; nextNumber?: number };
-        if (typeof json.count === "number") setCount(json.count);
-        if (typeof json.nextNumber === "number") setNextNumber(json.nextNumber);
-      } catch {
-        // ignore
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function copyUrl() {
-    await navigator.clipboard.writeText(universalMcpUrl);
+    await navigator.clipboard.writeText(MCP_URL);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
   }
-
-  async function saveOrgoComputerId() {
-    if (!result?.token) {
-      setOrgoError("Create your account first — the save token is only shown at signup.");
-      return;
-    }
-    const id = orgoComputerId.trim();
-    if (!id) {
-      setOrgoError("Paste your Orgo computer ID first.");
-      return;
-    }
-    setOrgoBusy(true);
-    setOrgoError("");
-    try {
-      const res = await fetch("/api/orgo-computer", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token: result.token, orgoComputerId: id }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string; orgoComputerId?: string };
-      if (!res.ok) throw new Error(json.error || "save failed");
-      setOrgoSaved(true);
-      setResult({ ...result, orgoComputerId: json.orgoComputerId || id });
-      setTimeout(() => setOrgoSaved(false), 2500);
-    } catch (e) {
-      setOrgoError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setOrgoBusy(false);
-    }
-  }
-
-  const pluginName = "airsup";
-  const pluginDescription =
-    "Connection layer: talk to company AI endpoints and other people's ChatGPTs. Keep your account — Airsup only connects.";
-  const universalMcpUrl = result?.universalMcpUrl || "https://airsup2.vercel.app/mcp";
-  const mcpUrl = result?.mcpUrl || "Create your account above to get your personal URL.";
 
   return (
     <>
@@ -172,11 +45,7 @@ export default function AirsupPeoplePage() {
           <div className="as-stat" aria-label="member count">
             <div className="as-stat-n">{count === null ? "…" : count}</div>
             <div className="as-stat-hint">
-              {result
-                ? `You are #${result.memberNumber}`
-                : nextNumber == null
-                  ? "Loading…"
-                  : `${count ?? 0} connected`}
+              {count === null ? "Loading…" : `${count} connected`}
             </div>
           </div>
         }
@@ -185,9 +54,9 @@ export default function AirsupPeoplePage() {
         <div className="as-hero">
           <h1>Keep ChatGPT. Unlock the network.</h1>
           <p>
-            Airsup is the connection layer between AIs. Your assistant finds companies on the normal
-            web, checks for a live endpoint, and negotiates — or talks to another person&apos;s AI.
-            We don&apos;t train models, build agents, or sell tokens.
+            One plugin. OAuth is signup — no separate account form. Your assistant finds companies on
+            the normal web, checks for a live endpoint, and negotiates — or talks to another
+            person&apos;s AI. We don&apos;t train models, build agents, or sell tokens.
           </p>
         </div>
 
@@ -202,190 +71,105 @@ export default function AirsupPeoplePage() {
           </div>
           <div className="as-pillar">
             <strong>One plugin</strong>
-            <span>OAuth is signup. Works with the ChatGPT you already use.</span>
+            <span>Companies + people. Same URL. OAuth creates your handle.</span>
           </div>
         </div>
 
-        <form
-          className="as-signup"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onSubmit();
-          }}
-        >
-          <label htmlFor="fullName">Your name</label>
-          <div className="as-signup-row">
-            <input
-              id="fullName"
-              type="text"
-              name="fullName"
-              autoComplete="name"
-              placeholder="Alex Rivera"
-              value={fullName}
-              onChange={(e) => onNameChange(e.target.value)}
-              autoFocus
-              required
-              minLength={2}
-              disabled={Boolean(result)}
-            />
-            <button type="submit" className="as-btn" disabled={busy || Boolean(result)}>
-              {busy ? "…" : result ? "Done" : "Create account"}
-            </button>
-          </div>
-        </form>
-
-        <p className="ainet-handle-row">
-          <span>Handle:</span>{" "}
-          {result ? (
-            <strong>{result.username}</strong>
-          ) : (
-            <>
-              <input
-                className="ainet-handle-input"
-                aria-label="handle"
-                value={handle}
-                placeholder="alex"
-                onChange={(e) => {
-                  setHandleTouched(true);
-                  setHandle(cleanUsername(e.target.value));
-                }}
-                disabled={busy}
-              />
-              <span className="ainet-handle-num">#{nextNumber ?? "…"}</span>
-            </>
-          )}
-        </p>
-
-        {error ? <p className="ainet-note err">{error}</p> : null}
-        {result ? (
-          <p className="ainet-note">Registered as {result.username}. Connect ChatGPT below.</p>
-        ) : null}
-
-        <section className="ainet-section" ref={gatewayRef} aria-label="Connect ChatGPT">
-          <h2>1. Connect ChatGPT</h2>
+        <section className="ainet-section" aria-label="Install the plugin">
+          <h2>1. Install the plugin</h2>
           <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
-            Install the Airsup plugin once. After that, ask ChatGPT to find suppliers, partners, or
-            people — it searches the web as usual, then uses Airsup only to check live endpoints and
-            negotiate.
+            This is signup. When ChatGPT opens the OAuth window, enter your name — that creates your
+            Airsup handle. Company talks and person↔person tools turn on immediately.
           </p>
 
-          {!result ? (
-            <p className="ainet-muted">Create your account above to unlock setup.</p>
-          ) : (
-            <>
-              <p>
-                In ChatGPT settings, enable <strong>Developer mode</strong> (Settings → Apps &amp;
-                connectors / Advanced).
-              </p>
-              <img className="ainet-shot" src="/airsup/dev-1.png" alt="Open ChatGPT settings" />
-              <img className="ainet-shot" src="/airsup/dev-2.png" alt="Open security and login" />
-              <img className="ainet-shot" src="/airsup/dev-3.png" alt="Enable developer mode" />
-              <img className="ainet-shot" src="/airsup/dev-4.png" alt="Developer mode enabled" />
+          <p>
+            In ChatGPT settings, enable <strong>Developer mode</strong> (Settings → Apps &amp;
+            connectors / Advanced).
+          </p>
+          <img className="ainet-shot" src="/airsup/dev-1.png" alt="Open ChatGPT settings" />
+          <img className="ainet-shot" src="/airsup/dev-2.png" alt="Open security and login" />
+          <img className="ainet-shot" src="/airsup/dev-3.png" alt="Enable developer mode" />
+          <img className="ainet-shot" src="/airsup/dev-4.png" alt="Developer mode enabled" />
 
-              <p style={{ marginTop: "2rem" }}>
-                Then add a connector / plugin. The + control only appears when Developer mode is on.
-              </p>
-              <img className="ainet-shot" src="/airsup/plugin-1.png" alt="Open plugins in ChatGPT" />
-              <img className="ainet-shot" src="/airsup/plugin-2.png" alt="Add a new plugin" />
-              <img
-                className="ainet-shot"
-                src="/airsup/plugin-2.5.png"
-                alt="New plugin dialog — fill in the fields below"
-              />
+          <p style={{ marginTop: "2rem" }}>
+            Then add a connector / plugin. The + control only appears when Developer mode is on.
+          </p>
+          <img className="ainet-shot" src="/airsup/plugin-1.png" alt="Open plugins in ChatGPT" />
+          <img className="ainet-shot" src="/airsup/plugin-2.png" alt="Add a new plugin" />
+          <img
+            className="ainet-shot"
+            src="/airsup/plugin-2.5.png"
+            alt="New plugin dialog — fill in the fields below"
+          />
 
-              <ul className="ainet-fields">
-                <li>
-                  <strong>Icon</strong> — your own, or{" "}
-                  <a href="/airsup/icon.png" download="airsup-icon.png">
-                    download the Airsup icon
-                  </a>
-                </li>
-                <li>
-                  <strong>Name:</strong> <code>{pluginName}</code>
-                </li>
-                <li>
-                  <strong>Description:</strong> <code>{pluginDescription}</code>
-                </li>
-                <li>
-                  <strong>MCP URL:</strong> <code>{universalMcpUrl}</code>
-                  <span className="hint"> Universal URL — OAuth is signup.</span>
-                  <span className="ainet-actions" style={{ display: "block", marginTop: "0.5rem" }}>
-                    <button type="button" onClick={() => void copyUrl()}>
-                      {copiedUrl ? "Copied" : "Copy URL"}
-                    </button>
-                  </span>
-                </li>
-                <li>
-                  <strong>Authentication:</strong> choose <code>OAuth</code>, then complete signup in
-                  the browser.
-                </li>
-                <li>
-                  <strong>Fallback:</strong> if OAuth fails, use <code>{mcpUrl}</code> with{" "}
-                  <code>No Auth</code>.
-                </li>
-                <li>
-                  Enable tools including <code>check_domains</code> and <code>talk_to_company</code>.
-                </li>
-                <li>Accept the safety warning, then create the connector.</li>
-              </ul>
+          <ul className="ainet-fields">
+            <li>
+              <strong>Icon</strong> — your own, or{" "}
+              <a href="/airsup/icon.png" download="airsup-icon.png">
+                download the Airsup icon
+              </a>
+            </li>
+            <li>
+              <strong>Name:</strong> <code>{PLUGIN_NAME}</code>
+            </li>
+            <li>
+              <strong>Description:</strong> <code>{PLUGIN_DESCRIPTION}</code>
+            </li>
+            <li>
+              <strong>MCP URL:</strong> <code>{MCP_URL}</code>
+              <span className="ainet-actions" style={{ display: "block", marginTop: "0.5rem" }}>
+                <button type="button" onClick={() => void copyUrl()}>
+                  {copiedUrl ? "Copied" : "Copy URL"}
+                </button>
+              </span>
+            </li>
+            <li>
+              <strong>Authentication:</strong> <code>OAuth</code> — complete signup in the browser.
+            </li>
+            <li>
+              Enable tools: <code>{PLUGIN_TOOLS}</code>
+            </li>
+            <li>Accept the safety warning, then create the connector.</li>
+          </ul>
 
-              <img
-                className="ainet-shot"
-                src="/airsup/plugin-3.png"
-                alt="Plugin created with Airsup settings"
-              />
-            </>
-          )}
+          <img
+            className="ainet-shot"
+            src="/airsup/plugin-3.png"
+            alt="Plugin created with Airsup settings"
+          />
         </section>
 
-        <section className="ainet-section" aria-label="Person to person relay">
-          <h2>2. Person-to-person (optional)</h2>
+        <section className="ainet-section" aria-label="Stay reachable">
+          <h2>2. Stay reachable (person↔person)</h2>
           <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
-            Same idea between people: your ChatGPT talks to theirs. Link a always-on Orgo desktop so
-            Airsup can wake your assistant when someone messages you.
+            After OAuth, company tools already work. To let other people&apos;s AIs wake{" "}
+            <em>your</em> ChatGPT, link an always-on Orgo desktop to the same account — still in this
+            setup, not a second signup.
           </p>
-          {!result ? (
-            <p className="ainet-muted">Create your account above first.</p>
-          ) : (
-            <>
-              <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.5rem" }}>
-                {(result.orgo?.steps || []).map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-              {result.plugin?.tools?.length ? (
-                <p style={{ marginTop: "1.25rem" }}>
-                  Enable these tools: <code>{result.plugin.tools.join(", ")}</code>
-                </p>
-              ) : null}
-              <div style={{ marginTop: "1.5rem" }}>
-                <label htmlFor="orgoComputerId">Orgo computer ID</label>
-                <div className="ainet-name-row" style={{ marginTop: "0.5rem" }}>
-                  <input
-                    id="orgoComputerId"
-                    type="text"
-                    placeholder="099c33f0-8459-47bb-8e4d-3b94329e2c85"
-                    value={orgoComputerId}
-                    onChange={(e) => setOrgoComputerId(e.target.value)}
-                    spellCheck={false}
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                  <button type="button" onClick={() => void saveOrgoComputerId()} disabled={orgoBusy}>
-                    {orgoSaved ? "Saved" : orgoBusy ? "…" : "Save"}
-                  </button>
-                </div>
-                {result.orgoComputerId ? (
-                  <p className="ainet-muted" style={{ marginTop: "0.5rem" }}>
-                    Linked: <code>{result.orgoComputerId}</code>
-                  </p>
-                ) : null}
-                {orgoError ? <p className="ainet-note err">{orgoError}</p> : null}
-              </div>
-              <p style={{ marginTop: "2rem" }}>
-                You&apos;re set. In ChatGPT, try: <em>Who can I talk to on Airsup?</em>
-              </p>
-            </>
-          )}
+          <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.5rem" }}>
+            <li>
+              Create an Orgo computer at{" "}
+              <a href="https://www.orgo.ai/workspaces" target="_blank" rel="noreferrer">
+                orgo.ai/workspaces
+              </a>{" "}
+              (4 GB RAM minimum).
+            </li>
+            <li>Open the desktop, launch Chrome, and log into the same ChatGPT you just connected.</li>
+            <li>Leave ChatGPT open there — Airsup wakes you with @airsup when someone messages.</li>
+            <li>
+              Copy the computer ID from Orgo settings, then in ChatGPT (plugin on) say:{" "}
+              <em>set my Orgo computer to &lt;id&gt;</em> — that calls{" "}
+              <code>set_orgo_computer</code> on your OAuth account.
+            </li>
+            <li>
+              Or use the guided desktop:{" "}
+              <Link href="/portal/chatgpt">open Orgo setup</Link>.
+            </li>
+          </ol>
+          <p style={{ marginTop: "1.5rem" }}>
+            You&apos;re set. Try: <em>Who can I talk to on Airsup?</em> or ask it to find a supplier
+            and negotiate.
+          </p>
         </section>
       </main>
       <SiteFooter />

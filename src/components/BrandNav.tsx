@@ -62,9 +62,7 @@ export function BrandNav({
     const on =
       href === "/company"
         ? pathname.startsWith("/company")
-        : href === "/portal"
-          ? pathname.startsWith("/portal")
-          : pathname === href || pathname.startsWith(`${href}/`);
+        : pathname === href || pathname.startsWith(`${href}/`);
     return (
       <Link href={href} className={on ? "as-nav-link on" : "as-nav-link"}>
         {label}
@@ -80,7 +78,6 @@ export function BrandNav({
           <nav className="as-nav-links" aria-label="Primary">
             {item("/airsup", "People")}
             {item("/company", "Company")}
-            {item("/portal", "Portal")}
           </nav>
         ) : null}
         <div className="as-header-actions">
