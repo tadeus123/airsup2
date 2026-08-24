@@ -30,7 +30,7 @@ function htmlPage(body: string, status = 200) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Connect · Airsup</title>
+  <title>Connect - Airsup</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
@@ -189,8 +189,8 @@ export async function GET(request: Request) {
 
   const hidden = qsHidden(p);
   return htmlPage(`
-    <h1>Connect ChatGPT to Airsup</h1>
-    <p>This is your signup. One plugin for people and company conversations.</p>
+    <h1>Connect to Airsup</h1>
+    <p>One plugin. OAuth is signup. Keep using ChatGPT — Airsup is only the connection layer between AIs.</p>
     <div class="tabs">
       <button type="button" class="on" data-tab="new" onclick="show('new')">New account</button>
       <button type="button" data-tab="existing" onclick="show('existing')">Returning</button>

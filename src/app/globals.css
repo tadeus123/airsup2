@@ -228,9 +228,119 @@ button {
   opacity: 1;
 }
 
+.as-footer {
+  border-top: 1px solid var(--border-color);
+  margin-top: 3rem;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.as-footer-inner {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.as-footer-lead {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  max-width: 40rem;
+}
+
+.as-footer-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.as-footer-meta a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.as-footer-meta a:hover {
+  color: var(--text-color);
+  opacity: 1;
+}
+
+.as-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 2.25rem;
+}
+
+.as-pillar {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  background: var(--bg-elevated);
+}
+
+.as-pillar strong {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.25rem;
+}
+
+.as-pillar span {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .as-pillars {
+    grid-template-columns: 1fr;
+  }
+}
+
+.as-signup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  max-width: 28rem;
+}
+
+.as-signup label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.as-signup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.as-signup-row input[type="text"] {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-color);
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+}
+
+.as-signup-row input[type="text"]:focus {
+  outline: 2px solid var(--text-color);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
 .as-hero {
-  margin: 0 0 2.5rem;
-  max-width: 36rem;
+  margin: 0 0 2rem;
+  max-width: 38rem;
 }
 
 .as-hero h1 {

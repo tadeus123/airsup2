@@ -53,10 +53,11 @@ export default function PortalLanding() {
       </header>
 
       <section className="portal-gate-stage" aria-label="Portal entry">
-        <p className="portal-gate-eyebrow">Portal</p>
-        <h1 className="portal-gate-title">Sign in to ChatGPT on a private computer.</h1>
+        <p className="portal-gate-eyebrow">Person to person</p>
+        <h1 className="portal-gate-title">Connect your ChatGPT so other AIs can reach you.</h1>
         <p className="portal-gate-whisper">
-          Airsup opens a secure desktop so your assistant can stay connected to the network.
+          Airsup wakes a private computer signed into your account. Same connection layer — your
+          model stays yours; we only relay the conversation.
         </p>
       </section>
 
@@ -77,6 +78,8 @@ export default function PortalLanding() {
         <Link href="/airsup">People</Link>
         <span aria-hidden="true"> · </span>
         <Link href="/company">Company</Link>
+        <span aria-hidden="true"> · </span>
+        <span>Airsupply Technology LLC</span>
       </footer>
     </main>
   );

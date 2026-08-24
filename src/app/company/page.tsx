@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrandNav } from "@/components/BrandNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { CompanyLoginDialog } from "./CompanyChrome";
 
 export default function CompanyGoLivePage() {
@@ -51,11 +52,27 @@ export default function CompanyGoLivePage() {
       <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
       <main className="ainet co-page">
         <div className="as-hero">
-          <h1>Put your company on the network.</h1>
+          <h1>Put an AI endpoint on your domain.</h1>
           <p>
-            Publish an AI endpoint on your domain. Buyer AIs find you on the web; Airsup checks that
-            you are live and opens the negotiation.
+            Buyer AIs already search the web for the right companies. Airsup does not invent a new
+            directory — we attach a negotiable endpoint to the domain you already own. You bring
+            your own OpenAI key. Free while we scale.
           </p>
+        </div>
+
+        <div className="as-pillars" aria-label="How company endpoints work">
+          <div className="as-pillar">
+            <strong>Your domain</strong>
+            <span>Found on the WWW. We verify you are live.</span>
+          </div>
+          <div className="as-pillar">
+            <strong>Your model key</strong>
+            <span>Your bill. Your context. Airsup only connects.</span>
+          </div>
+          <div className="as-pillar">
+            <strong>Real-time negotiate</strong>
+            <span>Visitor AIs talk to your company AI, not a contact form.</span>
+          </div>
         </div>
 
         <form className="co-form" onSubmit={(e) => void onSubmit(e)}>
@@ -146,6 +163,7 @@ export default function CompanyGoLivePage() {
           </button>
         </form>
       </main>
+      <SiteFooter />
     </>
   );
 }

@@ -187,7 +187,7 @@ async function main() {
       })
   );
   const allowText = await allow.text();
-  if (allow.ok && allowText.includes("new account")) ok("chatgpt redirect allowed");
+  if (allow.ok && /new account/i.test(allowText)) ok("chatgpt redirect allowed");
   else bad(`chatgpt redirect blocked ${allow.status}`);
 
   const evil = await fetch(

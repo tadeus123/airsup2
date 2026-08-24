@@ -188,7 +188,7 @@ function formatWakeSent(
 
 export function createAirsupMcpServer(me: User): McpServer {
   const server = new McpServer(
-    { name: "airsup", version: "3.2.5" },
+    { name: "airsup", version: "3.3.0" },
     { capabilities: { logging: {} }, instructions: pluginMcpInstructions(me.username) }
   );
 

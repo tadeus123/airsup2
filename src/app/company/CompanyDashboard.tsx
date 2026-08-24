@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { BrandNav } from "@/components/BrandNav";
+import { SiteFooter } from "@/components/SiteFooter";
 import { CompanyLoginDialog } from "./CompanyChrome";
 
 type Company = {
@@ -273,6 +274,7 @@ export default function CompanyDashboard() {
           </form>
         </section>
       </main>
+      <SiteFooter />
     </>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BrandNav } from "@/components/BrandNav";
+import { SiteFooter } from "@/components/SiteFooter";
 
 type OnboardResult = {
   username: string;
@@ -160,7 +161,7 @@ export default function AirsupPeoplePage() {
 
   const pluginName = "airsup";
   const pluginDescription =
-    "Talk to other people's ChatGPTs and company AI endpoints through Airsup.";
+    "Connection layer: talk to company AI endpoints and other people's ChatGPTs. Keep your account — Airsup only connects.";
   const universalMcpUrl = result?.universalMcpUrl || "https://airsup2.vercel.app/mcp";
   const mcpUrl = result?.mcpUrl || "Create your account above to get your personal URL.";
 
@@ -175,28 +176,45 @@ export default function AirsupPeoplePage() {
                 ? `You are #${result.memberNumber}`
                 : nextNumber == null
                   ? "Loading…"
-                  : `Next number #${nextNumber}`}
+                  : `${count ?? 0} connected`}
             </div>
           </div>
         }
       />
       <main className="ainet">
         <div className="as-hero">
-          <h1>Connect your AI to the network.</h1>
+          <h1>Keep ChatGPT. Unlock the network.</h1>
           <p>
-            One plugin. OAuth is your signup. Your ChatGPT can check company domains and talk to
-            live company endpoints — and to other people on Airsup.
+            Airsup is the connection layer between AIs. Your assistant finds companies on the normal
+            web, checks for a live endpoint, and negotiates — or talks to another person&apos;s AI.
+            We don&apos;t train models, build agents, or sell tokens.
           </p>
         </div>
 
-        <div className="ainet-name-row">
+        <div className="as-pillars" aria-label="What Airsup is">
+          <div className="as-pillar">
+            <strong>Connection only</strong>
+            <span>No models. No agents. No tokens. Just the pipe.</span>
+          </div>
+          <div className="as-pillar">
+            <strong>WWW discovery</strong>
+            <span>Find companies on the internet. We attach the endpoint.</span>
+          </div>
+          <div className="as-pillar">
+            <strong>One plugin</strong>
+            <span>OAuth is signup. Works with the ChatGPT you already use.</span>
+          </div>
+        </div>
+
+        <form
+          className="as-signup"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onSubmit();
+          }}
+        >
           <label htmlFor="fullName">Your name</label>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void onSubmit();
-            }}
-          >
+          <div className="as-signup-row">
             <input
               id="fullName"
               type="text"
@@ -210,11 +228,11 @@ export default function AirsupPeoplePage() {
               minLength={2}
               disabled={Boolean(result)}
             />
-            <button type="submit" disabled={busy || Boolean(result)}>
+            <button type="submit" className="as-btn" disabled={busy || Boolean(result)}>
               {busy ? "…" : result ? "Done" : "Create account"}
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
 
         <p className="ainet-handle-row">
           <span>Handle:</span>{" "}
@@ -240,11 +258,16 @@ export default function AirsupPeoplePage() {
 
         {error ? <p className="ainet-note err">{error}</p> : null}
         {result ? (
-          <p className="ainet-note">Registered as {result.username}. Continue with ChatGPT below.</p>
+          <p className="ainet-note">Registered as {result.username}. Connect ChatGPT below.</p>
         ) : null}
 
         <section className="ainet-section" ref={gatewayRef} aria-label="Connect ChatGPT">
           <h2>1. Connect ChatGPT</h2>
+          <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
+            Install the Airsup plugin once. After that, ask ChatGPT to find suppliers, partners, or
+            people — it searches the web as usual, then uses Airsup only to check live endpoints and
+            negotiate.
+          </p>
 
           {!result ? (
             <p className="ainet-muted">Create your account above to unlock setup.</p>
@@ -285,7 +308,7 @@ export default function AirsupPeoplePage() {
                 </li>
                 <li>
                   <strong>MCP URL:</strong> <code>{universalMcpUrl}</code>
-                  <span className="hint"> Universal URL — OAuth creates your account link.</span>
+                  <span className="hint"> Universal URL — OAuth is signup.</span>
                   <span className="ainet-actions" style={{ display: "block", marginTop: "0.5rem" }}>
                     <button type="button" onClick={() => void copyUrl()}>
                       {copiedUrl ? "Copied" : "Copy URL"}
@@ -316,16 +339,15 @@ export default function AirsupPeoplePage() {
         </section>
 
         <section className="ainet-section" aria-label="Person to person relay">
-          <h2>2. Person-to-person relay (optional)</h2>
+          <h2>2. Person-to-person (optional)</h2>
+          <p className="ainet-muted" style={{ marginBottom: "1rem" }}>
+            Same idea between people: your ChatGPT talks to theirs. Link a always-on Orgo desktop so
+            Airsup can wake your assistant when someone messages you.
+          </p>
           {!result ? (
             <p className="ainet-muted">Create your account above first.</p>
           ) : (
             <>
-              <p>
-                For messaging other people on Airsup, link an Orgo cloud desktop that stays signed
-                into ChatGPT with this plugin installed. Airsup wakes that desktop when you receive
-                a message.
-              </p>
               <ol className="ainet-fields" style={{ listStyle: "decimal", paddingLeft: "1.5rem" }}>
                 {(result.orgo?.steps || []).map((step) => (
                   <li key={step}>{step}</li>
@@ -366,6 +388,7 @@ export default function AirsupPeoplePage() {
           )}
         </section>
       </main>
+      <SiteFooter />
     </>
   );
 }
