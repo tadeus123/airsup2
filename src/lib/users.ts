@@ -377,6 +377,11 @@ export async function listLinkedOrgoComputerIds(): Promise<Set<string>> {
   }
 }
 
+/** E2E / isolation probe usernames — never surface in peer lookup. */
+export function isEphemeralTestUsername(username: string): boolean {
+  return /^(isot|isok|tadee2e|kostise2e)[a-z0-9]*$/i.test(username.trim());
+}
+
 export async function listUsers(input?: {
   query?: string;
   limit?: number;
@@ -389,16 +394,19 @@ export async function listUsers(input?: {
         p_query: input?.query ?? "",
         p_limit: input?.limit ?? 50,
       })) || [];
-    return rows.map((r) => ({
-      username: String(r.username),
-      displayName: String(r.displayName ?? r.display_name ?? r.username),
-      bio: String(r.bio ?? ""),
-    }));
+    return rows
+      .map((r) => ({
+        username: String(r.username),
+        displayName: String(r.displayName ?? r.display_name ?? r.username),
+        bio: String(r.bio ?? ""),
+      }))
+      .filter((u) => !isEphemeralTestUsername(u.username));
   }
   const q = (input?.query || "").trim().toLowerCase();
   const limit = Math.min(Math.max(input?.limit ?? 50, 1), 100);
   return [...memory.users.values()]
     .filter((u) => !!u.orgoComputerId)
+    .filter((u) => !isEphemeralTestUsername(u.username))
     .filter(
       (u) =>
         !q ||
@@ -441,11 +449,12 @@ function scorePeerMatch(
   for (const stem of peerMatchStems(hint)) {
     if (!stem) continue;
     if (un === stem) best = Math.max(best, 100);
-    else if (dn === stem) best = Math.max(best, 90);
-    else if (un.startsWith(stem)) best = Math.max(best, 80 - (un.length - stem.length));
-    else if (stem.startsWith(un)) best = Math.max(best, 75);
-    else if (dn.startsWith(stem)) best = Math.max(best, 65);
-    else if (un.includes(stem)) best = Math.max(best, 50);
+    else if (un.startsWith(stem)) best = Math.max(best, 90 - Math.min(20, un.length - stem.length));
+    else if (un.includes(stem)) best = Math.max(best, 70);
+    // Bare first-name display match is weak — e2e junk used displayName "Tade".
+    else if (dn === stem || dn.split(/\s+/)[0] === stem) {
+      best = Math.max(best, un.includes(stem) ? 85 : 45);
+    } else if (dn.startsWith(stem)) best = Math.max(best, 40);
   }
   return best;
 }
@@ -460,14 +469,15 @@ export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResul
   if (!hint) return { ok: false, error: "Empty username" };
 
   const exact = await getUserByUsername(hint);
-  if (exact) {
+  if (exact && !isEphemeralTestUsername(exact.username)) {
     return { ok: true, user: exact, hint, resolvedFrom: raw.trim(), fuzzy: false };
   }
 
   const listed = await listUsers({ limit: 100 });
   const scored = listed
+    .filter((u) => !isEphemeralTestUsername(u.username))
     .map((u) => ({ u, score: scorePeerMatch(hint, u) }))
-    .filter((x) => x.score > 0)
+    .filter((x) => x.score >= 60)
     .sort(
       (a, b) =>
         b.score - a.score ||
@@ -485,12 +495,18 @@ export async function resolvePeerUsername(raw: string): Promise<ResolvePeerResul
     return {
       ok: false,
       error: `"${raw.trim()}" matches multiple users — be more specific`,
-      candidates: ties.map((t) => t.u.username),
+      candidates: ties.map((t) =>
+        t.u.displayName && t.u.displayName.toLowerCase() !== t.u.username
+          ? `${t.u.username} (${t.u.displayName})`
+          : t.u.username
+      ),
     };
   }
 
   const user = await getUserByUsername(scored[0].u.username);
-  if (!user) return { ok: false, error: "User not found" };
+  if (!user || isEphemeralTestUsername(user.username)) {
+    return { ok: false, error: "User not found" };
+  }
   return { ok: true, user, hint, resolvedFrom: raw.trim(), fuzzy: true };
 }
 

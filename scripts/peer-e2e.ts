@@ -66,6 +66,16 @@ async function testNicknameResolve() {
 }
 
 async function testThreadIsolation() {
+  const usingSupabase = Boolean(
+    process.env.SUPABASE_URL &&
+      process.env.SUPABASE_ANON_KEY &&
+      process.env.AIRSUP_DB_TOKEN
+  );
+  if (usingSupabase && process.env.AIRSUP_ALLOW_LIVE_E2E !== "1") {
+    console.log("skip thread isolation on live supabase (avoids polluting users)");
+    return;
+  }
+
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const tadeName = `isot${suffix}`;
   const kostiName = `isok${suffix}`;
@@ -195,6 +205,11 @@ async function main() {
       process.env.AIRSUP_DB_TOKEN
   );
   console.log(`backend: ${usingSupabase ? "supabase" : "memory"}`);
+
+  if (usingSupabase && process.env.AIRSUP_ALLOW_LIVE_E2E !== "1") {
+    console.log("OK peer e2e passed (live mutating tests skipped — set AIRSUP_ALLOW_LIVE_E2E=1 to force)");
+    return;
+  }
 
   if (!usingSupabase) {
     __resetUserMemoryForTests();
