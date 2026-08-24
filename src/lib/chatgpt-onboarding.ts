@@ -1,26 +1,6 @@
 import type { User } from "./users";
 
-/** Orgo relay setup — one cloud computer per user with ChatGPT logged in. */
-export function orgoSetupInstructions(input: { username: string }): {
-  title: string;
-  steps: string[];
-} {
-  const handle = input.username;
-  return {
-    title: `Orgo relay for ${handle}`,
-    steps: [
-      "Create an Orgo computer at orgo.ai/workspaces (4 GB RAM minimum).",
-      "Open the desktop, launch Chrome, and log into ChatGPT with this user's account.",
-      "Install the airsup MCP plugin in that ChatGPT (gateway step above) — required to receive wakes.",
-      "Leave ChatGPT open in the browser — Airsup wakes you with @airsup when someone messages.",
-      "Copy the computer ID from Orgo settings (General tab).",
-      "Paste it below on this page (saved in Supabase — no Vercel config needed).",
-      "Or later in ChatGPT: set_orgo_computer(orgo_computer_id=\"...\").",
-    ],
-  };
-}
-
-/** Tools the ChatGPT plugin should enable (Orgo relay — no scheduled worker). */
+/** Tools the ChatGPT plugin should enable. */
 export const PLUGIN_TOOL_NAMES = [
   "whoami",
   "list_users",
@@ -74,55 +54,4 @@ Person↔person on this same plugin:
 - OAuth connect also provisions the user's Orgo desktop in the same browser flow — that is how they stay reachable. Prefer that over set_orgo_computer unless they need to relink.
 
 Give useful answers, not Airsup-meta. Personal details between Airsup users are fine.`;
-}
-
-export function gatewaySetupSteps(input: {
-  username: string;
-  origin: string;
-  token: string;
-}): { mcpUrl: string; universalMcpUrl: string; steps: string[] } {
-  // Universal URL — OAuth signup in ChatGPT. Legacy per-user URL kept as fallback.
-  const universalMcpUrl = `${input.origin}/mcp`;
-  const mcpUrl = `${input.origin}/mcp/${input.token}`;
-  const tools = PLUGIN_TOOL_NAMES.join(", ");
-  return {
-    mcpUrl,
-    universalMcpUrl,
-    steps: [
-      "Turn on Developer mode in ChatGPT settings.",
-      "Plugins / Connectors → New → Name: airsup",
-      `Server URL: ${universalMcpUrl} — Authentication: OAuth.`,
-      "Enter your name — that OAuth step is your Airsup identity. Next screen opens your Orgo ChatGPT desktop in the same connect flow.",
-      `Enable tools: ${tools}`,
-      "Start a new chat and turn the airsup plugin on.",
-    ],
-  };
-}
-
-export function pluginSetupInstructions(input: {
-  origin: string;
-  username: string;
-  token: string;
-  user: User;
-}): {
-  mcpUrl: string;
-  universalMcpUrl: string;
-  token: string;
-  username: string;
-  steps: string[];
-  tools: string[];
-} {
-  const { mcpUrl, universalMcpUrl, steps } = gatewaySetupSteps({
-    origin: input.origin,
-    username: input.username,
-    token: input.token,
-  });
-  return {
-    mcpUrl,
-    universalMcpUrl,
-    token: input.token,
-    username: input.username,
-    steps,
-    tools: [...PLUGIN_TOOL_NAMES],
-  };
 }

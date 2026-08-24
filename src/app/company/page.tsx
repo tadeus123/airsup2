@@ -56,7 +56,7 @@ export default function CompanyGoLivePage() {
           <p>
             Buyer AIs already search the web for the right companies. Airsup does not invent a new
             directory — we attach a negotiable endpoint to the domain you already own. You bring
-            your own OpenAI key. Free while we scale.
+            your own OpenAI key. People connect through the ChatGPT plugin only — not this site.
           </p>
         </div>
 

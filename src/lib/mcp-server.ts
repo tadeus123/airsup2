@@ -712,7 +712,7 @@ export function createAirsupMcpServer(me: User): McpServer {
 
       if (!peer.orgoComputerId) {
         return errorText(
-          `User "${peer.username}" has no Orgo computer linked yet. They need to paste their Orgo computer ID on the airsup onboarding page (or call set_orgo_computer).`
+          `User "${peer.username}" has no Orgo computer linked yet. They need to reconnect the Airsup plugin (OAuth sets up Orgo in the same flow).`
         );
       }
 

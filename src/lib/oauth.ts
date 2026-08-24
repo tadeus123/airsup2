@@ -92,7 +92,7 @@ export function protectedResourceMetadata(origin: string) {
     authorization_servers: [origin],
     scopes_supported: [OAUTH_SCOPE],
     bearer_methods_supported: ["header"],
-    resource_documentation: `${origin}/airsup`,
+    resource_documentation: `${origin}/company`,
   };
 }
 

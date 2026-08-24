@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s · Airsup",
   },
   description:
-    "Airsup (Airsupply Technology LLC) is the connection layer for AI-to-AI conversation. Keep your ChatGPT. We connect people and company endpoints — no models, no agents, no tokens.",
+    "Airsup (Airsupply Technology LLC) — put a negotiable AI endpoint on your company domain. People connect via the ChatGPT plugin.",
   icons: {
     icon: "/airsup/icon.png",
     apple: "/airsup/icon.png",

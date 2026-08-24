@@ -1,5 +1,5 @@
-import PortalLanding from "./PortalLanding";
+import { redirect } from "next/navigation";
 
-export default function PortalPage() {
-  return <PortalLanding />;
+export default function PortalRedirect() {
+  redirect("/company");
 }

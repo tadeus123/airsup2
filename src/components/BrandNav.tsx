@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 export function ThemeToggle() {
@@ -42,7 +41,7 @@ export function ThemeToggle() {
   );
 }
 
-export function BrandMark({ href = "/airsup" }: { href?: string }) {
+export function BrandMark({ href = "/company" }: { href?: string }) {
   return (
     <Link href={href} className="as-mark" aria-label="Airsup home">
       AIRSUP
@@ -50,36 +49,11 @@ export function BrandMark({ href = "/airsup" }: { href?: string }) {
   );
 }
 
-export function BrandNav({
-  links = true,
-  actions,
-}: {
-  links?: boolean;
-  actions?: ReactNode;
-}) {
-  const pathname = usePathname() || "";
-  const item = (href: string, label: string) => {
-    const on =
-      href === "/company"
-        ? pathname.startsWith("/company")
-        : pathname === href || pathname.startsWith(`${href}/`);
-    return (
-      <Link href={href} className={on ? "as-nav-link on" : "as-nav-link"}>
-        {label}
-      </Link>
-    );
-  };
-
+export function BrandNav({ actions }: { actions?: ReactNode }) {
   return (
     <header className="as-header">
       <div className="as-header-inner">
-        <BrandMark href="/airsup" />
-        {links ? (
-          <nav className="as-nav-links" aria-label="Primary">
-            {item("/airsup", "People")}
-            {item("/company", "Company")}
-          </nav>
-        ) : null}
+        <BrandMark />
         <div className="as-header-actions">
           {actions}
           <ThemeToggle />

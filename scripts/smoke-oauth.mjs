@@ -232,11 +232,14 @@ async function main() {
     ok("evil redirect blocked");
   else bad("evil redirect not blocked");
 
-  for (const p of ["/company", "/portal", "/airsup"]) {
-    const r = await fetch(`${BASE}${p}`);
+  for (const p of ["/", "/company"]) {
+    const r = await fetch(`${BASE}${p}`, { redirect: "follow" });
     if (!r.ok) bad(`${p} ${r.status}`);
     else ok(p);
   }
+  const portal = await fetch(`${BASE}/portal`, { redirect: "manual" });
+  if (portal.status >= 300 && portal.status < 400) ok("portal redirects");
+  else bad(`portal should redirect ${portal.status}`);
 
   // Company tools should answer cleanly even with zero live companies.
   if (accessToken) {

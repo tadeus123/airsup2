@@ -84,7 +84,7 @@ function htmlPage(body: string, status = 200) {
   </style>
 </head>
 <body>
-  <div class="top"><a class="mark" href="/airsup">AIRSUP</a></div>
+  <div class="top"><a class="mark" href="/company">AIRSUP</a></div>
   <main>${body}</main>
 </body>
 </html>`,

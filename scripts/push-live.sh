@@ -71,12 +71,12 @@ if [ "${STATE:-pending}" != "success" ]; then
   exit 0
 fi
 
-echo "→ smoke check https://airsup2.vercel.app/portal ..."
-HTTP="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://airsup2.vercel.app/portal" || echo "000")"
+echo "→ smoke check https://airsup2.vercel.app/company ..."
+HTTP="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://airsup2.vercel.app/company" || echo "000")"
 if [ "$HTTP" = "200" ]; then
-  echo "✓ /portal returns 200"
+  echo "✓ /company returns 200"
 else
-  echo "[WARN] /portal returned $HTTP (may still be propagating)"
+  echo "[WARN] /company returned $HTTP (may still be propagating)"
 fi
 
 echo ""
