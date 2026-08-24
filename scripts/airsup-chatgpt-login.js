@@ -247,70 +247,104 @@ function loginExpression(email, password) {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const setNative = (el, value) => {
       el.focus();
+      el.click();
       const proto = el instanceof HTMLTextAreaElement
         ? window.HTMLTextAreaElement.prototype
         : window.HTMLInputElement.prototype;
       const desc = Object.getOwnPropertyDescriptor(proto, "value");
       if (desc && desc.set) desc.set.call(el, value);
       else el.value = value;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, cancelable: true, inputType: "insertText", data: value }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    const findEmail = () =>
-      document.querySelector('input[type="email"]') ||
-      document.querySelector('input[name="email"]') ||
-      document.querySelector('input[autocomplete="username"]') ||
-      document.querySelector('input[placeholder*="Email" i]') ||
-      [...document.querySelectorAll("input")].find((i) => /email/i.test(i.id + i.name + (i.placeholder || "")));
-    const findPassword = () =>
-      document.querySelector('input[type="password"]') ||
-      document.querySelector('input[name="password"]') ||
-      document.querySelector('input[autocomplete="current-password"]');
-    const findContinue = () =>
-      [...document.querySelectorAll("button")].find((b) =>
-        /continue|log\\s*in|sign\\s*in|next/i.test((b.innerText || b.textContent || "").trim())
+    const isPhone = (el) => {
+      const t = ((el.type || "") + " " + (el.name || "") + " " + (el.id || "") + " " + (el.placeholder || "") + " " + (el.autocomplete || "")).toLowerCase();
+      return el.type === "tel" || /phone|mobile|otp|sms/.test(t);
+    };
+    const findEmail = () => {
+      const inputs = [...document.querySelectorAll("input")].filter((i) => !i.disabled && i.offsetParent !== null);
+      return (
+        inputs.find((i) => i.type === "email") ||
+        inputs.find((i) => (i.autocomplete || "").toLowerCase() === "username") ||
+        inputs.find((i) => /email/i.test(i.placeholder || "") && !isPhone(i)) ||
+        inputs.find((i) => /email/i.test((i.name || "") + (i.id || "")) && !isPhone(i)) ||
+        null
       );
+    };
+    const findPassword = () =>
+      [...document.querySelectorAll("input")].find(
+        (i) => i.type === "password" && !i.disabled && i.offsetParent !== null
+      ) || null;
+    const findContinue = () => {
+      const buttons = [...document.querySelectorAll("button")].filter((b) => !b.disabled && b.offsetParent !== null);
+      return (
+        buttons.find((b) => /^continue$/i.test((b.innerText || b.textContent || "").trim())) ||
+        buttons.find((b) => /^(log\\s*in|sign\\s*in|next)$/i.test((b.innerText || b.textContent || "").trim())) ||
+        null
+      );
+    };
+    const clickEmailPath = () => {
+      const buttons = [...document.querySelectorAll("button, a, [role='button']")];
+      const emailBtn = buttons.find((b) => {
+        const t = (b.innerText || b.textContent || "").trim().toLowerCase();
+        return t === "continue with email" || t === "email" || t === "use email";
+      });
+      if (emailBtn) {
+        emailBtn.click();
+        return true;
+      }
+      return false;
+    };
 
     if (!/chatgpt\\.com|openai\\.com|auth\\.openai\\.com/i.test(location.hostname)) {
       location.href = "https://chatgpt.com/auth/login";
-      await sleep(2500);
+      await sleep(2000);
+    }
+
+    // Leave phone mode if stuck there
+    const phoneErr = [...document.querySelectorAll("p, span, div")].some((n) =>
+      /phone number is not valid/i.test(n.textContent || "")
+    );
+    if (phoneErr || document.querySelector('input[type="tel"]')) {
+      clickEmailPath();
+      await sleep(500);
     }
 
     let emailEl = null;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       emailEl = findEmail();
       if (emailEl) break;
-      const emailBtn = [...document.querySelectorAll("button")].find((b) =>
-        /continue with email|email/i.test((b.innerText || "").trim())
-      );
-      if (emailBtn) emailBtn.click();
-      await sleep(400);
+      clickEmailPath();
+      await sleep(350);
     }
-    if (!emailEl) return { ok: false, error: "email_field_not_found", href: location.href };
+    if (!emailEl) {
+      return {
+        ok: false,
+        error: "email_field_not_found",
+        href: location.href,
+        inputs: [...document.querySelectorAll("input")].map((i) => i.type + ":" + (i.placeholder || "")).slice(0, 8),
+      };
+    }
 
     setNative(emailEl, ${emailJson});
-    await sleep(250);
+    await sleep(300);
     const cont = findContinue();
     if (cont) cont.click();
-    else {
-      emailEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
-    }
+    else emailEl.form ? emailEl.form.requestSubmit() : emailEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
 
     let passEl = null;
     for (let i = 0; i < 40; i++) {
-      await sleep(400);
+      await sleep(350);
       passEl = findPassword();
       if (passEl) break;
     }
     if (!passEl) return { ok: false, error: "password_field_not_found", href: location.href, emailSet: true };
 
     setNative(passEl, ${passJson});
-    await sleep(250);
+    await sleep(300);
     const cont2 = findContinue();
     if (cont2) cont2.click();
-    else {
-      passEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
-    }
+    else passEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
     return { ok: true, href: location.href };
   })()`;
 }

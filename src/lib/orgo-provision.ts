@@ -1,4 +1,4 @@
-import { fillChatGptLoginViaCdp, localSleep, orgoClick, orgoPressKey, orgoType } from "./orgo-actions";
+import { fillChatGptLoginViaCdp, getChatGptAuthState, localSleep } from "./orgo-actions";
 
 const ORGO_API_BASE = (
   process.env.ORGO_API_BASE_URL || "https://www.orgo.ai"
@@ -385,7 +385,11 @@ async function orgoWait(computerId: string, seconds: number): Promise<void> {
 }
 
 /** Open ChatGPT login via Chrome on the VM desktop. */
-export async function openChromeToChatGpt(computerId: string): Promise<void> {
+export async function openChromeToChatGpt(
+  computerId: string,
+  opts?: { force?: boolean }
+): Promise<void> {
+  const force = opts?.force ? "1" : "0";
   const cmd = [
     "if [ -S /tmp/.X11-unix/X99 ]; then export DISPLAY=:99",
     "elif [ -S /tmp/.X11-unix/X0 ]; then export DISPLAY=:0",
@@ -395,7 +399,9 @@ export async function openChromeToChatGpt(computerId: string): Promise<void> {
     "elif [ -x /opt/google/chrome/google-chrome ]; then CHROME=/opt/google/chrome/google-chrome",
     "else CHROME=$(command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1); fi",
     "if [ -z \"$CHROME\" ]; then echo NO_CHROME; exit 1; fi",
-    "if pgrep -f '/opt/google/chrome/chrome' >/dev/null 2>&1; then echo ALREADY; exit 0; fi",
+    `FORCE=${force}`,
+    'if [ "$FORCE" != "1" ] && pgrep -f "/opt/google/chrome/chrome" >/dev/null 2>&1; then echo ALREADY; exit 0; fi',
+    'if [ "$FORCE" = "1" ]; then pkill -9 -f "/opt/google/chrome/chrome" 2>/dev/null || true; pkill -9 -f "google-chrome" 2>/dev/null || true; sleep 1; fi',
     "setsid env DISPLAY=\"$DISPLAY\" \"$CHROME\" --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --no-default-browser-check --hide-crash-restore-bubble --disable-session-crashed-bubble --remote-debugging-port=9222 --remote-allow-origins=* --window-size=1280,720 --start-maximized 'https://chatgpt.com/auth/login' >/tmp/airsup-chrome.log 2>&1 < /dev/null &",
     "echo LAUNCHED",
   ].join("\n");
@@ -407,38 +413,22 @@ export async function prepareChatGptLoginOnDesktop(computerId: string): Promise<
   await openChromeToChatGpt(computerId);
 }
 
-/** Fill ChatGPT email + password on the VM (CDP DOM fill, pixel click fallback). */
+/** Fill ChatGPT email + password via in-VM Chrome CDP (DOM). Never VNC, never pixel-type. */
 export async function fillChatGptLoginOnDesktop(
   computerId: string,
   email: string,
   password: string
 ): Promise<void> {
-  try {
-    await fillChatGptLoginViaCdp(computerId, email, password);
-    return;
-  } catch {
-    // Fallback: Orgo click/type APIs if CDP path fails
-  }
+  const already = await getChatGptAuthState(computerId);
+  if (already.loggedIn) return;
 
-  await orgoClick(computerId, 640, 545);
-  await localSleep(300);
-  await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(80);
-  await orgoPressKey(computerId, "BackSpace");
-  await localSleep(80);
-  await orgoType(computerId, email.trim());
-  await localSleep(200);
-  await orgoPressKey(computerId, "Return");
-  await orgoWait(computerId, 2);
-
-  await orgoClick(computerId, 640, 360);
-  await localSleep(250);
-  await orgoPressKey(computerId, "ctrl+a");
-  await localSleep(80);
-  await orgoType(computerId, password);
-  await localSleep(200);
-  await orgoPressKey(computerId, "Return");
+  const cdpUp = already.url.length > 0;
+  await openChromeToChatGpt(computerId, { force: !cdpUp });
+  await localSleep(cdpUp ? 400 : 2200);
+  await fillChatGptLoginViaCdp(computerId, email, password);
 }
+
+export { getChatGptAuthState };
 
 /** Launch ChatGPT login — await this before returning from serverless handlers. */
 export async function launchChatGptLoginWithRetries(computerId: string): Promise<void> {

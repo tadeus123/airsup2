@@ -138,21 +138,24 @@ export default function PortalChatGptPage() {
       {phase === "login" && desktop ? (
         <section className="portal-connect-body">
           <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">sign in</p>
+            <p className="portal-connect-eyebrow">sign in here</p>
             <h1 className="portal-connect-title">your chatgpt</h1>
             <div className="portal-gate-rule" aria-hidden="true" />
+            <p className="portal-connect-note">
+              the window is only a preview — sign in on this page, not inside it.
+            </p>
           </div>
+          <ChatGptNativeLoginForm onSigning={setSigning} />
           <div
-            className={`portal-connect-stage${signing ? " portal-connect-stage--signing" : ""}`}
+            className={`portal-connect-stage portal-connect-stage--preview${signing ? " portal-connect-stage--signing" : ""}`}
           >
             <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             {signing ? (
               <p className="portal-connect-signing-overlay" aria-live="polite">
-                typing into your private computer…
+                filling chatgpt in your private computer…
               </p>
             ) : null}
           </div>
-          <ChatGptNativeLoginForm onSigning={setSigning} />
         </section>
       ) : null}
     </main>

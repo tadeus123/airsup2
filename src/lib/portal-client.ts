@@ -73,6 +73,16 @@ export async function fetchPortalDesktop(
   return json;
 }
 
+export async function fetchPortalLoginStatus(
+  token: string
+): Promise<{ loggedIn: boolean }> {
+  const res = await fetch("/api/portal/login", {
+    headers: authHeaders(token),
+  });
+  const json = (await res.json().catch(() => ({}))) as { loggedIn?: boolean };
+  return { loggedIn: Boolean(json.loggedIn) };
+}
+
 export async function submitPortalLogin(
   token: string,
   email: string,

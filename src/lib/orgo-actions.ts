@@ -176,6 +176,28 @@ async function deployVmLoginScript(computerId: string): Promise<void> {
   await deployVmScript(computerId, VM_LOGIN_PATH, loadVmLoginScript());
 }
 
+/** True if ChatGPT is already a logged-in session in Chrome (disk cookies persist). */
+export async function getChatGptAuthState(
+  computerId: string
+): Promise<{ loggedIn: boolean; url: string }> {
+  const out = await orgoBash(
+    computerId,
+    `curl -sS --max-time 2 http://127.0.0.1:9222/json/list 2>/dev/null || echo '[]'`
+  );
+  const start = out.indexOf("[");
+  const end = out.lastIndexOf("]");
+  if (start < 0 || end <= start) return { loggedIn: false, url: "" };
+  try {
+    const pages = JSON.parse(out.slice(start, end + 1)) as Array<{ url?: string }>;
+    const page = pages.find((p) => /chatgpt\.com|openai\.com/i.test(p.url || ""));
+    const url = (page?.url || pages[0]?.url || "").trim();
+    const loggedIn = /chatgpt\.com/i.test(url) && !/\/auth\/|\/log-in|\/login/i.test(url);
+    return { loggedIn, url };
+  } catch {
+    return { loggedIn: false, url: "" };
+  }
+}
+
 /**
  * Fill ChatGPT login via Chrome CDP on the VM (reliable DOM fill, not VNC/pixels).
  */

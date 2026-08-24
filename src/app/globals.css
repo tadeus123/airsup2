@@ -837,9 +837,16 @@ button {
   color: rgba(28, 25, 21, 0.38);
 }
 
-.portal-connect-stage {
-  position: relative;
-  width: min(42rem, 100%);
+.portal-connect-stage--preview {
+  width: min(28rem, 100%);
+  opacity: 0.78;
+  pointer-events: none;
+  user-select: none;
+}
+
+.portal-connect-stage--preview .portal-connect-frame {
+  aspect-ratio: 16 / 10;
+  max-height: min(32vh, 16rem);
 }
 
 .portal-connect-stage .portal-connect-frame {

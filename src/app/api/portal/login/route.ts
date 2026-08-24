@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   fillChatGptLoginOnDesktop,
+  getChatGptAuthState,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
@@ -8,6 +9,28 @@ import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+export async function GET(request: Request) {
+  try {
+    const token = bearerFromRequest(request);
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const user = await authPortalUser(token);
+    const computerId = (user.orgoComputerId || "").trim();
+    if (!computerId) {
+      return NextResponse.json({ ok: true, loggedIn: false });
+    }
+    const state = await getChatGptAuthState(computerId);
+    return NextResponse.json({
+      ok: true,
+      loggedIn: state.loggedIn,
+      url: state.url,
+    });
+  } catch {
+    return NextResponse.json({ ok: true, loggedIn: false });
+  }
+}
 
 export async function POST(request: Request) {
   try {

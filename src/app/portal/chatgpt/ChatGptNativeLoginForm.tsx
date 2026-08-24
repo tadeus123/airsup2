@@ -46,7 +46,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   return (
     <form className="portal-login-form" onSubmit={(e) => void onSubmit(e)}>
       <p className="portal-login-hint">
-        type here — we send it into your private computer. no need to fight the livestream.
+        type here — chatgpt is filled inside your private computer. do not type in the preview.
       </p>
       <label className="portal-login-field">
         <span className="portal-login-label">email</span>
@@ -82,7 +82,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
         {busy ? "signing in…" : "sign in"}
       </button>
       <p className="portal-connect-note">
-        airsup does not store your password — it is typed once into your private computer.
+        airsup does not keep your password. after the first sign-in, chatgpt stays logged in on that computer.
       </p>
     </form>
   );
