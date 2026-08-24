@@ -9,7 +9,7 @@ const ChatGptLoginFrame = dynamic(() => import("@/app/portal/chatgpt/ChatGptLogi
   ssr: false,
   loading: () => (
     <div className="portal-connect-frame portal-connect-frame--loading">
-      <p className="portal-connect-frame-status">opening chatgpt…</p>
+      <p className="portal-connect-frame-status">…</p>
     </div>
   ),
 });
@@ -23,7 +23,7 @@ export default function OauthSetupPage() {
   const [desktop, setDesktop] = useState<{ vncUrl: string; password: string } | null>(null);
   const [signing, setSigning] = useState(false);
   const [finishing, setFinishing] = useState(false);
-  const [status, setStatus] = useState("Creating your Airsup identity…");
+  const [status, setStatus] = useState("Setting up…");
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +45,7 @@ export default function OauthSetupPage() {
           return;
         }
 
-        setStatus("Starting your always-on ChatGPT desktop…");
+        setStatus("Starting desktop…");
         const started = await startPortalSession(mj.aspToken);
         if (cancelled) return;
 
@@ -96,44 +96,26 @@ export default function OauthSetupPage() {
 
       {phase === "loading" ? (
         <section className="portal-connect-body">
-          <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">OAuth signup</p>
-            <h1 className="portal-connect-title">You&apos;re on Airsup</h1>
-            <p className="portal-connect-note">{status}</p>
-          </div>
-          <div className="portal-connect-frame portal-connect-frame--loading">
-            <p className="portal-connect-frame-status">{status}</p>
-          </div>
+          <h1 className="portal-connect-title">{status}</h1>
+          <div className="portal-connect-frame portal-connect-frame--loading" aria-hidden="true" />
         </section>
       ) : null}
 
       {phase === "error" ? (
         <section className="portal-connect-body">
-          <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">Something went wrong</p>
-            <h1 className="portal-connect-title">Could not finish setup</h1>
-          </div>
+          <h1 className="portal-connect-title">Setup failed</h1>
           <div className="portal-connect-frame portal-connect-frame--failed">
             <p className="portal-connect-frame-error">{error}</p>
           </div>
           <button type="button" className="portal-connect-retry" onClick={() => void finish()}>
-            Continue to ChatGPT anyway
+            Continue
           </button>
         </section>
       ) : null}
 
       {phase === "login" && desktop ? (
         <section className="portal-connect-body">
-          <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">
-              {username ? `${username} · ` : ""}Stay reachable
-            </p>
-            <h1 className="portal-connect-title">Sign into ChatGPT on your desktop</h1>
-            <p className="portal-connect-note">
-              This is part of the same OAuth connect — so other AIs can wake you. Same ChatGPT
-              account you use with the plugin.
-            </p>
-          </div>
+          <h1 className="portal-connect-title">Sign into ChatGPT</h1>
           <ChatGptNativeLoginForm onSigning={setSigning} />
           <div
             className={`portal-connect-stage portal-connect-stage--preview${signing ? " portal-connect-stage--signing" : ""}`}
@@ -141,7 +123,7 @@ export default function OauthSetupPage() {
             <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
             {signing ? (
               <p className="portal-connect-signing-overlay" aria-live="polite">
-                Signing you in…
+                …
               </p>
             ) : null}
           </div>
@@ -152,18 +134,14 @@ export default function OauthSetupPage() {
             disabled={finishing}
             onClick={() => void finish()}
           >
-            {finishing ? "Returning to ChatGPT…" : "Done — return to ChatGPT"}
+            {finishing ? "…" : "Done"}
           </button>
         </section>
       ) : null}
 
       {phase === "ready" ? (
         <section className="portal-connect-body">
-          <div className="portal-connect-intro">
-            <p className="portal-connect-eyebrow">{username || "Airsup"}</p>
-            <h1 className="portal-connect-title">You&apos;re already reachable</h1>
-            <p className="portal-connect-note">Orgo is linked. Finish OAuth back in ChatGPT.</p>
-          </div>
+          <h1 className="portal-connect-title">{username || "Ready"}</h1>
           {error ? <p className="portal-connect-frame-error">{error}</p> : null}
           <button
             type="button"
@@ -171,7 +149,7 @@ export default function OauthSetupPage() {
             disabled={finishing}
             onClick={() => void finish()}
           >
-            {finishing ? "Returning…" : "Continue to ChatGPT"}
+            {finishing ? "…" : "Continue"}
           </button>
         </section>
       ) : null}

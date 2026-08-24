@@ -60,8 +60,7 @@ export function CompanyLoginDialog({
       }}
     >
       <form className="co-login-panel" onSubmit={(e) => void onSubmit(e)}>
-        <h2 id={titleId}>Company login</h2>
-        <p className="ainet-muted">Sign in with your domain and password.</p>
+        <h2 id={titleId}>Log in</h2>
 
         <label className="co-field">
           <span>Domain</span>

@@ -86,8 +86,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   if (step === "done") {
     return (
       <div className="portal-login-form portal-login-form--done">
-        <p className="portal-login-status">signed in — chatgpt is ready on your private computer.</p>
-        <p className="portal-connect-note">next visits on this computer should stay logged in.</p>
+        <p className="portal-login-status">Signed in</p>
       </div>
     );
   }
@@ -95,11 +94,8 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
   if (step === "totp") {
     return (
       <form className="portal-login-form" onSubmit={(e) => void onSubmitTotp(e)}>
-        <p className="portal-login-hint">
-          chatgpt wants your authenticator code — open your app and enter it here.
-        </p>
         <label className="portal-login-field">
-          <span className="portal-login-label">authenticator code</span>
+          <span className="portal-login-label">2FA code</span>
           <input
             className="portal-login-input"
             type="text"
@@ -118,22 +114,16 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
         </label>
         {error ? <p className="portal-login-error">{error}</p> : null}
         <button type="submit" className="portal-login-submit" disabled={busy || code.length < 6}>
-          {busy ? "verifying…" : "continue"}
+          {busy ? "…" : "Continue"}
         </button>
-        <p className="portal-connect-note">
-          airsup does not store this code — it is used once to finish sign-in.
-        </p>
       </form>
     );
   }
 
   return (
     <form className="portal-login-form" onSubmit={(e) => void onSubmitCredentials(e)}>
-      <p className="portal-login-hint">
-        type here — orgo will open chatgpt and sign you in. do not type in the preview.
-      </p>
       <label className="portal-login-field">
-        <span className="portal-login-label">email</span>
+        <span className="portal-login-label">Email</span>
         <input
           className="portal-login-input"
           type="email"
@@ -148,7 +138,7 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
         />
       </label>
       <label className="portal-login-field">
-        <span className="portal-login-label">password</span>
+        <span className="portal-login-label">Password</span>
         <input
           className="portal-login-input"
           type="password"
@@ -163,12 +153,8 @@ export default function ChatGptNativeLoginForm({ onSigning }: Props) {
       </label>
       {error ? <p className="portal-login-error">{error}</p> : null}
       <button type="submit" className="portal-login-submit" disabled={busy}>
-        {busy ? "signing in…" : "sign in"}
+        {busy ? "…" : "Sign in"}
       </button>
-      <p className="portal-connect-note">
-        if chatgpt asks for 2fa, we will ask for your authenticator code next. after the first
-        sign-in, this computer usually stays logged in.
-      </p>
     </form>
   );
 }

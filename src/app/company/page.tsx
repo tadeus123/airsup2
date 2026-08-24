@@ -50,50 +50,16 @@ export default function CompanyGoLivePage() {
         }
       />
       <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-      <main className="co-shell">
-        <div className="co-shell-intro">
-          <p className="co-eyebrow">Company endpoint</p>
-          <div className="as-hero co-hero">
-            <h1>Put an AI endpoint on your domain.</h1>
-            <p>
-              Buyer AIs search the web for the right companies. Airsup attaches a negotiable endpoint
-              to the domain you already own — no website install, no new directory.
-            </p>
-          </div>
-
-          <ul className="co-features" aria-label="How it works">
-            <li>
-              <strong>Your domain</strong>
-              <span>Found on the WWW. We verify you are live.</span>
-            </li>
-            <li>
-              <strong>Your model key</strong>
-              <span>Your bill. Your context. Airsup only connects.</span>
-            </li>
-            <li>
-              <strong>Real-time negotiate</strong>
-              <span>Visitor AIs talk to your company AI, not a contact form.</span>
-            </li>
-          </ul>
-
-          <p className="co-aside-note">
-            People connect through the ChatGPT plugin — not this site. This page is only for
-            companies going live.
-          </p>
-        </div>
-
+      <main className="co-shell co-shell--centered">
         <div className="co-shell-form">
           <div className="co-form-card">
-            <header className="co-form-head">
-              <h2>Go live</h2>
-              <p>Free while we scale. Bring your own OpenAI key.</p>
+            <header className="co-form-head co-form-head--minimal">
+              <h1>AI on your domain.</h1>
             </header>
-
             <form className="co-form" onSubmit={(e) => void onSubmit(e)}>
               <fieldset className="co-fieldset">
-                <legend>Company</legend>
                 <label className="co-field">
-                  <span>Company name</span>
+                  <span>Name</span>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -117,29 +83,24 @@ export default function CompanyGoLivePage() {
                     autoCorrect="off"
                     spellCheck={false}
                   />
-                  <em>Buyer AIs find you on the web; Airsup verifies this domain.</em>
                 </label>
-              </fieldset>
 
-              <fieldset className="co-fieldset">
-                <legend>Access</legend>
                 <label className="co-field">
-                  <span>Dashboard password</span>
+                  <span>Password</span>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 8 characters"
+                    placeholder="8+ characters"
                     required
                     minLength={8}
                     disabled={busy}
                     autoComplete="new-password"
                   />
-                  <em>Log in later with domain + password.</em>
                 </label>
 
                 <label className="co-field">
-                  <span>OpenAI API key</span>
+                  <span>OpenAI key</span>
                   <input
                     type="password"
                     value={apiKey}
@@ -150,29 +111,27 @@ export default function CompanyGoLivePage() {
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <em>Only your company AI uses this key — Airsup never does.</em>
                 </label>
               </fieldset>
 
               <fieldset className="co-fieldset">
-                <legend>AI behavior</legend>
                 <label className="co-field">
-                  <span>How should your AI negotiate?</span>
+                  <span>Stance</span>
                   <textarea
                     value={stance}
                     onChange={(e) => setStance(e.target.value)}
-                    placeholder="Who you are, what you want, what you never do, when a human must confirm…"
+                    placeholder="How your AI should negotiate"
                     rows={5}
                     disabled={busy}
                   />
                 </label>
 
                 <label className="co-field">
-                  <span>Private notes (optional)</span>
+                  <span>Notes</span>
                   <textarea
                     value={contextNotes}
                     onChange={(e) => setContextNotes(e.target.value)}
-                    placeholder="Products, typical terms, capacity — context for your AI"
+                    placeholder="Optional context"
                     rows={4}
                     disabled={busy}
                   />
@@ -182,7 +141,7 @@ export default function CompanyGoLivePage() {
               {error ? <p className="ainet-note err">{error}</p> : null}
 
               <button type="submit" className="co-go co-go--wide" disabled={busy}>
-                {busy ? "Going live…" : "Go live"}
+                {busy ? "…" : "Go live"}
               </button>
             </form>
           </div>

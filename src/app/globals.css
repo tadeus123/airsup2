@@ -1625,6 +1625,31 @@ button {
   align-items: start;
 }
 
+.co-shell--centered {
+  max-width: 26rem;
+  grid-template-columns: 1fr;
+  padding-top: 2rem;
+}
+
+.co-shell--centered .co-shell-form {
+  position: static;
+}
+
+.co-form-head--minimal {
+  margin-bottom: 1.25rem;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.co-form-head--minimal h1 {
+  margin: 0;
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
 @media (max-width: 960px) {
   .co-shell {
     grid-template-columns: 1fr;
@@ -1887,7 +1912,7 @@ button {
   font-size: 0.92rem;
 }
 
-body:has(.co-shell) {
+body:has(.co-shell--centered) {
   background:
     radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--text-color) 5%, transparent), transparent),
     var(--bg-color);

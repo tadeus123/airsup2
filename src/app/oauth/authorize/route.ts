@@ -185,12 +185,11 @@ export async function GET(request: Request) {
 
   const hidden = qsHidden(p);
   return htmlPage(`
-    <h1>Connect to Airsup</h1>
-    <p>Your name is your identity. Next we open your always-on ChatGPT desktop so others can reach you — then you return to ChatGPT.</p>
+    <h1>Connect</h1>
     <form method="post" action="/oauth/authorize">
       ${hidden}
       <input type="hidden" name="mode" value="signup" />
-      <label><span>Your name</span>
+      <label><span>Name</span>
         <input name="display_name" required minlength="2" autofocus placeholder="Alex Rivera" />
       </label>
       <button type="submit">Continue</button>

@@ -174,7 +174,7 @@ export default function CompanyDashboard() {
         />
         <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
         <main className="ainet co-dashboard">
-          <p className="ainet-muted">Loading…</p>
+          <p className="ainet-muted">…</p>
         </main>
       </>
     );
@@ -229,16 +229,11 @@ export default function CompanyDashboard() {
         <section className="co-panel" aria-label="conversations">
           <div className="co-panel-head">
             <h2>Conversations</h2>
-            <p className="ainet-muted">Live AI↔AI negotiations from visitor ChatGPTs.</p>
           </div>
           {error ? <p className="ainet-note err">{error}</p> : null}
           {realTalks.length === 0 ? (
             <div className="co-empty">
               <p className="co-empty-title">No conversations yet</p>
-              <p className="ainet-muted">
-                When a visitor AI finds your domain and opens a negotiation, the thread appears
-                here automatically.
-              </p>
             </div>
           ) : (
             <div className="co-inbox">
@@ -257,7 +252,7 @@ export default function CompanyDashboard() {
                             {c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}
                           </strong>
                           <span className="co-thread-meta">
-                            {c.messageCount} turns
+                            {c.messageCount}
                             {c.lastAt ? ` · ${formatTime(c.lastAt)}` : ""}
                           </span>
                           <span className="co-thread-preview">{previewBody(c.lastBody)}</span>
@@ -276,12 +271,10 @@ export default function CompanyDashboard() {
                         <strong>{visitorLabel}</strong>
                         <span> ↔ {company.name} AI</span>
                       </div>
-                      <span className="co-chat-head-meta">{active.messageCount} turns</span>
+                      <span className="co-chat-head-meta">{active.messageCount}</span>
                     </header>
                     <div className="co-chat" ref={scroller}>
-                      {messages.length === 0 ? (
-                        <p className="ainet-muted">No messages in this thread.</p>
-                      ) : (
+                      {messages.length === 0 ? null : (
                         messages.map((m) => {
                           const mine = m.role === "company";
                           const who = mine
@@ -309,7 +302,7 @@ export default function CompanyDashboard() {
                   </>
                 ) : (
                   <div className="co-chat-empty">
-                    <p>Select a conversation to read the AI↔AI negotiation.</p>
+                    <p>Select a conversation</p>
                   </div>
                 )}
               </div>
@@ -319,16 +312,15 @@ export default function CompanyDashboard() {
 
         <section className="co-panel" aria-label="settings">
           <div className="co-panel-head">
-            <h2>Teach your AI</h2>
-            <p className="ainet-muted">Update negotiation stance and private context anytime.</p>
+            <h2>Settings</h2>
           </div>
           <form className="co-form" onSubmit={(e) => void saveSettings(e)}>
             <label className="co-field">
-              <span>How it should negotiate</span>
+              <span>Stance</span>
               <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
             </label>
             <label className="co-field">
-              <span>Private notes</span>
+              <span>Notes</span>
               <textarea
                 value={contextNotes}
                 onChange={(e) => setContextNotes(e.target.value)}
@@ -336,18 +328,18 @@ export default function CompanyDashboard() {
               />
             </label>
             <label className="co-field">
-              <span>Replace API key (optional)</span>
+              <span>New API key</span>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={`Keep current ···${company.keyLast4}`}
+                placeholder={`···${company.keyLast4}`}
                 autoComplete="off"
               />
             </label>
             {saveError ? <p className="ainet-note err">{saveError}</p> : null}
             <button type="submit" className="co-go" disabled={saving}>
-              {saved ? "Saved" : saving ? "Saving…" : "Save"}
+              {saved ? "Saved" : saving ? "…" : "Save"}
             </button>
           </form>
         </section>
