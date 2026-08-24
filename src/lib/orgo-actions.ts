@@ -387,20 +387,21 @@ export async function signInChatGptViaOrgoAgent(
   password: string
 ): Promise<{ ok: boolean; message: string }> {
   const prompt = [
-    "Sign the user into ChatGPT on this computer.",
+    "Sign the user into ChatGPT on this computer. Move fast.",
     "",
     "Credentials:",
     `email: ${email}`,
     `password: ${password}`,
     "",
     "Rules:",
-    "- Open Chrome if needed and go to https://chatgpt.com/auth/login",
+    "- Be fast: no pauses, no extra browsing, no commentary on screen",
+    "- Open Chrome if needed and go straight to https://chatgpt.com/auth/login",
     "- Prefer email + password login (NOT phone, NOT Google, NOT Apple)",
-    "- If you see a phone number field or phone error, switch to email login",
+    "- If you see a phone number field or phone error, switch to email login immediately",
     "- Enter the email, continue, enter the password, continue/sign in",
-    "- Handle Cloudflare/captcha if it appears (click the checkbox)",
+    "- Handle Cloudflare/captcha if it appears (click the checkbox quickly)",
     "- Do not stop until ChatGPT is fully signed in (main chat UI visible, not the login page)",
-    "- Keep trying until it works. Retry on mistakes.",
+    "- Keep trying until it works. Retry on mistakes immediately.",
     "- When done, reply with exactly: SIGNED_IN",
     "- If impossible after many attempts, reply with: FAILED: <short reason>",
   ].join("\n");
