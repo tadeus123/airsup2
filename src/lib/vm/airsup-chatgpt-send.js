@@ -297,10 +297,11 @@ async function listPages() {
 
 function pickChatGptPage(pages) {
   const hit =
+    pages.find((p) => /chatgpt\.com\/?(?:$|\?|#|c\/)/i.test(p.url || "")) ||
     pages.find((p) => /chatgpt\.com|openai\.com/i.test(p.url || "")) ||
     pages.find((p) => /chat/i.test(p.title || "")) ||
     pages[0];
-  if (!hit) throw new Error("No Chrome page targets");
+  if (!hit) throw new Error("No Chrome page targets — open Chrome on the Orgo desktop");
   return hit;
 }
 
@@ -390,13 +391,16 @@ function isNavLossError(msg) {
 async function attachPage() {
   let pages = await listPages();
   if (!pages.length) {
-    await sleep(1500);
+    await sleep(1200);
     pages = await listPages();
   }
   const page = pickChatGptPage(pages);
   const { ws, send } = await connectWs(page.webSocketDebuggerUrl);
   await send("Runtime.enable");
   await send("Page.enable");
+  try {
+    await send("Page.bringToFront");
+  } catch {}
   return { ws, send, page };
 }
 
@@ -412,176 +416,86 @@ async function evaluateValue(send, expression) {
   return result?.result?.value;
 }
 
-/** Navigate / new-chat only — may destroy the execution context. */
-function pagePrepareExpression(newChat) {
-  const payload = JSON.stringify({ newChat: !!newChat });
+function pageFocusComposerExpression() {
   return `(() => {
-    const cfg = ${payload};
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    function findNewChat() {
-      return (
-        document.querySelector('[data-testid="create-new-chat-button"]') ||
-        document.querySelector('a[href="/"]') ||
-        Array.from(document.querySelectorAll("a,button")).find((el) =>
-          /^\\s*new chat\\s*$/i.test((el.textContent || "").trim())
-        )
-      );
+    if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.href)) {
+      return { ok: false, error: "not_logged_in", href: location.href };
     }
-    return (async () => {
-      if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.pathname + location.href)) {
-        return { ok: false, error: "not_logged_in", href: location.href };
-      }
-      if (!/chatgpt\\.com|openai\\.com/i.test(location.hostname)) {
-        location.href = "https://chatgpt.com/";
-        return { ok: true, navigated: true, href: "https://chatgpt.com/" };
-      }
-      if (cfg.newChat) {
-        const nb = findNewChat();
-        if (nb) {
-          nb.click();
-          await sleep(400);
-          return { ok: true, clickedNewChat: true, href: location.href };
-        }
-        if (location.pathname && location.pathname !== "/" && !/^\\/?$/.test(location.pathname)) {
-          location.href = "https://chatgpt.com/";
-          return { ok: true, navigated: true, href: "https://chatgpt.com/" };
-        }
-      }
-      return { ok: true, ready: true, href: location.href };
-    })();
+    const el =
+      document.querySelector("#prompt-textarea") ||
+      document.querySelector('[data-testid="prompt-textarea"]') ||
+      document.querySelector('div.ProseMirror[contenteditable="true"]') ||
+      document.querySelector('[contenteditable="true"]');
+    if (!el) return { ok: false, error: "composer_not_found", href: location.href };
+    el.focus();
+    try {
+      document.execCommand("selectAll", false, null);
+    } catch {}
+    return { ok: true, href: location.href, tag: el.tagName };
   })()`;
 }
 
-function pageInjectExpression(text, marker) {
-  const payload = JSON.stringify({ text, marker });
+function pageClickSendExpression() {
   return `(() => {
-    const cfg = ${payload};
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-    function findComposer() {
-      return (
-        document.querySelector("#prompt-textarea") ||
-        document.querySelector('[data-testid="prompt-textarea"]') ||
-        document.querySelector('div.ProseMirror[contenteditable="true"]') ||
-        document.querySelector('[contenteditable="true"]')
-      );
+    const btn =
+      document.querySelector('[data-testid="send-button"]') ||
+      document.querySelector('button[aria-label="Send message"]') ||
+      document.querySelector('button[aria-label*="Send"]');
+    if (btn && !btn.disabled) {
+      btn.click();
+      return { clicked: true };
     }
-
-    function findSend() {
-      return (
-        document.querySelector('[data-testid="send-button"]') ||
-        document.querySelector('button[aria-label="Send message"]') ||
-        document.querySelector('button[aria-label*="Send"]') ||
-        Array.from(document.querySelectorAll("button")).find((b) => {
-          const t = (b.getAttribute("data-testid") || "") + " " + (b.getAttribute("aria-label") || "");
-          return /send/i.test(t) && !b.disabled;
-        })
-      );
-    }
-
-    function setComposerText(el, text) {
-      el.focus();
-      try {
-        document.execCommand("selectAll", false, null);
-        document.execCommand("insertText", false, text);
-      } catch {}
-      let got = (el.innerText || el.textContent || "").trim();
-      if (got.includes(text.slice(0, Math.min(32, text.length)))) return true;
-      try {
-        el.textContent = "";
-        const p = document.createElement("p");
-        p.textContent = text;
-        el.appendChild(p);
-        el.dispatchEvent(
-          new InputEvent("input", { bubbles: true, cancelable: true, inputType: "insertText", data: text })
-        );
-      } catch {}
-      got = (el.innerText || el.textContent || "").trim();
-      return got.includes(text.slice(0, Math.min(24, text.length)));
-    }
-
-    function markerInUserTurns(marker) {
-      const nodes = Array.from(
-        document.querySelectorAll('[data-message-author-role="user"], [data-testid*="user"]')
-      );
-      if (nodes.some((el) => (el.innerText || "").includes(marker))) return true;
-      return (document.body && document.body.innerText || "").includes(marker);
-    }
-
-    return (async () => {
-      if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.href)) {
-        return { ok: false, error: "not_logged_in", href: location.href };
-      }
-
-      let composer = null;
-      for (let i = 0; i < 12; i++) {
-        composer = findComposer();
-        if (composer) break;
-        await sleep(200);
-      }
-      if (!composer) return { ok: false, error: "composer_not_found", href: location.href };
-
-      if (!setComposerText(composer, cfg.text)) {
-        return { ok: false, error: "set_text_failed", sample: (composer.innerText || "").slice(0, 80) };
-      }
-
-      await sleep(150);
-      const sendBtn = findSend();
-      let method = "dom_enter";
-      if (sendBtn && !sendBtn.disabled) {
-        sendBtn.click();
-        method = "dom_click_send";
-      } else {
-        composer.focus();
-        composer.dispatchEvent(
-          new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
-        );
-        composer.dispatchEvent(
-          new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true })
-        );
-      }
-
-      for (let i = 0; i < 8; i++) {
-        await sleep(250);
-        if (markerInUserTurns(cfg.marker)) {
-          const still = findComposer();
-          const composerStill = still
-            ? (still.innerText || still.textContent || "").includes(cfg.marker.slice(0, 20))
-            : false;
-          if (!composerStill || i >= 2) {
-            return {
-              ok: true,
-              method,
-              verified: true,
-              href: location.href,
-              composerCleared: !composerStill,
-            };
-          }
-        }
-      }
-
-      return {
-        ok: false,
-        error: "not_verified_in_chat",
-        method,
-        href: location.href,
-        sample: (document.body && document.body.innerText || "").slice(0, 120),
-      };
-    })();
+    return { clicked: false, disabled: !!(btn && btn.disabled) };
   })()`;
 }
 
+/** Strict: must be in a user message bubble, NOT merely in the composer/body. */
 function pageVerifyExpression(marker) {
   const payload = JSON.stringify({ marker });
   return `(() => {
     const cfg = ${payload};
-    const nodes = Array.from(
-      document.querySelectorAll('[data-message-author-role="user"], [data-testid*="user"]')
+    const turns = Array.from(
+      document.querySelectorAll('[data-message-author-role="user"]')
     );
-    const inTurns = nodes.some((el) => (el.innerText || "").includes(cfg.marker));
-    const inBody = (document.body && document.body.innerText || "").includes(cfg.marker);
-    return { ok: inTurns || inBody, inTurns, inBody, href: location.href };
+    const inTurns = turns.some((el) => (el.innerText || "").includes(cfg.marker));
+    const composer =
+      document.querySelector("#prompt-textarea") ||
+      document.querySelector('[data-testid="prompt-textarea"]') ||
+      document.querySelector('div.ProseMirror[contenteditable="true"]');
+    const composerText = composer
+      ? (composer.innerText || composer.textContent || "").trim()
+      : "";
+    const composerHas = cfg.marker
+      ? composerText.includes(cfg.marker.slice(0, Math.min(24, cfg.marker.length)))
+      : false;
+    return {
+      ok: inTurns && !composerHas,
+      inTurns,
+      composerHas,
+      href: location.href,
+      turnCount: turns.length,
+    };
   })()`;
+}
+
+async function pressEnter(send) {
+  const base = {
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    nativeVirtualKeyCode: 13,
+  };
+  await send("Input.dispatchKeyEvent", { type: "keyDown", ...base });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+}
+
+async function pollVerified(send, marker, attempts = 10) {
+  for (let i = 0; i < attempts; i++) {
+    await sleep(280);
+    const v = await evaluateValue(send, pageVerifyExpression(marker));
+    if (v && v.ok) return v;
+  }
+  return evaluateValue(send, pageVerifyExpression(marker));
 }
 
 async function sendViaCdp(text, newChat) {
@@ -602,7 +516,6 @@ async function sendViaCdp(text, newChat) {
   };
 
   try {
-    // Always land on a fresh chat via navigate — faster/more reliable than UI clicks.
     if (newChat || !/chatgpt\.com|openai\.com/i.test(page.url || "")) {
       try {
         await send("Page.navigate", { url: "https://chatgpt.com/" });
@@ -614,12 +527,71 @@ async function sendViaCdp(text, newChat) {
       await waitForExecutionContext(send);
     }
 
-    let value = null;
+    let last = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        value = await evaluateValue(send, pageInjectExpression(text, marker));
-        if (value && value.ok) break;
-        if (value && value.error === "not_logged_in") break;
+        const focus = await evaluateValue(send, pageFocusComposerExpression());
+        if (!focus?.ok) {
+          last = focus || { ok: false, error: "composer_not_found" };
+          if (focus?.error === "not_logged_in") return focus;
+          if (attempt < 1) {
+            await reconnect(900);
+            continue;
+          }
+          break;
+        }
+
+        // Real CDP text entry (React/ProseMirror listens to this; DOM hacks often don't).
+        try {
+          await send("Input.insertText", { text });
+        } catch {
+          // Fallback: execCommand path
+          await evaluateValue(
+            send,
+            `(() => {
+              const el = document.querySelector("#prompt-textarea") || document.querySelector('[data-testid="prompt-textarea"]') || document.querySelector('div.ProseMirror[contenteditable="true"]');
+              if (!el) return false;
+              el.focus();
+              document.execCommand("selectAll", false, null);
+              return document.execCommand("insertText", false, ${JSON.stringify(text)});
+            })()`
+          );
+        }
+        await sleep(200);
+
+        const click = await evaluateValue(send, pageClickSendExpression());
+        let method = click?.clicked ? "cdp_click_send" : "cdp_enter";
+        if (!click?.clicked) {
+          await pressEnter(send);
+        }
+        await sleep(200);
+
+        // If still in composer, try Enter once more then click again.
+        let verified = await pollVerified(send, marker, 6);
+        if (!verified?.ok) {
+          await pressEnter(send);
+          const click2 = await evaluateValue(send, pageClickSendExpression());
+          if (click2?.clicked) method = "cdp_click_send_retry";
+          verified = await pollVerified(send, marker, 8);
+        }
+
+        if (verified?.ok) {
+          return {
+            ok: true,
+            method,
+            verified: true,
+            href: verified.href,
+            turnCount: verified.turnCount,
+          };
+        }
+        last = {
+          ok: false,
+          error: "not_verified_in_chat",
+          method,
+          href: verified?.href,
+          inTurns: verified?.inTurns,
+          composerHas: verified?.composerHas,
+        };
         if (attempt < 1) {
           await reconnect(900);
           continue;
@@ -633,7 +605,7 @@ async function sendViaCdp(text, newChat) {
       }
     }
 
-    return value || { ok: false, error: "no_result" };
+    return last || { ok: false, error: "no_result" };
   } finally {
     try {
       ws.close();
@@ -658,7 +630,6 @@ async function main() {
   let ensure = { restarted: false, mode: "attach" };
   let value;
   if (mode === "verify") {
-    // Never relaunch Chrome just to verify — that blows Orgo's bash budget.
     if (!(await cdpReady())) {
       console.log(JSON.stringify({ ok: false, error: "cdp_down" }));
       process.exit(1);

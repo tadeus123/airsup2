@@ -16,7 +16,7 @@ function convKey(computerId: string, conversationId: string): string {
 }
 
 function maxConcurrentRelaysPerComputer(): number {
-  const n = Number(process.env.ORGO_MAX_CONCURRENT_RELAYS || 2);
+  const n = Number(process.env.ORGO_MAX_CONCURRENT_RELAYS || 1);
   if (!Number.isFinite(n)) return 2;
   return Math.max(1, Math.min(Math.floor(n), 4));
 }
