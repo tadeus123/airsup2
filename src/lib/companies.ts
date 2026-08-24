@@ -8,6 +8,20 @@ import {
 } from "./company-crypto";
 import { supabaseConfig, supabaseRpc } from "./users";
 
+async function companyRpc<T>(fn: string, body: Record<string, unknown>): Promise<T | null> {
+  try {
+    return await supabaseRpc<T>(fn, body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/could not find the function|PGRST202|schema cache/i.test(msg)) {
+      throw new Error(
+        "company tables are not on supabase yet — run supabase/migrations/012_companies.sql"
+      );
+    }
+    throw e;
+  }
+}
+
 export type CompanyPublic = {
   id: string;
   name: string;
@@ -51,15 +65,21 @@ type MemoryStore = {
   byHash: Map<string, string>;
   messages: CompanyMessage[];
   seq: number;
+  messageCompanyIds: Map<number, string>;
 };
 
-const memory: MemoryStore = {
-  byId: new Map(),
-  byDomain: new Map(),
-  byHash: new Map(),
-  messages: [],
-  seq: 0,
-};
+const g = globalThis as unknown as { __airsupCompanies?: MemoryStore };
+if (!g.__airsupCompanies) {
+  g.__airsupCompanies = {
+    byId: new Map(),
+    byDomain: new Map(),
+    byHash: new Map(),
+    messages: [],
+    seq: 0,
+    messageCompanyIds: new Map(),
+  };
+}
+const memory = g.__airsupCompanies;
 
 export function normalizeDomain(raw: string): string {
   let s = raw.trim().toLowerCase();
@@ -82,6 +102,21 @@ export function assertDomain(raw: string): string {
     throw new Error("that domain does not look valid");
   }
   return domain;
+}
+
+function publicOf(c: CompanyPublic): CompanyPublic {
+  return {
+    id: c.id,
+    name: c.name,
+    domain: c.domain,
+    tokenPrefix: c.tokenPrefix,
+    keyLast4: c.keyLast4,
+    model: c.model,
+    stance: c.stance,
+    contextNotes: c.contextNotes,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  };
 }
 
 function mapCompanyPublic(row: Record<string, unknown>): CompanyPublic {
@@ -148,7 +183,7 @@ export async function createCompany(input: {
 
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown>>("company_create", {
+    const row = await companyRpc<Record<string, unknown>>("company_create", {
       p_token: cfg.token,
       p_name: name,
       p_domain: domain,
@@ -186,14 +221,14 @@ export async function createCompany(input: {
   memory.byId.set(id, company);
   memory.byDomain.set(domain, id);
   memory.byHash.set(minted.hash, id);
-  return { company: { ...company }, token: minted.token };
+  return { company: publicOf(company), token: minted.token };
 }
 
 export async function getCompanyByToken(token: string): Promise<CompanyPublic | null> {
   const hash = hashCompanyToken(token.trim());
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown> | null>("company_get_by_token", {
+    const row = await companyRpc<Record<string, unknown> | null>("company_get_by_token", {
       p_token: cfg.token,
       p_token_hash: hash,
     });
@@ -203,14 +238,14 @@ export async function getCompanyByToken(token: string): Promise<CompanyPublic | 
   const id = memory.byHash.get(hash);
   if (!id) return null;
   const c = memory.byId.get(id);
-  return c ? { ...c } : null;
+  return c ? publicOf(c) : null;
 }
 
 export async function getCompanySecretByToken(token: string): Promise<CompanySecret | null> {
   const hash = hashCompanyToken(token.trim());
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown> | null>("company_get_secret_by_token", {
+    const row = await companyRpc<Record<string, unknown> | null>("company_get_secret_by_token", {
       p_token: cfg.token,
       p_token_hash: hash,
     });
@@ -220,7 +255,7 @@ export async function getCompanySecretByToken(token: string): Promise<CompanySec
   const id = memory.byHash.get(hash);
   if (!id) return null;
   const c = memory.byId.get(id);
-  return c ? { ...c } : null;
+  return c ? { ...publicOf(c), apiKeyEnc: c.apiKeyEnc } : null;
 }
 
 export async function getCompanySecretByDomain(domainRaw: string): Promise<CompanySecret | null> {
@@ -228,7 +263,7 @@ export async function getCompanySecretByDomain(domainRaw: string): Promise<Compa
   if (!domain) return null;
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown> | null>("company_get_secret_by_domain", {
+    const row = await companyRpc<Record<string, unknown> | null>("company_get_secret_by_domain", {
       p_token: cfg.token,
       p_domain: domain,
     });
@@ -238,7 +273,7 @@ export async function getCompanySecretByDomain(domainRaw: string): Promise<Compa
   const id = memory.byDomain.get(domain);
   if (!id) return null;
   const c = memory.byId.get(id);
-  return c ? { ...c } : null;
+  return c ? { ...publicOf(c), apiKeyEnc: c.apiKeyEnc } : null;
 }
 
 export async function updateCompany(input: {
@@ -260,7 +295,7 @@ export async function updateCompany(input: {
 
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown>>("company_update", {
+    const row = await companyRpc<Record<string, unknown>>("company_update", {
       p_token: cfg.token,
       p_token_hash: hash,
       p_name: input.name ?? null,
@@ -285,7 +320,7 @@ export async function updateCompany(input: {
     c.keyLast4 = keyLast4 || c.keyLast4;
   }
   c.updatedAt = new Date().toISOString();
-  return { ...c };
+  return publicOf(c);
 }
 
 export type DomainCheck = {
@@ -305,7 +340,7 @@ export async function checkCompanyDomains(rawDomains: string[]): Promise<DomainC
 
   const cfg = supabaseConfig();
   if (cfg) {
-    const rows = await supabaseRpc<Array<Record<string, unknown>>>("company_check_domains", {
+    const rows = await companyRpc<Array<Record<string, unknown>>>("company_check_domains", {
       p_token: cfg.token,
       p_domains: unique,
     });
@@ -336,7 +371,7 @@ export async function appendCompanyMessage(input: {
 }): Promise<CompanyMessage> {
   const cfg = supabaseConfig();
   if (cfg) {
-    const row = await supabaseRpc<Record<string, unknown>>("company_message_append", {
+    const row = await companyRpc<Record<string, unknown>>("company_message_append", {
       p_token: cfg.token,
       p_company_id: input.companyId,
       p_conversation_id: input.conversationId,
@@ -357,11 +392,9 @@ export async function appendCompanyMessage(input: {
     createdAt: new Date().toISOString(),
   };
   memory.messages.push(msg);
-  memoryCompanyIds.set(msg.id, input.companyId);
+  memory.messageCompanyIds.set(msg.id, input.companyId);
   return msg;
 }
-
-const memoryCompanyIds = new Map<number, string>();
 
 export async function listCompanyMessages(input: {
   companyId: string;
@@ -369,7 +402,7 @@ export async function listCompanyMessages(input: {
 }): Promise<CompanyMessage[]> {
   const cfg = supabaseConfig();
   if (cfg) {
-    const rows = await supabaseRpc<Array<Record<string, unknown>>>("company_messages_for_talk", {
+    const rows = await companyRpc<Array<Record<string, unknown>>>("company_messages_for_talk", {
       p_token: cfg.token,
       p_company_id: input.companyId,
       p_conversation_id: input.conversationId,
@@ -379,7 +412,7 @@ export async function listCompanyMessages(input: {
   return memory.messages.filter(
     (m) =>
       m.conversationId === input.conversationId &&
-      memoryCompanyIds.get(m.id) === input.companyId
+      memory.messageCompanyIds.get(m.id) === input.companyId
   );
 }
 
@@ -387,7 +420,7 @@ export async function listCompanyConversations(token: string): Promise<CompanyCo
   const hash = hashCompanyToken(token.trim());
   const cfg = supabaseConfig();
   if (cfg) {
-    const rows = await supabaseRpc<Array<Record<string, unknown>>>("company_conversations", {
+    const rows = await companyRpc<Array<Record<string, unknown>>>("company_conversations", {
       p_token: cfg.token,
       p_token_hash: hash,
     });
@@ -397,7 +430,7 @@ export async function listCompanyConversations(token: string): Promise<CompanyCo
   if (!id) return [];
   const grouped = new Map<string, CompanyMessage[]>();
   for (const m of memory.messages) {
-    if (memoryCompanyIds.get(m.id) !== id) continue;
+    if (memory.messageCompanyIds.get(m.id) !== id) continue;
     const arr = grouped.get(m.conversationId) || [];
     arr.push(m);
     grouped.set(m.conversationId, arr);
