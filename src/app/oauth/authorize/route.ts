@@ -60,10 +60,10 @@ function htmlPage(body: string, status = 200) {
       font-weight:800; letter-spacing:0.08em; text-transform:uppercase;
       font-size:1.05rem; text-decoration:none; color:inherit;
     }
-    main { max-width: 26rem; margin: 0 auto; padding: 2.75rem 1.5rem 4rem; }
+    main { max-width: 24rem; margin: 0 auto; padding: clamp(2rem, 8vh, 3.5rem) 1.5rem 4rem; }
     h1 {
-      font-family: Syne, sans-serif; font-weight:700; font-size:1.75rem;
-      letter-spacing:-0.03em; line-height:1.15; margin:0 0 .75rem;
+      font-family: Syne, sans-serif; font-weight:700; font-size:1.5rem;
+      letter-spacing:-0.03em; line-height:1.15; margin:0 0 1.25rem;
     }
     p { color:var(--muted); margin:0 0 1rem; line-height:1.55; font-size:0.98rem; }
     label { display:flex; flex-direction:column; gap:.4rem; margin:1.15rem 0; }

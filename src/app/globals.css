@@ -8,7 +8,8 @@
   --cta-bg: #0a0a0a;
   --cta-fg: #ffffff;
   --danger: #b42318;
-  --radius: 6px;
+  --radius: 8px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 [data-theme="dark"] {
@@ -62,7 +63,9 @@ button {
 /* —— Shared chrome (airsup.ai family) —— */
 .as-header {
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-color);
+  background: color-mix(in srgb, var(--bg-color) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -190,6 +193,7 @@ button {
   cursor: pointer;
   text-decoration: none;
   line-height: 1.2;
+  transition: opacity 0.18s var(--ease-out), transform 0.18s var(--ease-out);
 }
 
 .as-btn:hover,
@@ -217,6 +221,7 @@ button {
   padding: 0.45rem 0.9rem;
   cursor: pointer;
   text-decoration: none;
+  transition: background 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
 }
 
 .as-btn-ghost:hover,
@@ -227,8 +232,8 @@ button {
 
 .as-footer {
   border-top: 1px solid var(--border-color);
-  margin-top: 3rem;
-  padding: 2rem 1.5rem 3rem;
+  margin-top: auto;
+  padding: 1.5rem 1.5rem 2rem;
 }
 
 .as-footer-inner {
@@ -383,7 +388,12 @@ button {
 .ainet {
   max-width: 760px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 5rem;
+  padding: 1.5rem 1.5rem 2rem;
+  width: 100%;
+}
+
+.co-page .ainet.co-dashboard {
+  max-width: 960px;
 }
 
 .ainet-name-row {
@@ -1312,6 +1322,10 @@ button {
   font: inherit;
   width: 100%;
   resize: vertical;
+  transition:
+    border-color 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out),
+    background 0.18s var(--ease-out);
 }
 
 .co-field textarea,
@@ -1576,12 +1590,13 @@ button {
   width: 100%;
   text-align: left;
   border: 0;
-  border-radius: calc(var(--radius) - 1px);
+  border-radius: var(--radius);
   background: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
   padding: 0.7rem 0.75rem;
+  transition: background 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out);
 }
 
 .co-threads button:hover {
@@ -1626,9 +1641,15 @@ button {
 }
 
 .co-shell--centered {
-  max-width: 26rem;
+  width: 100%;
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vh, 2.5rem) 1.5rem clamp(2rem, 5vh, 3rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
   grid-template-columns: 1fr;
-  padding-top: 2rem;
 }
 
 .co-shell--centered .co-shell-form {
@@ -1736,9 +1757,29 @@ button {
   border-radius: calc(var(--radius) + 4px);
   background: var(--bg-color);
   box-shadow:
-    0 1px 2px color-mix(in srgb, var(--text-color) 6%, transparent),
-    0 12px 40px color-mix(in srgb, var(--text-color) 4%, transparent);
-  padding: 1.75rem 1.65rem 1.85rem;
+    0 1px 2px color-mix(in srgb, var(--text-color) 5%, transparent),
+    0 16px 48px color-mix(in srgb, var(--text-color) 6%, transparent);
+  padding: 1.65rem 1.5rem 1.75rem;
+}
+
+.co-form-card--enter {
+  animation: co-enter 0.45s var(--ease-out) both;
+}
+
+.co-form-card--flat {
+  box-shadow: none;
+  padding: 1.35rem 1.25rem 1.5rem;
+}
+
+@keyframes co-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .co-form-head {
@@ -1813,7 +1854,16 @@ button {
 /* —— Company dashboard —— */
 .co-dashboard {
   max-width: 960px;
-  padding-top: 2rem;
+  padding-top: 1.5rem;
+  padding-bottom: 2rem;
+  flex: 1;
+  width: 100%;
+}
+
+.co-dashboard--loading {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .co-live-top {
@@ -1870,9 +1920,13 @@ button {
 }
 
 .co-panel {
-  margin-top: 2.5rem;
-  padding-top: 2.5rem;
-  border-top: 1px solid var(--border-color);
+  margin-top: 1.25rem;
+}
+
+.co-panel--flush {
+  padding-top: 0;
+  border-top: 0;
+  margin-top: 1rem;
 }
 
 .co-panel-head {
@@ -1912,8 +1966,293 @@ button {
   font-size: 0.92rem;
 }
 
-body:has(.co-shell--centered) {
+body:has(.co-page) {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--text-color) 5%, transparent), transparent),
+    radial-gradient(ellipse 90% 55% at 50% -15%, color-mix(in srgb, var(--text-color) 4%, transparent), transparent),
     var(--bg-color);
+}
+
+/* —— Page shell —— */
+.co-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.co-page > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.co-page .as-footer-inner {
+  text-align: center;
+}
+
+/* —— Dashboard tabs —— */
+.co-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 1.75rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) + 2px);
+  background: color-mix(in srgb, var(--text-color) 3%, var(--bg-color));
+  width: fit-content;
+  max-width: 100%;
+}
+
+.co-tabs button {
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  cursor: pointer;
+  transition:
+    background 0.16s var(--ease-out),
+    color 0.16s var(--ease-out),
+    box-shadow 0.16s var(--ease-out);
+}
+
+.co-tabs button:hover {
+  color: var(--text-color);
+}
+
+.co-tabs button.on {
+  background: var(--bg-color);
+  color: var(--text-color);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text-color) 8%, transparent);
+}
+
+.co-tabs button:focus-visible {
+  outline: 2px solid var(--text-color);
+  outline-offset: 1px;
+}
+
+/* —— Loading skeleton —— */
+.co-skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-color) 6%, var(--bg-color)) 0%,
+    color-mix(in srgb, var(--text-color) 10%, var(--bg-color)) 50%,
+    color-mix(in srgb, var(--text-color) 6%, var(--bg-color)) 100%
+  );
+  background-size: 200% 100%;
+  animation: co-shimmer 1.4s ease-in-out infinite;
+}
+
+.co-skeleton--line {
+  height: 0.85rem;
+}
+
+.co-skeleton--short {
+  width: 5rem;
+}
+
+.co-skeleton--title {
+  height: 1.75rem;
+  width: min(14rem, 70%);
+}
+
+.co-skeleton--tabs {
+  height: 2.35rem;
+  width: 14rem;
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.co-skeleton--panel {
+  height: min(50vh, 22rem);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+@keyframes co-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.co-pulse {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  margin: 1.25rem auto 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text-color) 12%, transparent);
+  border-top-color: var(--text-color);
+  animation: co-spin 0.75s linear infinite;
+}
+
+@keyframes co-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* —— OAuth setup (aligned with company UI) —— */
+.oauth-page .oauth-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.25rem, 4vh, 2rem) 1.5rem 2.5rem;
+  width: 100%;
+}
+
+.oauth-stage {
+  width: min(24rem, 100%);
+}
+
+.oauth-stage--wide {
+  width: min(56rem, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 840px) {
+  .oauth-stage--wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oauth-stage h1,
+.oauth-copy h1 {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-brand), "Arial Narrow", "Helvetica Neue", sans-serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.oauth-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.oauth-vnc-wrap {
+  position: relative;
+  border-radius: calc(var(--radius) + 2px);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--text-color) 8%, transparent);
+  opacity: 0.92;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.oauth-vnc-wrap--busy {
+  opacity: 0.55;
+}
+
+.oauth-vnc-wrap .portal-connect-frame {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: min(42vh, 20rem);
+  border: 0;
+  box-shadow: none;
+}
+
+.oauth-vnc {
+  aspect-ratio: 16 / 10;
+  max-height: min(42vh, 20rem);
+  display: grid;
+  place-items: center;
+  background: #2c2a26;
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.oauth-page .portal-login-form {
+  width: 100%;
+  margin: 0 0 0.75rem;
+  gap: 0.85rem;
+}
+
+.oauth-page .portal-login-field {
+  gap: 0.4rem;
+}
+
+.oauth-page .portal-login-label {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+}
+
+.oauth-page .portal-login-input {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0.7rem 0.85rem;
+  transition:
+    border-color 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out);
+}
+
+.oauth-page .portal-login-input:focus {
+  outline: 2px solid var(--text-color);
+  outline-offset: 1px;
+  border-color: transparent;
+  background: var(--bg-color);
+}
+
+.oauth-page .portal-login-submit {
+  width: 100%;
+  margin-top: 0.15rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.7rem 1.1rem;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.oauth-page .portal-login-form--done .portal-login-status {
+  margin: 0 0 0.75rem;
+  font-family: inherit;
+  font-size: 0.92rem;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.co-fieldset + .co-fieldset {
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+}
+
+.co-form .co-field + .co-field {
+  margin-top: 0.85rem;
+}
+
+.co-go--wide:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.co-live {
+  margin: 0 0 0.25rem;
+}
+
+.co-empty-title {
+  margin: 0;
 }

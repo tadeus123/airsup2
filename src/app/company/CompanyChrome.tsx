@@ -1,7 +1,41 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { BrandNav } from "@/components/BrandNav";
+import { SiteFooter } from "@/components/SiteFooter";
+
+export function CompanyPage({
+  children,
+  showLogin = true,
+  actions,
+}: {
+  children: ReactNode;
+  showLogin?: boolean;
+  actions?: ReactNode;
+}) {
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  return (
+    <div className="co-page">
+      <BrandNav
+        actions={
+          actions ??
+          (showLogin ? (
+            <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
+              Log in
+            </button>
+          ) : null)
+        }
+      />
+      {showLogin ? (
+        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+      ) : null}
+      {children}
+      <SiteFooter />
+    </div>
+  );
+}
 
 export function CompanyLoginDialog({
   open,
@@ -102,5 +136,16 @@ export function CompanyLoginDialog({
         </div>
       </form>
     </dialog>
+  );
+}
+
+export function CompanyLoading() {
+  return (
+    <main className="ainet co-dashboard co-dashboard--loading">
+      <div className="co-skeleton co-skeleton--line co-skeleton--short" />
+      <div className="co-skeleton co-skeleton--line co-skeleton--title" />
+      <div className="co-skeleton co-skeleton--tabs" />
+      <div className="co-skeleton co-skeleton--panel" />
+    </main>
   );
 }

@@ -2,14 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { BrandNav } from "@/components/BrandNav";
 import { fetchPortalDesktop, startPortalSession } from "@/lib/portal-client";
 import ChatGptNativeLoginForm from "@/app/portal/chatgpt/ChatGptNativeLoginForm";
 
 const ChatGptLoginFrame = dynamic(() => import("@/app/portal/chatgpt/ChatGptLoginFrame"), {
   ssr: false,
   loading: () => (
-    <div className="portal-connect-frame portal-connect-frame--loading">
-      <p className="portal-connect-frame-status">…</p>
+    <div className="oauth-vnc oauth-vnc--loading" aria-hidden="true">
+      <span className="co-pulse" />
     </div>
   ),
 });
@@ -84,75 +85,62 @@ export default function OauthSetupPage() {
   }
 
   return (
-    <main className="portal-connect">
-      <div className="portal-gate-light" aria-hidden="true" />
-      <div className="portal-gate-vignette" aria-hidden="true" />
+    <div className="co-page oauth-page">
+      <BrandNav />
+      <main className="oauth-main">
+        {phase === "loading" ? (
+          <section className="oauth-stage co-form-card co-form-card--enter">
+            <h1>{status}</h1>
+            <span className="co-pulse" aria-hidden="true" />
+          </section>
+        ) : null}
 
-      <header className="portal-connect-header">
-        <span className="as-mark" style={{ textDecoration: "none" }}>
-          AIRSUP
-        </span>
-      </header>
+        {phase === "error" ? (
+          <section className="oauth-stage co-form-card">
+            <h1>Setup failed</h1>
+            <p className="ainet-note err">{error}</p>
+            <button type="button" className="co-go co-go--wide" onClick={() => void finish()}>
+              Continue
+            </button>
+          </section>
+        ) : null}
 
-      {phase === "loading" ? (
-        <section className="portal-connect-body">
-          <h1 className="portal-connect-title">{status}</h1>
-          <div className="portal-connect-frame portal-connect-frame--loading" aria-hidden="true" />
-        </section>
-      ) : null}
+        {phase === "login" && desktop ? (
+          <section className="oauth-stage oauth-stage--wide">
+            <div className="oauth-copy co-form-card co-form-card--enter">
+              <h1>Sign into ChatGPT</h1>
+              <ChatGptNativeLoginForm onSigning={setSigning} />
+              {error ? <p className="ainet-note err">{error}</p> : null}
+              <button
+                type="button"
+                className="co-go co-go--wide"
+                disabled={finishing}
+                onClick={() => void finish()}
+              >
+                {finishing ? "…" : "Done"}
+              </button>
+            </div>
+            <div className={`oauth-vnc-wrap${signing ? " oauth-vnc-wrap--busy" : ""}`}>
+              <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
+            </div>
+          </section>
+        ) : null}
 
-      {phase === "error" ? (
-        <section className="portal-connect-body">
-          <h1 className="portal-connect-title">Setup failed</h1>
-          <div className="portal-connect-frame portal-connect-frame--failed">
-            <p className="portal-connect-frame-error">{error}</p>
-          </div>
-          <button type="button" className="portal-connect-retry" onClick={() => void finish()}>
-            Continue
-          </button>
-        </section>
-      ) : null}
-
-      {phase === "login" && desktop ? (
-        <section className="portal-connect-body">
-          <h1 className="portal-connect-title">Sign into ChatGPT</h1>
-          <ChatGptNativeLoginForm onSigning={setSigning} />
-          <div
-            className={`portal-connect-stage portal-connect-stage--preview${signing ? " portal-connect-stage--signing" : ""}`}
-          >
-            <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
-            {signing ? (
-              <p className="portal-connect-signing-overlay" aria-live="polite">
-                …
-              </p>
-            ) : null}
-          </div>
-          {error ? <p className="portal-connect-frame-error">{error}</p> : null}
-          <button
-            type="button"
-            className="portal-connect-retry"
-            disabled={finishing}
-            onClick={() => void finish()}
-          >
-            {finishing ? "…" : "Done"}
-          </button>
-        </section>
-      ) : null}
-
-      {phase === "ready" ? (
-        <section className="portal-connect-body">
-          <h1 className="portal-connect-title">{username || "Ready"}</h1>
-          {error ? <p className="portal-connect-frame-error">{error}</p> : null}
-          <button
-            type="button"
-            className="portal-connect-retry"
-            disabled={finishing}
-            onClick={() => void finish()}
-          >
-            {finishing ? "…" : "Continue"}
-          </button>
-        </section>
-      ) : null}
-    </main>
+        {phase === "ready" ? (
+          <section className="oauth-stage co-form-card co-form-card--enter">
+            <h1>{username || "Ready"}</h1>
+            {error ? <p className="ainet-note err">{error}</p> : null}
+            <button
+              type="button"
+              className="co-go co-go--wide"
+              disabled={finishing}
+              onClick={() => void finish()}
+            >
+              {finishing ? "…" : "Continue"}
+            </button>
+          </section>
+        ) : null}
+      </main>
+    </div>
   );
 }

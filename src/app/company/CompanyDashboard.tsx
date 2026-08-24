@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { BrandNav } from "@/components/BrandNav";
-import { SiteFooter } from "@/components/SiteFooter";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
-import { CompanyLoginDialog } from "./CompanyChrome";
+import { CompanyLoading, CompanyPage } from "./CompanyChrome";
 
 type Company = {
   id: string;
@@ -33,6 +31,8 @@ type ChatMessage = {
   visitorUsername: string;
   createdAt: string;
 };
+
+type Tab = "conversations" | "settings";
 
 function formatTime(iso: string): string {
   try {
@@ -66,7 +66,9 @@ export default function CompanyDashboard() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
+  const autoSelected = useRef(false);
 
   const load = useCallback(
     async (conversationId?: string) => {
@@ -122,6 +124,18 @@ export default function CompanyDashboard() {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, activeId]);
 
+  useEffect(() => {
+    if (autoSelected.current) return;
+    const real = conversations.filter((c) => !c.isTest);
+    if (real.length === 0) return;
+    autoSelected.current = true;
+    const first = real[0].conversationId;
+    setActiveId(first);
+    void load(first).catch(() => {
+      autoSelected.current = false;
+    });
+  }, [conversations, load]);
+
   async function openThread(id: string) {
     setActiveId(id);
     setError("");
@@ -160,41 +174,21 @@ export default function CompanyDashboard() {
     }
   }
 
-  const [loginOpen, setLoginOpen] = useState(false);
-
   if (loading) {
     return (
-      <>
-        <BrandNav
-          actions={
-            <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
-              Log in
-            </button>
-          }
-        />
-        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
-        <main className="ainet co-dashboard">
-          <p className="ainet-muted">…</p>
-        </main>
-      </>
+      <CompanyPage>
+        <CompanyLoading />
+      </CompanyPage>
     );
   }
 
   if (!company) {
     return (
-      <>
-        <BrandNav
-          actions={
-            <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
-              Log in
-            </button>
-          }
-        />
-        <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <CompanyPage>
         <main className="ainet co-dashboard">
           <p className="ainet-note err">{error || "Company not found"}</p>
         </main>
-      </>
+      </CompanyPage>
     );
   }
 
@@ -205,15 +199,7 @@ export default function CompanyDashboard() {
     : "Visitor AI";
 
   return (
-    <>
-      <BrandNav
-        actions={
-          <button type="button" className="as-btn-ghost" onClick={() => setLoginOpen(true)}>
-            Log in
-          </button>
-        }
-      />
-      <CompanyLoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
+    <CompanyPage>
       <main className="ainet co-dashboard">
         <header className="co-live">
           <div className="co-live-top">
@@ -226,56 +212,83 @@ export default function CompanyDashboard() {
           <h1 className="co-live-name">{company.name}</h1>
         </header>
 
-        <section className="co-panel" aria-label="conversations">
-          <div className="co-panel-head">
-            <h2>Conversations</h2>
-          </div>
-          {error ? <p className="ainet-note err">{error}</p> : null}
-          {realTalks.length === 0 ? (
-            <div className="co-empty">
-              <p className="co-empty-title">No conversations yet</p>
-            </div>
-          ) : (
-            <div className="co-inbox">
-              <aside className="co-inbox-list" aria-label="Threads">
-                <ul className="co-threads">
-                  {realTalks.map((c) => {
-                    const on = c.conversationId === activeId;
-                    return (
-                      <li key={c.conversationId}>
-                        <button
-                          type="button"
-                          className={on ? "on" : undefined}
-                          onClick={() => void openThread(c.conversationId)}
-                        >
-                          <strong>
-                            {c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}
-                          </strong>
-                          <span className="co-thread-meta">
-                            {c.messageCount}
-                            {c.lastAt ? ` · ${formatTime(c.lastAt)}` : ""}
-                          </span>
-                          <span className="co-thread-preview">{previewBody(c.lastBody)}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </aside>
+        <nav className="co-tabs" role="tablist" aria-label="Dashboard">
+          <button
+            type="button"
+            role="tab"
+            id="tab-conversations"
+            aria-selected={tab === "conversations"}
+            aria-controls="panel-conversations"
+            className={tab === "conversations" ? "on" : undefined}
+            onClick={() => setTab("conversations")}
+          >
+            Conversations
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-settings"
+            aria-selected={tab === "settings"}
+            aria-controls="panel-settings"
+            className={tab === "settings" ? "on" : undefined}
+            onClick={() => setTab("settings")}
+          >
+            Settings
+          </button>
+        </nav>
 
-              <div className="co-inbox-chat" aria-label="Chat">
-                {activeId && active ? (
-                  <>
-                    <header className="co-chat-head">
-                      <div>
-                        <strong>{visitorLabel}</strong>
-                        <span> ↔ {company.name} AI</span>
-                      </div>
-                      <span className="co-chat-head-meta">{active.messageCount}</span>
-                    </header>
-                    <div className="co-chat" ref={scroller}>
-                      {messages.length === 0 ? null : (
-                        messages.map((m) => {
+        {tab === "conversations" ? (
+          <section
+            id="panel-conversations"
+            role="tabpanel"
+            aria-labelledby="tab-conversations"
+            className="co-panel co-panel--flush"
+          >
+            {error ? <p className="ainet-note err">{error}</p> : null}
+            {realTalks.length === 0 ? (
+              <div className="co-empty">
+                <p className="co-empty-title">No conversations yet</p>
+              </div>
+            ) : (
+              <div className="co-inbox">
+                <aside className="co-inbox-list" aria-label="Threads">
+                  <ul className="co-threads">
+                    {realTalks.map((c) => {
+                      const on = c.conversationId === activeId;
+                      return (
+                        <li key={c.conversationId}>
+                          <button
+                            type="button"
+                            className={on ? "on" : undefined}
+                            onClick={() => void openThread(c.conversationId)}
+                          >
+                            <strong>
+                              {c.visitorUsername ? `${c.visitorUsername} AI` : "Visitor AI"}
+                            </strong>
+                            <span className="co-thread-meta">
+                              {c.messageCount}
+                              {c.lastAt ? ` · ${formatTime(c.lastAt)}` : ""}
+                            </span>
+                            <span className="co-thread-preview">{previewBody(c.lastBody)}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </aside>
+
+                <div className="co-inbox-chat" aria-label="Chat">
+                  {activeId && active ? (
+                    <>
+                      <header className="co-chat-head">
+                        <div>
+                          <strong>{visitorLabel}</strong>
+                          <span> ↔ {company.name}</span>
+                        </div>
+                        <span className="co-chat-head-meta">{active.messageCount}</span>
+                      </header>
+                      <div className="co-chat" ref={scroller}>
+                        {messages.map((m) => {
                           const mine = m.role === "company";
                           const who = mine
                             ? `${company.name} AI`
@@ -296,55 +309,58 @@ export default function CompanyDashboard() {
                               </div>
                             </div>
                           );
-                        })
-                      )}
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="co-chat-empty">
+                      <p>Select a conversation</p>
                     </div>
-                  </>
-                ) : (
-                  <div className="co-chat-empty">
-                    <p>Select a conversation</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        ) : null}
 
-        <section className="co-panel" aria-label="settings">
-          <div className="co-panel-head">
-            <h2>Settings</h2>
-          </div>
-          <form className="co-form" onSubmit={(e) => void saveSettings(e)}>
-            <label className="co-field">
-              <span>Stance</span>
-              <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
-            </label>
-            <label className="co-field">
-              <span>Notes</span>
-              <textarea
-                value={contextNotes}
-                onChange={(e) => setContextNotes(e.target.value)}
-                rows={5}
-              />
-            </label>
-            <label className="co-field">
-              <span>New API key</span>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={`···${company.keyLast4}`}
-                autoComplete="off"
-              />
-            </label>
-            {saveError ? <p className="ainet-note err">{saveError}</p> : null}
-            <button type="submit" className="co-go" disabled={saving}>
-              {saved ? "Saved" : saving ? "…" : "Save"}
-            </button>
-          </form>
-        </section>
+        {tab === "settings" ? (
+          <section
+            id="panel-settings"
+            role="tabpanel"
+            aria-labelledby="tab-settings"
+            className="co-panel co-panel--flush"
+          >
+            <form className="co-form co-form-card co-form-card--flat" onSubmit={(e) => void saveSettings(e)}>
+              <label className="co-field">
+                <span>Stance</span>
+                <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
+              </label>
+              <label className="co-field">
+                <span>Notes</span>
+                <textarea
+                  value={contextNotes}
+                  onChange={(e) => setContextNotes(e.target.value)}
+                  rows={5}
+                />
+              </label>
+              <label className="co-field">
+                <span>New API key</span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={`···${company.keyLast4}`}
+                  autoComplete="off"
+                />
+              </label>
+              {saveError ? <p className="ainet-note err">{saveError}</p> : null}
+              <button type="submit" className="co-go" disabled={saving}>
+                {saved ? "Saved" : saving ? "…" : "Save"}
+              </button>
+            </form>
+          </section>
+        ) : null}
       </main>
-      <SiteFooter />
-    </>
+    </CompanyPage>
   );
 }
