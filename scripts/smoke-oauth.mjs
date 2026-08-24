@@ -59,6 +59,7 @@ async function main() {
   const redirect = "http://127.0.0.1:9/cb";
   const clientId = "https://chatgpt.com/oauth/client.json";
   const resource = `${BASE}/mcp`;
+  let accessToken = "";
   const body = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
@@ -108,6 +109,7 @@ async function main() {
       if (!tr.ok) bad("token");
       else {
         ok("tokens");
+        accessToken = tj.access_token || "";
         const init = await fetch(`${BASE}/mcp`, {
           method: "POST",
           headers: {
@@ -213,10 +215,56 @@ async function main() {
     else ok(p);
   }
 
+  // Company tools should answer cleanly even with zero live companies.
+  if (accessToken) {
+    const init2 = await fetch(`${BASE}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 10,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "smoke", version: "0" },
+        },
+      }),
+    });
+    const sess2 = init2.headers.get("mcp-session-id");
+    const check = await fetch(`${BASE}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        ...(sess2 ? { "mcp-session-id": sess2 } : {}),
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: {
+          name: "check_domains",
+          arguments: { domains: ["blackbird.care"] },
+        },
+      }),
+    });
+    const ct = await check.text();
+    if (!check.ok || !ct.includes("live")) bad(`check_domains ${check.status}`);
+    else ok("check_domains");
+  }
+
   lines.push(`ERRORS ${errors.length}`);
   lines.push(...errors);
   writeFileSync("smoke-oauth.txt", lines.join("\n"));
-  process.exit(errors.length ? 1 : 0);
+  if (errors.length) process.exit(1);
+  console.log(lines.join("\n"));
+  process.exit(0);
 }
 
 main().catch((e) => {
