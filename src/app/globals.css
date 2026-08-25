@@ -1300,3 +1300,30 @@ body:has(.co-page) {
   background: #2c2a26;
   border-radius: calc(var(--radius) + 2px);
 }
+
+.oauth-vnc--preparing {
+  gap: 0.55rem;
+  padding: 1.25rem;
+  color: #f4f1ea;
+  text-align: center;
+}
+
+.oauth-vnc--preparing p {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 550;
+}
+
+.oauth-vnc-prep-hint,
+.oauth-login-prep {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.oauth-vnc-prep-hint {
+  color: color-mix(in srgb, #f4f1ea 70%, transparent);
+  font-weight: 400;
+  font-size: 0.78rem;
+}

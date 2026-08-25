@@ -29,12 +29,29 @@ export default function OauthSetupPage() {
   const [aspToken, setAspToken] = useState("");
   const [error, setError] = useState("");
   const [desktop, setDesktop] = useState<{ vncUrl: string; password: string } | null>(null);
+  const [desktopStatus, setDesktopStatus] = useState("Preparing desktop…");
+  const [desktopReady, setDesktopReady] = useState(false);
   const [signing, setSigning] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
-  const [status, setStatus] = useState("Setting up…");
   const trustedRef = useRef(false);
   const finishStartedRef = useRef(false);
+  const desktopReadyRef = useRef(false);
+  const desktopWaiters = useRef<Array<() => void>>([]);
+
+  const markDesktopReady = useCallback(() => {
+    desktopReadyRef.current = true;
+    setDesktopReady(true);
+    const waiters = desktopWaiters.current.splice(0);
+    for (const resolve of waiters) resolve();
+  }, []);
+
+  const waitForDesktop = useCallback(async () => {
+    if (desktopReadyRef.current) return;
+    await new Promise<void>((resolve) => {
+      desktopWaiters.current.push(resolve);
+    });
+  }, []);
 
   const refreshLogin = useCallback(async (token: string) => {
     const { loggedIn: ok } = await fetchPortalLoginStatus(token);
@@ -53,7 +70,6 @@ export default function OauthSetupPage() {
     finishStartedRef.current = true;
     setFinishing(true);
     setError("");
-    setStatus("Returning to ChatGPT…");
     try {
       let lastErr = "could not finish";
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -99,23 +115,28 @@ export default function OauthSetupPage() {
           setLoggedIn(true);
           trustedRef.current = true;
           setPhase("ready");
+          markDesktopReady();
           return;
         }
 
-        setStatus("Starting desktop…");
+        // Show the form immediately so the user can type while Orgo boots.
+        setPhase("login");
+        setDesktopStatus("Starting desktop…");
+
         if (!mj.hasOrgo) {
           await startPortalSession(mj.aspToken);
         }
         if (cancelled) return;
 
-        setStatus("Opening ChatGPT…");
+        setDesktopStatus("Opening ChatGPT login…");
         const desk = await fetchPortalDesktop(mj.aspToken, {
           launch: true,
           waitMs: 25000,
         });
         if (cancelled) return;
         setDesktop({ vncUrl: desk.vncUrl, password: desk.password });
-        setPhase("login");
+        setDesktopStatus("ChatGPT login ready");
+        markDesktopReady();
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
@@ -126,7 +147,7 @@ export default function OauthSetupPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [markDesktopReady]);
 
   useEffect(() => {
     if (!aspToken || (phase !== "login" && phase !== "ready")) return;
@@ -151,7 +172,7 @@ export default function OauthSetupPage() {
       <main className="oauth-main">
         {phase === "loading" ? (
           <section className="oauth-stage co-form-card co-form-card--enter">
-            <h1>{status}</h1>
+            <h1>Setting up…</h1>
             <span className="co-pulse" aria-hidden="true" />
           </section>
         ) : null}
@@ -164,13 +185,15 @@ export default function OauthSetupPage() {
           </section>
         ) : null}
 
-        {phase === "login" && desktop ? (
+        {phase === "login" ? (
           <section className="oauth-stage oauth-stage--wide">
             <div className="oauth-copy co-form-card co-form-card--enter">
               <h1>{finishing ? "Returning to ChatGPT…" : "Connect ChatGPT"}</h1>
               {displayName ? <p className="oauth-name">{displayName}</p> : null}
               {!finishing ? (
                 <ChatGptNativeLoginForm
+                  desktopReady={desktopReady}
+                  waitForDesktop={waitForDesktop}
                   onSigning={setSigning}
                   onSignedIn={() => {
                     trustedRef.current = true;
@@ -194,8 +217,18 @@ export default function OauthSetupPage() {
                 <span className="co-pulse" aria-hidden="true" />
               )}
             </div>
-            <div className={`oauth-vnc-wrap${signing || finishing ? " oauth-vnc-wrap--busy" : ""}`}>
-              <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
+            <div
+              className={`oauth-vnc-wrap${signing || finishing ? " oauth-vnc-wrap--busy" : ""}`}
+            >
+              {desktop ? (
+                <ChatGptLoginFrame vncUrl={desktop.vncUrl} password={desktop.password} />
+              ) : (
+                <div className="oauth-vnc oauth-vnc--preparing" role="status" aria-live="polite">
+                  <span className="co-pulse" aria-hidden="true" />
+                  <p>{desktopStatus}</p>
+                  <p className="oauth-vnc-prep-hint">You can type your login on the left meanwhile.</p>
+                </div>
+              )}
             </div>
           </section>
         ) : null}

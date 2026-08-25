@@ -8,13 +8,22 @@ import {
 } from "@/lib/portal-client";
 
 type Props = {
+  /** False while Orgo/ChatGPT login is still warming up in the background. */
+  desktopReady?: boolean;
+  /** Resolves when the desktop is ready for credential submit. */
+  waitForDesktop?: () => Promise<void>;
   onSigning?: (busy: boolean) => void;
   onSignedIn?: () => void;
 };
 
 type Step = "credentials" | "totp" | "done";
 
-export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props) {
+export default function ChatGptNativeLoginForm({
+  desktopReady = true,
+  waitForDesktop,
+  onSigning,
+  onSignedIn,
+}: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -30,6 +39,9 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
     setBusy(true);
     onSigning?.(true);
     try {
+      if (!desktopReady && waitForDesktop) {
+        await waitForDesktop();
+      }
       const token = getSavedPortalToken();
       if (!token) throw new Error("session expired — refresh and try again");
       const result = await submitPortalLogin(token, email.trim(), password);
@@ -178,8 +190,17 @@ export default function ChatGptNativeLoginForm({ onSigning, onSignedIn }: Props)
       </label>
       {error ? <p className="ainet-note err">{error}</p> : null}
       <button type="submit" className="co-go co-go--wide" disabled={busy}>
-        {busy ? "…" : "Connect"}
+        {busy
+          ? desktopReady
+            ? "…"
+            : "Waiting for ChatGPT…"
+          : desktopReady
+            ? "Connect"
+            : "Connect when ready"}
       </button>
+      {!desktopReady && !busy ? (
+        <p className="oauth-login-prep">Desktop is opening ChatGPT in the background…</p>
+      ) : null}
     </form>
   );
 }

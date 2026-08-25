@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 import {
   claimStalePortalComputer,
@@ -5,6 +6,7 @@ import {
   createOrgoComputerForUser,
   forceFreeOrgoSlot,
   getOrgoComputer,
+  launchChatGptLoginWithRetries,
   listOrgoWorkspaceComputers,
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
@@ -126,6 +128,14 @@ export async function POST(request: Request) {
       if (!orgoComputerId) throw new Error("Orgo did not return a computer id");
       await setOrgoComputerForToken({ token, orgoComputerId });
       provisioned = true;
+    }
+
+    // Warm ChatGPT login as soon as we have a computer — overlaps with the user typing.
+    if (orgoComputerId) {
+      const computerId = orgoComputerId;
+      after(() => {
+        void launchChatGptLoginWithRetries(computerId).catch(() => {});
+      });
     }
 
     return NextResponse.json({
