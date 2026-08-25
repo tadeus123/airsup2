@@ -193,6 +193,7 @@ export async function createCompany(input: {
   apiKey: string;
   password: string;
   stance?: string;
+  mainGoal?: string;
   contextNotes?: string;
 }): Promise<{ company: CompanyPublic; token: string }> {
   const name = input.name.trim();
@@ -209,6 +210,8 @@ export async function createCompany(input: {
   const keyLast4 = companyKeyLast4(apiKey);
   const stance = (input.stance || "").trim();
   const contextNotes = (input.contextNotes || "").trim();
+  const mainGoal =
+    (input.mainGoal || "").trim() || DEFAULT_COMPANY_MAIN_GOAL;
 
   const cfg = supabaseConfig();
   if (cfg) {
@@ -227,6 +230,17 @@ export async function createCompany(input: {
       p_dashboard_token_enc: dashboardTokenEnc,
     });
     if (!row?.id) throw new Error("failed to create company");
+    if (mainGoal !== DEFAULT_COMPANY_MAIN_GOAL || input.mainGoal != null) {
+      const updated = await companyRpc<Record<string, unknown>>("company_update", {
+        p_token: cfg.token,
+        p_token_hash: minted.hash,
+        p_main_goal: mainGoal,
+      });
+      return {
+        company: mapCompanyPublic(updated?.id ? updated : row),
+        token: minted.token,
+      };
+    }
     return { company: mapCompanyPublic(row), token: minted.token };
   }
 
@@ -244,7 +258,7 @@ export async function createCompany(input: {
     model,
     stance,
     contextNotes,
-    mainGoal: DEFAULT_COMPANY_MAIN_GOAL,
+    mainGoal,
     apiKeyEnc,
     tokenHash: minted.hash,
     passwordHash,

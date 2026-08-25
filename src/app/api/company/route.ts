@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       apiKey?: string;
       password?: string;
       stance?: string;
+      mainGoal?: string;
       contextNotes?: string;
     };
     const { company, token } = await createCompany({
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
       apiKey: body.apiKey || "",
       password: body.password || "",
       stance: body.stance,
+      mainGoal: body.mainGoal,
       contextNotes: body.contextNotes,
     });
     const origin = new URL(request.url).origin;

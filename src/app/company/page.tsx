@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CompanyPage } from "./CompanyChrome";
 
+const DEFAULT_MAIN_GOAL = "Make the company more money. Cut costs. Save time.";
+
 export default function CompanyGoLivePage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [password, setPassword] = useState("");
-  const [stance, setStance] = useState("");
+  const [mainGoal, setMainGoal] = useState(DEFAULT_MAIN_GOAL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,7 +24,7 @@ export default function CompanyGoLivePage() {
       const res = await fetch("/api/company", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, domain, apiKey, password, stance }),
+        body: JSON.stringify({ name, domain, apiKey, password, mainGoal }),
       });
       const json = (await res.json()) as {
         token?: string;
@@ -103,14 +105,17 @@ export default function CompanyGoLivePage() {
 
             <fieldset className="co-fieldset">
               <label className="co-field">
-                <span>How to negotiate</span>
+                <span>North-star goal</span>
                 <textarea
-                  value={stance}
-                  onChange={(e) => setStance(e.target.value)}
-                  placeholder="How your AI should negotiate for the company"
-                  rows={4}
+                  value={mainGoal}
+                  onChange={(e) => setMainGoal(e.target.value)}
+                  placeholder={DEFAULT_MAIN_GOAL}
+                  rows={3}
                   disabled={busy}
                 />
+                <span className="co-field-hint">
+                  Always optimize for this: more revenue, lower costs, less wasted time.
+                </span>
               </label>
             </fieldset>
 
