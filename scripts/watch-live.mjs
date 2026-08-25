@@ -27,31 +27,36 @@ function fmt(row) {
 }
 
 async function tailOnce() {
-  const r = await fetch(`${url}/rest/v1/rpc/airsup_events_tail`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      apikey: key,
-      authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({ p_token: token, p_after_id: afterId, p_limit: 80 }),
-  });
-  const raw = await r.text();
-  if (!r.ok) {
-    if (raw.includes("airsup_events_tail") && raw.includes("does not exist")) {
-      console.error(
-        "airsup_events_tail RPC missing — apply migration 016_airsup_events_tail.sql first"
-      );
-      process.exit(2);
+  try {
+    const r = await fetch(`${url}/rest/v1/rpc/airsup_events_tail`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ p_token: token, p_after_id: afterId, p_limit: 80 }),
+    });
+    const raw = await r.text();
+    if (!r.ok) {
+      if (raw.includes("airsup_events_tail") && raw.includes("does not exist")) {
+        console.error(
+          "airsup_events_tail RPC missing — apply migration 016_airsup_events_tail.sql first"
+        );
+        process.exit(2);
+      }
+      console.error("tail failed", r.status, raw.slice(0, 200));
+      return;
     }
-    console.error("tail failed", r.status, raw.slice(0, 200));
-    return;
-  }
-  const rows = JSON.parse(raw);
-  if (!Array.isArray(rows) || !rows.length) return;
-  for (const row of rows) {
-    afterId = Math.max(afterId, Number(row.id) || 0);
-    console.log(fmt(row));
+    const rows = JSON.parse(raw);
+    if (!Array.isArray(rows) || !rows.length) return;
+    for (const row of rows) {
+      afterId = Math.max(afterId, Number(row.id) || 0);
+      console.log(fmt(row));
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("tail error (will retry):", msg.slice(0, 160));
   }
 }
 
