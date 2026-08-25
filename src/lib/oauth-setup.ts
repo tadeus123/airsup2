@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const OAUTH_SETUP_COOKIE = "airsup_oauth_setup";
+/** Provisional session created on the authorize Name page so Orgo can warm before Connect. */
+export const OAUTH_PREWARM_COOKIE = "airsup_oauth_prewarm";
 /** Set after a successful Orgo ChatGPT login so finish can return to ChatGPT even if CDP lag. */
 export const CHATGPT_READY_COOKIE = "airsup_chatgpt_ready";
 const MAX_AGE_SEC = 30 * 60;
@@ -11,6 +13,17 @@ export type OauthSetupPayload = {
   username: string;
   aspToken: string;
   code: string;
+  redirectUri: string;
+  state: string;
+  issuer: string;
+  exp: number;
+};
+
+export type OauthPrewarmPayload = {
+  v: 1;
+  username: string;
+  aspToken: string;
+  clientId: string;
   redirectUri: string;
   state: string;
   issuer: string;
@@ -79,6 +92,63 @@ export function readOauthSetupCookie(request: Request): OauthSetupPayload | null
   const header = request.headers.get("cookie") || "";
   const match = header.match(new RegExp(`(?:^|;\\s*)${OAUTH_SETUP_COOKIE}=([^;]+)`));
   return unpackOauthSetup(match?.[1] ? decodeURIComponent(match[1]) : null);
+}
+
+export function packOauthPrewarm(payload: Omit<OauthPrewarmPayload, "v" | "exp">): string {
+  const full: OauthPrewarmPayload = {
+    v: 1,
+    ...payload,
+    exp: Math.floor(Date.now() / 1000) + MAX_AGE_SEC,
+  };
+  const body = b64url(JSON.stringify(full));
+  return `${body}.${sign(body)}`;
+}
+
+export function unpackOauthPrewarm(raw: string | undefined | null): OauthPrewarmPayload | null {
+  if (!raw) return null;
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const expected = sign(body);
+  try {
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OauthPrewarmPayload;
+    if (parsed.v !== 1) return null;
+    if (
+      !parsed.username ||
+      !parsed.aspToken ||
+      !parsed.clientId ||
+      !parsed.redirectUri ||
+      !parsed.issuer
+    ) {
+      return null;
+    }
+    if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function oauthPrewarmCookieHeader(value: string): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${OAUTH_PREWARM_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SEC}${secure}`;
+}
+
+export function clearOauthPrewarmCookieHeader(): string {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${OAUTH_PREWARM_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+}
+
+export function readOauthPrewarmCookie(request: Request): OauthPrewarmPayload | null {
+  const header = request.headers.get("cookie") || "";
+  const match = header.match(new RegExp(`(?:^|;\\s*)${OAUTH_PREWARM_COOKIE}=([^;]+)`));
+  return unpackOauthPrewarm(match?.[1] ? decodeURIComponent(match[1]) : null);
 }
 
 export function finishRedirectUrl(payload: OauthSetupPayload): string {

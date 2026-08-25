@@ -10,11 +10,14 @@ import {
   OAUTH_SCOPE,
 } from "@/lib/oauth";
 import {
+  clearOauthPrewarmCookieHeader,
   finishRedirectUrl,
   oauthSetupCookieHeader,
   packOauthSetup,
+  readOauthPrewarmCookie,
 } from "@/lib/oauth-setup";
 import { orgoProvisionConfigured } from "@/lib/orgo-provision";
+import { setDisplayNameForToken } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +31,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function htmlPage(body: string, status = 200) {
+function htmlPage(body: string, status = 200, extraHead = "") {
   return new NextResponse(
     `<!DOCTYPE html>
 <html lang="en">
@@ -105,6 +108,7 @@ function htmlPage(body: string, status = 200) {
     }
     a { color:inherit; }
   </style>
+  ${extraHead}
 </head>
 <body>
   <header class="top"><a class="mark" href="/company">AIRSUP</a></header>
@@ -208,7 +212,32 @@ export async function GET(request: Request) {
   if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const hidden = qsHidden(p);
-  return htmlPage(`
+  const prewarmPayload = JSON.stringify({
+    response_type: p.responseType,
+    client_id: p.clientId,
+    redirect_uri: p.redirectUri,
+    state: p.state,
+    code_challenge: p.codeChallenge,
+    code_challenge_method: p.codeChallengeMethod || "S256",
+    scope: p.scope || OAUTH_SCOPE,
+    resource: p.resource,
+  });
+  // Fire-and-forget: provision Orgo + open ChatGPT login while the user types their name.
+  const prewarmScript = `<script>
+(function(){
+  try {
+    fetch("/api/oauth/prewarm", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: ${JSON.stringify(prewarmPayload)}
+    }).catch(function(){});
+  } catch (e) {}
+})();
+</script>`;
+
+  return htmlPage(
+    `
     <h1>Connect</h1>
     <form method="post" action="/oauth/authorize">
       ${hidden}
@@ -218,7 +247,10 @@ export async function GET(request: Request) {
       </label>
       <button type="submit">Continue</button>
     </form>
-  `);
+  `,
+    200,
+    prewarmScript
+  );
 }
 
 export async function POST(request: Request) {
@@ -239,10 +271,32 @@ export async function POST(request: Request) {
   if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   try {
-    const { user, aspToken } = await signupFromAuthorize({ displayName: get("display_name") });
+    const displayName = get("display_name");
+    const prewarm = readOauthPrewarmCookie(request);
+    let username: string;
+    let aspToken: string;
+
+    if (
+      prewarm &&
+      prewarm.clientId === p.clientId &&
+      prewarm.state === p.state &&
+      prewarm.redirectUri === p.redirectUri
+    ) {
+      // Reuse the provisional user whose Orgo desktop is already warming.
+      const user = await setDisplayNameForToken({
+        token: prewarm.aspToken,
+        displayName,
+      });
+      username = user.username;
+      aspToken = prewarm.aspToken;
+    } else {
+      const created = await signupFromAuthorize({ displayName });
+      username = created.user.username;
+      aspToken = created.aspToken;
+    }
 
     const code = await storeAuthCode({
-      username: user.username,
+      username,
       clientId: p.clientId,
       redirectUri: p.redirectUri,
       codeChallenge: p.codeChallenge,
@@ -253,16 +307,18 @@ export async function POST(request: Request) {
 
     // If Orgo isn't configured, finish OAuth immediately (company tools still work).
     if (!orgoProvisionConfigured()) {
-      return redirectWithCode({
+      const res = redirectWithCode({
         redirectUri: p.redirectUri,
         code,
         state: p.state,
         issuer: origin,
       });
+      res.headers.append("set-cookie", clearOauthPrewarmCookieHeader());
+      return res;
     }
 
     const packed = packOauthSetup({
-      username: user.username,
+      username,
       aspToken,
       code,
       redirectUri: p.redirectUri,
@@ -271,6 +327,7 @@ export async function POST(request: Request) {
     });
     const res = NextResponse.redirect(`${origin}/oauth/setup`, 302);
     res.headers.append("set-cookie", oauthSetupCookieHeader(packed));
+    res.headers.append("set-cookie", clearOauthPrewarmCookieHeader());
     return res;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

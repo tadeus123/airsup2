@@ -123,9 +123,9 @@ export default function OauthSetupPage() {
         setPhase("login");
         setDesktopStatus("Starting desktop…");
 
-        if (!mj.hasOrgo) {
-          await startPortalSession(mj.aspToken);
-        }
+        // Always kick start — Name-page prewarm may already own a computer; this
+        // re-opens ChatGPT login if needed. Connect only fills credentials.
+        await startPortalSession(mj.aspToken);
         if (cancelled) return;
 
         setDesktopStatus("Opening ChatGPT login…");

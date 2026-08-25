@@ -363,6 +363,41 @@ export async function setOrgoComputerForToken(input: {
   };
 }
 
+export async function setDisplayNameForToken(input: {
+  token: string;
+  displayName: string;
+}): Promise<User> {
+  const displayName = input.displayName.trim().slice(0, 80);
+  if (displayName.length < 2) throw new Error("name required");
+  const hash = hashUserToken(input.token);
+  const cfg = supabaseConfig();
+  if (cfg) {
+    const row = await supabaseRpc<Record<string, unknown>>("user_set_display_name", {
+      p_token: cfg.token,
+      p_token_hash: hash,
+      p_display_name: displayName,
+    });
+    if (!row?.username) throw new Error("Failed to update display name");
+    authCache.delete(hash);
+    return mapUser(row);
+  }
+  const username = memory.byHash.get(hash);
+  if (!username) throw new Error("Unauthorized");
+  const mem = memory.users.get(username);
+  if (!mem) throw new Error("Unauthorized");
+  mem.displayName = displayName;
+  mem.updatedAt = new Date().toISOString();
+  return {
+    username: mem.username,
+    displayName: mem.displayName,
+    bio: mem.bio,
+    tokenPrefix: mem.tokenPrefix,
+    orgoComputerId: mem.orgoComputerId,
+    createdAt: mem.createdAt,
+    updatedAt: mem.updatedAt,
+  };
+}
+
 export async function listLinkedOrgoComputerIds(): Promise<Set<string>> {
   const cfg = supabaseConfig();
   if (!cfg) return new Set();

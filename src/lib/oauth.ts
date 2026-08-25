@@ -414,6 +414,20 @@ export async function signupFromAuthorize(input: {
   throw lastErr || new Error("could not create account");
 }
 
+/** Provisional account for Orgo warm-up on the authorize Name page (before display name). */
+export async function signupForOauthPrewarm(): Promise<{ user: User; aspToken: string }> {
+  const suffix = createHash("sha256")
+    .update(`${Date.now()}:${Math.random()}`)
+    .digest("hex")
+    .slice(0, 10);
+  const username = `join-${suffix}`;
+  const { user, token } = await registerUser({
+    username,
+    displayName: "Connecting…",
+  });
+  return { user, aspToken: token };
+}
+
 export async function loginWithAspToken(aspToken: string): Promise<User> {
   const forged = new Request("https://airsup.local/mcp", {
     headers: { authorization: `Bearer ${aspToken.trim()}` },
