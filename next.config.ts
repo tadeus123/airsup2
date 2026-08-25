@@ -4,7 +4,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Keep the Orgo CDP sender script in the serverless bundle.
   outputFileTracingIncludes: {
-    "/api/**/*": ["./src/lib/vm/airsup-chatgpt-send.js"],
+    "/api/**/*": [
+      "./src/lib/vm/airsup-chatgpt-send.js",
+      "./src/lib/company-onboarding-instructions.md",
+    ],
   },
   async redirects() {
     return [

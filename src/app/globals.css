@@ -408,6 +408,11 @@ button {
   line-height: 1.45;
 }
 
+.co-build-ok {
+  color: var(--text-color);
+  opacity: 0.85;
+}
+
 .co-upload-actions {
   display: flex;
   flex-wrap: wrap;

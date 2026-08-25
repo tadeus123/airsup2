@@ -119,6 +119,8 @@ export default function CompanyDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [buildNote, setBuildNote] = useState("");
   const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
   const autoSelected = useRef(false);
@@ -244,6 +246,39 @@ export default function CompanyDashboard() {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function buildContextWithAi() {
+    setBuilding(true);
+    setUploadError("");
+    setBuildNote("");
+    try {
+      const res = await fetch("/api/company/context/build", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, target: "demo" }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        assets?: ContextAsset[];
+        files?: string[];
+        primaryWorkflow?: string | null;
+        notes?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) throw new Error(json.error || "context build failed");
+      setAssets(json.assets || []);
+      const wf = json.primaryWorkflow ? ` Primary workflow: ${json.primaryWorkflow}.` : "";
+      setBuildNote(
+        `Built ${(json.files || []).length} context files.${wf}${
+          json.notes ? ` ${json.notes}` : ""
+        }`.trim()
+      );
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBuilding(false);
     }
   }
 
@@ -480,14 +515,23 @@ export default function CompanyDashboard() {
               <div className="co-field">
                 <span>Company context</span>
                 <p className="co-field-hint">
-                  Upload files, folders, or zip archives. We extract text, structure it into
-                  knowledge cards, and retrieve the relevant pieces during talks.
+                  Upload files, folders, or zip archives — or let AI research your domain and
+                  build the endpoint package (00–08) from the onboarding playbook. Knowledge
+                  cards are retrieved during talks.
                 </p>
                 <div className="co-upload-actions">
                   <button
                     type="button"
                     className="co-upload-btn"
-                    disabled={uploading}
+                    disabled={uploading || building}
+                    onClick={() => void buildContextWithAi()}
+                  >
+                    {building ? "Building context…" : "Let AI build my context"}
+                  </button>
+                  <button
+                    type="button"
+                    className="co-upload-btn co-upload-btn--ghost"
+                    disabled={uploading || building}
                     onClick={() => fileInput.current?.click()}
                   >
                     {uploading ? "Uploading…" : "Upload files"}
@@ -495,12 +539,19 @@ export default function CompanyDashboard() {
                   <button
                     type="button"
                     className="co-upload-btn co-upload-btn--ghost"
-                    disabled={uploading}
+                    disabled={uploading || building}
                     onClick={() => folderInput.current?.click()}
                   >
                     Upload folder
                   </button>
                 </div>
+                {building ? (
+                  <p className="co-field-hint">
+                    Fetching public pages and running a smart model — usually 1–3 minutes.
+                    Keep this tab open.
+                  </p>
+                ) : null}
+                {buildNote ? <p className="co-field-hint co-build-ok">{buildNote}</p> : null}
                 <input
                   ref={fileInput}
                   type="file"

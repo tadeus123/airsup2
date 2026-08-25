@@ -289,13 +289,14 @@ export async function ingestCompanyContextFile(input: {
   bytes: Buffer;
   apiKey?: string | null;
   provider?: "openai" | "anthropic" | null;
+  sourceKind?: string;
 }): Promise<CompanyContextAsset> {
   const cfg = supabaseConfig();
   if (!cfg) throw new Error("Supabase not configured");
 
   const filename = input.filename.trim().slice(0, 400) || "upload";
   const mime = input.mimeType || "application/octet-stream";
-  const kind = sourceKindFor(filename, mime);
+  const kind = input.sourceKind?.trim() || sourceKindFor(filename, mime);
   const hash = tokenHash(input.dashboardToken);
 
   const asset = await ctxRpc<{
@@ -322,7 +323,8 @@ export async function ingestCompanyContextFile(input: {
 
     if (isProbablyText(mime, filename)) {
       const text = input.bytes.toString("utf8");
-      if (input.apiKey && input.provider) {
+      const skipStructure = kind === "ai_build";
+      if (!skipStructure && input.apiKey && input.provider) {
         const structured = await structureWithCompanyAi({
           apiKey: input.apiKey,
           provider: input.provider,
@@ -332,9 +334,9 @@ export async function ingestCompanyContextFile(input: {
         if (structured?.length) cards = structured;
       }
       if (!cards.length) {
-        const pieces = chunkText(text);
+        const pieces = chunkText(text, kind === "ai_build" ? 3500 : 2800);
         cards = pieces.map((body, i) => ({
-          title: `${filename}${pieces.length > 1 ? ` (${i + 1})` : ""}`,
+          title: `${filename.replace(/^ai-build\//, "")}${pieces.length > 1 ? ` (${i + 1})` : ""}`,
           summary: body.slice(0, 220).replace(/\s+/g, " "),
           body,
           keywords: extractKeywords(body, filename),
