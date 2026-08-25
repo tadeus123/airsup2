@@ -27,6 +27,9 @@ async function companyRpc<T>(fn: string, body: Record<string, unknown>): Promise
   }
 }
 
+export const DEFAULT_COMPANY_MAIN_GOAL =
+  "Make the company more money. Cut costs. Save time.";
+
 export type CompanyPublic = {
   id: string;
   name: string;
@@ -36,6 +39,7 @@ export type CompanyPublic = {
   model: string;
   stance: string;
   contextNotes: string;
+  mainGoal: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -123,6 +127,7 @@ function publicOf(c: CompanyPublic): CompanyPublic {
     model: c.model,
     stance: c.stance,
     contextNotes: c.contextNotes,
+    mainGoal: c.mainGoal || DEFAULT_COMPANY_MAIN_GOAL,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
   };
@@ -138,6 +143,9 @@ function mapCompanyPublic(row: Record<string, unknown>): CompanyPublic {
     model: String(row.model ?? "gpt-4o"),
     stance: String(row.stance ?? ""),
     contextNotes: String(row.contextNotes ?? row.context_notes ?? ""),
+    mainGoal: String(
+      row.mainGoal ?? row.main_goal ?? DEFAULT_COMPANY_MAIN_GOAL
+    ),
     createdAt: row.createdAt ? String(row.createdAt) : row.created_at ? String(row.created_at) : undefined,
     updatedAt: row.updatedAt ? String(row.updatedAt) : row.updated_at ? String(row.updated_at) : undefined,
   };
@@ -236,6 +244,7 @@ export async function createCompany(input: {
     model,
     stance,
     contextNotes,
+    mainGoal: DEFAULT_COMPANY_MAIN_GOAL,
     apiKeyEnc,
     tokenHash: minted.hash,
     passwordHash,
@@ -282,6 +291,7 @@ export async function loginCompany(input: {
         model: "gpt-4o",
         stance: "",
         contextNotes: "",
+        mainGoal: DEFAULT_COMPANY_MAIN_GOAL,
       },
       token,
     };
@@ -356,6 +366,7 @@ export async function updateCompany(input: {
   name?: string;
   stance?: string;
   contextNotes?: string;
+  mainGoal?: string;
   apiKey?: string;
 }): Promise<CompanyPublic> {
   const token = input.token.trim();
@@ -383,6 +394,7 @@ export async function updateCompany(input: {
       p_api_key_enc: apiKeyEnc,
       p_key_last4: keyLast4,
       p_model: model,
+      p_main_goal: input.mainGoal ?? null,
     });
     if (!row?.id) throw new Error("company not found");
     return mapCompanyPublic(row);
@@ -395,6 +407,7 @@ export async function updateCompany(input: {
   if (input.name?.trim()) c.name = input.name.trim();
   if (input.stance != null) c.stance = input.stance;
   if (input.contextNotes != null) c.contextNotes = input.contextNotes;
+  if (input.mainGoal != null) c.mainGoal = input.mainGoal.trim() || DEFAULT_COMPANY_MAIN_GOAL;
   if (apiKeyEnc) {
     c.apiKeyEnc = apiKeyEnc;
     c.keyLast4 = keyLast4 || c.keyLast4;

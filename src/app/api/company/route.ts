@@ -106,6 +106,7 @@ export async function PATCH(request: Request) {
       name?: string;
       stance?: string;
       contextNotes?: string;
+      mainGoal?: string;
       apiKey?: string;
     };
     const token = bearerToken(request, body.token);
@@ -117,6 +118,7 @@ export async function PATCH(request: Request) {
       name: body.name,
       stance: body.stance,
       contextNotes: body.contextNotes,
+      mainGoal: body.mainGoal,
       apiKey: body.apiKey,
     });
     return NextResponse.json({ ok: true, company });

@@ -12,6 +12,19 @@ type Company = {
   keyLast4: string;
   stance: string;
   contextNotes: string;
+  mainGoal: string;
+};
+
+type ContextAsset = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  status: string;
+  error?: string | null;
+  sourceKind: string;
+  createdAt: string;
+  chunkCount?: number;
 };
 
 type Conversation = {
@@ -34,6 +47,8 @@ type ChatMessage = {
 
 type Tab = "conversations" | "settings";
 
+const DEFAULT_MAIN_GOAL = "Make the company more money. Cut costs. Save time.";
+
 function formatTime(iso: string): string {
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -51,6 +66,41 @@ function previewBody(body: string): string {
   return body.replace(/\s+/g, " ").replace(/\*\*/g, "").trim().slice(0, 90);
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function expandFiles(fileList: FileList | File[]): Promise<File[]> {
+  const incoming = Array.from(fileList);
+  const out: File[] = [];
+  for (const file of incoming) {
+    const isZip =
+      file.name.toLowerCase().endsWith(".zip") ||
+      file.type === "application/zip" ||
+      file.type === "application/x-zip-compressed";
+    if (!isZip) {
+      out.push(file);
+      continue;
+    }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const entries = Object.values(zip.files);
+      for (const entry of entries) {
+        if (entry.dir) continue;
+        if (entry.name.startsWith("__MACOSX/") || entry.name.endsWith(".DS_Store")) continue;
+        const blob = await entry.async("blob");
+        out.push(new File([blob], entry.name, { type: blob.type || "application/octet-stream" }));
+      }
+    } catch {
+      out.push(file);
+    }
+  }
+  return out;
+}
+
 export default function CompanyDashboard() {
   const params = useParams();
   const token = String(params.token || "");
@@ -59,15 +109,35 @@ export default function CompanyDashboard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [stance, setStance] = useState("");
+  const [mainGoal, setMainGoal] = useState(DEFAULT_MAIN_GOAL);
   const [apiKey, setApiKey] = useState("");
+  const [assets, setAssets] = useState<ContextAsset[]>([]);
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
   const autoSelected = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const el = folderInput.current;
+    if (!el) return;
+    el.setAttribute("webkitdirectory", "");
+    el.setAttribute("directory", "");
+  }, []);
+
+  const loadContext = useCallback(async () => {
+    const res = await fetch(`/api/company/context?token=${encodeURIComponent(token)}`);
+    const json = (await res.json()) as { assets?: ContextAsset[]; error?: string };
+    if (!res.ok) throw new Error(json.error || "could not load context");
+    setAssets(json.assets || []);
+  }, [token]);
 
   const load = useCallback(
     async (conversationId?: string) => {
@@ -83,6 +153,7 @@ export default function CompanyDashboard() {
       if (!res.ok || !json.company) throw new Error(json.error || "could not load");
       setCompany(json.company);
       setStance(json.company.stance);
+      setMainGoal(json.company.mainGoal || DEFAULT_MAIN_GOAL);
       setConversations(json.conversations || []);
       setMessages(json.messages || []);
     },
@@ -95,6 +166,9 @@ export default function CompanyDashboard() {
     void (async () => {
       try {
         await load();
+        await loadContext().catch(() => {
+          /* context optional on first paint */
+        });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -104,7 +178,7 @@ export default function CompanyDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [token, load]);
+  }, [token, load, loadContext]);
 
   const live = Boolean(company);
 
@@ -155,12 +229,14 @@ export default function CompanyDashboard() {
         body: JSON.stringify({
           token,
           stance,
+          mainGoal,
           apiKey: apiKey.trim() || undefined,
         }),
       });
       const json = (await res.json()) as { company?: Company; error?: string };
       if (!res.ok || !json.company) throw new Error(json.error || "save failed");
       setCompany(json.company);
+      setMainGoal(json.company.mainGoal || DEFAULT_MAIN_GOAL);
       setApiKey("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -168,6 +244,55 @@ export default function CompanyDashboard() {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadSelected(list: FileList | null) {
+    if (!list?.length) return;
+    setUploading(true);
+    setUploadError("");
+    try {
+      const files = await expandFiles(list);
+      if (!files.length) throw new Error("nothing to upload");
+      const form = new FormData();
+      form.set("token", token);
+      for (const f of files.slice(0, 20)) form.append("files", f, f.name);
+      const res = await fetch("/api/company/context", { method: "POST", body: form });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        assets?: ContextAsset[];
+        results?: Array<{ filename: string; ok: boolean; error?: string }>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "upload failed");
+      setAssets(json.assets || []);
+      const failed = (json.results || []).filter((r) => !r.ok);
+      if (failed.length) {
+        setUploadError(
+          failed.map((f) => `${f.filename}: ${f.error || "failed"}`).join(" · ")
+        );
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+      if (folderInput.current) folderInput.current.value = "";
+    }
+  }
+
+  async function removeAsset(id: string) {
+    setUploadError("");
+    try {
+      const res = await fetch(
+        `/api/company/context?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || "delete failed");
+      setAssets((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -327,11 +452,95 @@ export default function CompanyDashboard() {
             aria-labelledby="tab-settings"
             className="co-panel co-panel--flush"
           >
-            <form className="co-form co-form-card co-form-card--flat" onSubmit={(e) => void saveSettings(e)}>
+            <form
+              className="co-form co-form-card co-form-card--flat"
+              onSubmit={(e) => void saveSettings(e)}
+            >
+              <label className="co-field">
+                <span>North-star goal</span>
+                <textarea
+                  value={mainGoal}
+                  onChange={(e) => setMainGoal(e.target.value)}
+                  rows={3}
+                  placeholder={DEFAULT_MAIN_GOAL}
+                />
+                <span className="co-field-hint">
+                  Default mindset for your company AI: grow revenue, cut costs, save time.
+                </span>
+              </label>
               <label className="co-field">
                 <span>How to negotiate</span>
-                <textarea value={stance} onChange={(e) => setStance(e.target.value)} rows={6} />
+                <textarea
+                  value={stance}
+                  onChange={(e) => setStance(e.target.value)}
+                  rows={6}
+                />
               </label>
+
+              <div className="co-field">
+                <span>Company context</span>
+                <p className="co-field-hint">
+                  Upload files, folders, or zip archives. We extract text, structure it into
+                  knowledge cards, and retrieve the relevant pieces during talks.
+                </p>
+                <div className="co-upload-actions">
+                  <button
+                    type="button"
+                    className="co-upload-btn"
+                    disabled={uploading}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    {uploading ? "Uploading…" : "Upload files"}
+                  </button>
+                  <button
+                    type="button"
+                    className="co-upload-btn co-upload-btn--ghost"
+                    disabled={uploading}
+                    onClick={() => folderInput.current?.click()}
+                  >
+                    Upload folder
+                  </button>
+                </div>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  accept="*/*,.zip"
+                  hidden
+                  onChange={(e) => void uploadSelected(e.target.files)}
+                />
+                <input
+                  ref={folderInput}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => void uploadSelected(e.target.files)}
+                />
+                {uploadError ? <p className="ainet-note err">{uploadError}</p> : null}
+                {assets.length ? (
+                  <ul className="co-asset-list">
+                    {assets.map((a) => (
+                      <li key={a.id}>
+                        <div>
+                          <strong>{a.filename}</strong>
+                          <span>
+                            {a.status}
+                            {typeof a.chunkCount === "number" ? ` · ${a.chunkCount} cards` : ""}
+                            {a.byteSize ? ` · ${formatBytes(a.byteSize)}` : ""}
+                          </span>
+                          {a.error ? <em>{a.error}</em> : null}
+                        </div>
+                        <button type="button" onClick={() => void removeAsset(a.id)}>
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="co-field-hint">No context uploaded yet.</p>
+                )}
+              </div>
+
               <label className="co-field">
                 <span>New API key</span>
                 <input

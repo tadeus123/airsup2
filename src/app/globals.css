@@ -400,6 +400,87 @@ button {
   font-size: 0.88rem;
 }
 
+.co-field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.co-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.co-upload-btn {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--text-color);
+  color: var(--bg-color);
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.co-upload-btn--ghost {
+  background: transparent;
+  color: var(--text-color);
+}
+
+.co-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.co-asset-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.co-asset-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.75rem;
+}
+
+.co-asset-list strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.co-asset-list span,
+.co-asset-list em {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+.co-asset-list button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.co-asset-list button:hover {
+  color: var(--text-color);
+}
+
 .co-field input,
 .co-field textarea {
   border: 1px solid var(--border-color);

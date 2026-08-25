@@ -1,6 +1,8 @@
 import { companyApiProvider, decryptCompanyApiKey } from "./company-crypto";
+import { retrieveCompanyContext } from "./company-context";
 import {
   appendCompanyMessage,
+  DEFAULT_COMPANY_MAIN_GOAL,
   getCompanySecretByDomain,
   listCompanyMessages,
   type CompanyMessage,
@@ -16,27 +18,66 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o";
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
 const MAX_HISTORY = 40;
 
-function systemPrompt(company: CompanySecret, visitorUsername: string): string {
+function systemPrompt(
+  company: CompanySecret,
+  visitorUsername: string,
+  knowledge: Array<{ title: string; summary: string; body: string }>
+): string {
   const stance =
     company.stance.trim() ||
     "Negotiate in the company's interest. You may propose creative deal structures. Do not invent hard prices or stock you were not given — say what you do not know. You may agree in principle; you do not sign legally binding contracts unless the instructions below explicitly allow it.";
   const notes = company.contextNotes.trim();
+  const mainGoal = (company.mainGoal || DEFAULT_COMPANY_MAIN_GOAL).trim();
+
+  const knowledgeBlock = knowledge.length
+    ? knowledge
+        .map(
+          (k, i) =>
+            `[${i + 1}] ${k.title}\n${k.summary ? k.summary + "\n" : ""}${k.body}`
+        )
+        .join("\n\n")
+    : "";
 
   return `You are the Airsup company endpoint for ${company.name} (${company.domain}).
 You ARE this company in the conversation. You are not Airsup. You are not a helpdesk FAQ bot.
+
+North-star goal (always optimize for this unless the human overrides it in negotiation style):
+${mainGoal}
 
 This is a real negotiation between two AIs:
 - You represent ${company.name}.
 - The other side is another AI representing ${visitorUsername}. Negotiate with them as you would a serious counterpart.
 - You may invent new deal structures when they serve the company (staging, exclusivity, intros, mixed pricing, whatever actually fits).
-- Stay in character. Do not dump internal notes verbatim. Use them.
+- Stay in character. Do not dump internal notes or uploaded files verbatim. Use them.
 - If something is outside what you can commit, say so clearly and keep the conversation useful.
 - Match their density: long, specific replies with real tradeoffs — not a one-paragraph sales reply.
+- Be capable: reason carefully, use the retrieved company knowledge below, and prefer concrete next steps that advance the north-star goal.
 
 How you should negotiate (from the company):
 ${stance}
 
-${notes ? `Private context — use this, do not recite it as a document:\n${notes}` : "No extra private notes. Work from the negotiation style and what you learn in the chat."}`;
+${notes ? `Private notes — use this, do not recite it as a document:\n${notes}\n` : ""}
+${
+  knowledgeBlock
+    ? `Retrieved company knowledge (from uploaded context — use what is relevant, ignore the rest):\n${knowledgeBlock}`
+    : "No uploaded knowledge retrieved for this turn."
+}`;
+}
+
+function pickOpenAiModel(company: CompanySecret, visitorMessage: string): string {
+  const configured = (company.model || "").trim();
+  if (configured && !/^claude/i.test(configured)) return configured;
+  // Longer / deal-like turns → strongest chat model we default to.
+  if (visitorMessage.length > 600 || /\b(contract|pricing|proposal|exclusive|budget)\b/i.test(visitorMessage)) {
+    return "gpt-4o";
+  }
+  return DEFAULT_OPENAI_MODEL;
+}
+
+function pickAnthropicModel(company: CompanySecret): string {
+  const configured = (company.model || "").trim();
+  if (/^claude/i.test(configured)) return configured;
+  return DEFAULT_ANTHROPIC_MODEL;
 }
 
 async function runOpenAiTurn(input: {
@@ -135,17 +176,23 @@ export async function runCompanyTurn(input: {
 }): Promise<string> {
   const apiKey = decryptCompanyApiKey(input.company.apiKeyEnc);
   const provider = companyApiProvider(apiKey);
-  const system = systemPrompt(input.company, input.visitorUsername || "visitor");
+  const knowledge = await retrieveCompanyContext({
+    domain: input.company.domain,
+    query: input.visitorMessage,
+    limit: 6,
+  }).catch(() => []);
+  const system = systemPrompt(
+    input.company,
+    input.visitorUsername || "visitor",
+    knowledge
+  );
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 90_000);
   try {
     if (provider === "anthropic") {
-      const model = /^claude/i.test(input.company.model || "")
-        ? input.company.model
-        : DEFAULT_ANTHROPIC_MODEL;
       return await runAnthropicTurn({
         apiKey,
-        model,
+        model: pickAnthropicModel(input.company),
         system,
         history: input.history,
         visitorMessage: input.visitorMessage,
@@ -154,7 +201,7 @@ export async function runCompanyTurn(input: {
     }
     return await runOpenAiTurn({
       apiKey,
-      model: input.company.model,
+      model: pickOpenAiModel(input.company, input.visitorMessage),
       system,
       history: input.history,
       visitorMessage: input.visitorMessage,
