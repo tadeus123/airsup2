@@ -79,6 +79,41 @@ function previewBody(body: string): string {
   return body.replace(/\s+/g, " ").replace(/\*\*/g, "").trim().slice(0, 90);
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function expandFiles(fileList: FileList | File[]): Promise<File[]> {
+  const incoming = Array.from(fileList);
+  const out: File[] = [];
+  for (const file of incoming) {
+    const isZip =
+      file.name.toLowerCase().endsWith(".zip") ||
+      file.type === "application/zip" ||
+      file.type === "application/x-zip-compressed";
+    if (!isZip) {
+      out.push(file);
+      continue;
+    }
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const entries = Object.values(zip.files);
+      for (const entry of entries) {
+        if (entry.dir) continue;
+        if (entry.name.startsWith("__MACOSX/") || entry.name.endsWith(".DS_Store")) continue;
+        const blob = await entry.async("blob");
+        out.push(new File([blob], entry.name, { type: blob.type || "application/octet-stream" }));
+      }
+    } catch {
+      out.push(file);
+    }
+  }
+  return out;
+}
+
 export default function CompanyDashboard() {
   const params = useParams();
   const token = String(params.token || "");
@@ -100,11 +135,21 @@ export default function CompanyDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [buildNote, setBuildNote] = useState("");
   const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
   const autoSelected = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   const gapFileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  useEffect(() => {
+    const el = folderInput.current;
+    if (!el) return;
+    el.setAttribute("webkitdirectory", "");
+    el.setAttribute("directory", "");
+  }, []);
 
   const loadContext = useCallback(async () => {
     const [assetsRes, gapsRes] = await Promise.all([
@@ -352,6 +397,60 @@ export default function CompanyDashboard() {
     }
   }
 
+  async function uploadSelected(list: FileList | null) {
+    if (!list?.length) return;
+    setUploading(true);
+    setContextError("");
+    try {
+      const files = await expandFiles(list);
+      if (!files.length) throw new Error("nothing to upload");
+      const form = new FormData();
+      form.set("token", token);
+      for (const f of files.slice(0, 20)) form.append("files", f, f.name);
+      const res = await fetch("/api/company/context", { method: "POST", body: form });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        assets?: ContextAsset[];
+        results?: Array<{ filename: string; ok: boolean; error?: string }>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "upload failed");
+      setAssets(json.assets || []);
+      const failed = (json.results || []).filter((r) => !r.ok);
+      if (failed.length) {
+        setContextError(
+          failed.map((f) => `${f.filename}: ${f.error || "failed"}`).join(" · ")
+        );
+      } else {
+        const n = (json.results || []).filter((r) => r.ok).length;
+        setBuildNote(
+          `Added ${n} file${n === 1 ? "" : "s"} to company knowledge. AI build and gap cards stay in sync with this.`
+        );
+      }
+    } catch (err) {
+      setContextError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+      if (folderInput.current) folderInput.current.value = "";
+    }
+  }
+
+  async function removeAsset(id: string) {
+    setContextError("");
+    try {
+      const res = await fetch(
+        `/api/company/context?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || "delete failed");
+      setAssets((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setContextError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   if (loading) {
     return (
       <CompanyPage showLogin={false}>
@@ -380,6 +479,13 @@ export default function CompanyDashboard() {
   );
   const openGaps = gaps.filter((g) => g.status === "open" || justFilled[g.id]);
   const filledGaps = gaps.filter((g) => g.status === "filled" && !justFilled[g.id]);
+  const manualAssets = assets.filter(
+    (a) =>
+      a.sourceKind !== "ai_build" &&
+      !a.filename.startsWith("ai-build/") &&
+      a.sourceKind !== "gap" &&
+      !a.filename.startsWith("gap/")
+  );
 
   return (
     <CompanyPage showLogin={false}>
@@ -533,15 +639,15 @@ export default function CompanyDashboard() {
               <div className="co-field">
                 <span>Endpoint context</span>
                 <p className="co-field-hint">
-                  One click researches your domain, builds the endpoint package, then a second
-                  pass asks only for the few things that would make it sharper. Optional — skip
-                  any card.
+                  Let AI research your domain and build the package, or upload internal files
+                  that are not public. Both land in the same knowledge store. After an AI build,
+                  adaptive cards ask only for the highest-value missing pieces — optional.
                 </p>
                 <div className="co-upload-actions">
                   <button
                     type="button"
                     className="co-upload-btn"
-                    disabled={building}
+                    disabled={building || uploading}
                     onClick={() => void buildContextWithAi()}
                   >
                     {building
@@ -550,7 +656,38 @@ export default function CompanyDashboard() {
                         ? "Rebuild context"
                         : "Let AI build my context"}
                   </button>
+                  <button
+                    type="button"
+                    className="co-upload-btn co-upload-btn--ghost"
+                    disabled={building || uploading}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    {uploading ? "Uploading…" : "Upload files"}
+                  </button>
+                  <button
+                    type="button"
+                    className="co-upload-btn co-upload-btn--ghost"
+                    disabled={building || uploading}
+                    onClick={() => folderInput.current?.click()}
+                  >
+                    Upload folder
+                  </button>
                 </div>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  accept="*/*,.zip"
+                  hidden
+                  onChange={(e) => void uploadSelected(e.target.files)}
+                />
+                <input
+                  ref={folderInput}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => void uploadSelected(e.target.files)}
+                />
                 {building ? (
                   <p className="co-field-hint">
                     Researching public pages, writing the package, then finding gaps — usually
@@ -561,10 +698,36 @@ export default function CompanyDashboard() {
                 {packReady && !building ? (
                   <p className="co-context-ready">
                     Context package ready
-                    {filledGaps.length ? ` · ${filledGaps.length} improvement${filledGaps.length === 1 ? "" : "s"} added` : ""}
+                    {filledGaps.length
+                      ? ` · ${filledGaps.length} improvement${filledGaps.length === 1 ? "" : "s"} added`
+                      : ""}
+                    {manualAssets.length
+                      ? ` · ${manualAssets.length} uploaded file${manualAssets.length === 1 ? "" : "s"}`
+                      : ""}
                   </p>
                 ) : null}
                 {contextError ? <p className="ainet-note err">{contextError}</p> : null}
+
+                {manualAssets.length ? (
+                  <ul className="co-asset-list">
+                    {manualAssets.map((a) => (
+                      <li key={a.id}>
+                        <div>
+                          <strong>{a.filename}</strong>
+                          <span>
+                            {a.status}
+                            {typeof a.chunkCount === "number" ? ` · ${a.chunkCount} cards` : ""}
+                            {a.byteSize ? ` · ${formatBytes(a.byteSize)}` : ""}
+                          </span>
+                          {a.error ? <em>{a.error}</em> : null}
+                        </div>
+                        <button type="button" onClick={() => void removeAsset(a.id)}>
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
 
                 {openGaps.length ? (
                   <div className="co-gap-list" aria-label="Suggested improvements">
@@ -661,11 +824,13 @@ export default function CompanyDashboard() {
                   </div>
                 ) : packReady ? (
                   <p className="co-field-hint">
-                    No open gaps right now. Rebuild if your business changed.
+                    No open gaps right now. Upload internal files anytime, or rebuild if the
+                    business changed.
                   </p>
                 ) : (
                   <p className="co-field-hint">
-                    Start with the button above. Adaptive fields appear after the first build.
+                    Start with AI build, upload internal files, or both. Adaptive fields appear
+                    after the first build.
                   </p>
                 )}
               </div>
