@@ -96,7 +96,16 @@ export async function wakePeerViaOrgo(
     );
   }
   await report?.(relayProgressMessage({ peer, phase: "paste" }), 55);
-  await orgoSendChat(computerId, wakeText, true);
+  try {
+    await orgoSendChat(computerId, wakeText, true);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await report?.(
+      `Wake inject failed on ${peer}'s desktop: ${msg.slice(0, 120)}`,
+      70
+    );
+    throw e;
+  }
 
   await report?.(relayProgressMessage({ peer, phase: "sent" }), 75);
 

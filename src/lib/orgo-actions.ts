@@ -208,7 +208,71 @@ async function verifyWakeInChat(computerId: string, text: string): Promise<boole
   return v.ok;
 }
 
-/** Send text into ChatGPT on an Orgo desktop. Success only if DOM verifies the wake. */
+/**
+ * Orgo computer-use agent: sees the real desktop (same path as ChatGPT login).
+ * Used when CDP cannot find the composer — the usual live failure mode.
+ */
+export async function orgoSendChatViaAgent(
+  computerId: string,
+  text: string,
+  newChat: boolean
+): Promise<void> {
+  const prompt = [
+    "You control this Orgo desktop. Deliver ONE message into the ChatGPT web app. Move fast.",
+    "",
+    "Goal: the text below must appear as a SENT user chat bubble in ChatGPT (not only sitting in the input box).",
+    "",
+    "Steps:",
+    newChat
+      ? "1. Focus the Chrome window showing ChatGPT. Open a New chat if needed (sidebar New chat, or go to https://chatgpt.com/)."
+      : "1. Focus the ChatGPT composer in Chrome.",
+    "2. Click the message input box so it is focused.",
+    "3. Clear anything already in the box, then paste/type EXACTLY this text — no extra words:",
+    "-----BEGIN MESSAGE-----",
+    text,
+    "-----END MESSAGE-----",
+    "4. Press Enter or click Send so ChatGPT submits it.",
+    "5. Wait until that text appears as a sent message in the chat transcript.",
+    "",
+    "Reply rules:",
+    "- When the message is clearly submitted as a user bubble, reply with exactly: SENT",
+    "- If ChatGPT shows a login / sign-in page, reply: FAILED: not logged in",
+    "- If Chrome/ChatGPT is missing, open Chrome to https://chatgpt.com/ and continue",
+    "- If impossible after trying, reply: FAILED: <short reason>",
+    "- Do not ask the human. Do not invent other tasks.",
+  ].join("\n");
+
+  const res = await fetch(`${ORGO_API_BASE}/api/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${orgoApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.ORGO_WAKE_MODEL?.trim() || process.env.ORGO_LOGIN_MODEL?.trim() || "claude-sonnet-5",
+      computer_id: computerId,
+      max_steps: 45,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`Orgo agent send failed (${res.status}): ${raw.slice(0, 240)}`);
+  }
+
+  const { message } = parseOrgoAgentResponse(raw);
+  if (/\bSENT\b/i.test(message)) return;
+  if (/FAILED:\s*not logged in/i.test(message)) {
+    throw new Error("ChatGPT is not logged in on Orgo — reconnect/sign-in first");
+  }
+  const fail = /FAILED:\s*(.+)/i.exec(message);
+  throw new Error(
+    fail ? `Orgo agent send failed: ${fail[1].trim().slice(0, 160)}` : `Orgo agent send failed: ${message.slice(0, 160) || "no SENT"}`
+  );
+}
+
+/** Send text into ChatGPT on an Orgo desktop. Success only if DOM verifies or agent confirms SENT. */
 export async function orgoSendChat(
   computerId: string,
   text: string,
@@ -231,35 +295,65 @@ export async function orgoSendChat(
       ok: false,
       severity: "warn",
       computerId,
-      summary: `Orgo CDP failed, trying xdotool+verify: ${cdpMsg.slice(0, 120)}`,
+      summary: `Orgo CDP failed, trying next path: ${cdpMsg.slice(0, 120)}`,
       detail: { method: "cdp", error: cdpMsg.slice(0, 240), newChat },
     });
+
+    // xdotool can't help if Chrome CDP already can't see a composer — go to agent.
+    const skipXdotool = /composer_not_found|not_logged_in|cdp_down|Desktop not found/i.test(
+      cdpMsg
+    );
+    if (!skipXdotool) {
+      try {
+        await orgoSendChatViaXdotool(computerId, text, newChat);
+        await localSleep(400);
+        if (await verifyWakeInChat(computerId, text)) {
+          logActivitySafe({
+            kind: "orgo_send",
+            ok: true,
+            severity: "warn",
+            computerId,
+            summary: `Orgo xdotool send verified in ChatGPT (newChat=${newChat})`,
+            detail: {
+              method: "xdotool_verified",
+              newChat,
+              textLen: text.length,
+              verified: true,
+            },
+          });
+          return;
+        }
+      } catch (xdoErr) {
+        const xdoMsg = xdoErr instanceof Error ? xdoErr.message : String(xdoErr);
+        logActivitySafe({
+          kind: "orgo_send",
+          ok: false,
+          severity: "warn",
+          computerId,
+          summary: `Orgo xdotool path failed: ${xdoMsg.slice(0, 120)}`,
+          detail: { method: "xdotool", error: xdoMsg.slice(0, 240), newChat },
+        });
+      }
+    }
   }
 
+  // Reliable path: computer-use agent (same system that signs into ChatGPT).
   try {
-    await orgoSendChatViaXdotool(computerId, text, newChat);
-    await localSleep(400);
-    const verified = await verifyWakeInChat(computerId, text);
-    if (!verified) {
-      // Last attempt: CDP attach after focusing UI (no Chrome kill)
-      await orgoSendChatViaCdp(computerId, text, newChat);
-      logActivitySafe({
-        kind: "orgo_send",
-        ok: true,
-        severity: "warn",
-        computerId,
-        summary: `Orgo send recovered via CDP after xdotool (newChat=${newChat})`,
-        detail: { method: "xdotool_then_cdp", newChat, textLen: text.length, verified: true },
-      });
-      return;
-    }
+    logActivitySafe({
+      kind: "orgo_send",
+      ok: false,
+      severity: "warn",
+      computerId,
+      summary: `Orgo using computer-use agent to paste wake`,
+      detail: { method: "agent_fallback", newChat, textLen: text.length },
+    });
+    await orgoSendChatViaAgent(computerId, text, newChat);
     logActivitySafe({
       kind: "orgo_send",
       ok: true,
-      severity: "warn",
       computerId,
-      summary: `Orgo xdotool send verified in ChatGPT (newChat=${newChat})`,
-      detail: { method: "xdotool_verified", newChat, textLen: text.length, verified: true },
+      summary: `Orgo agent send confirmed SENT (newChat=${newChat})`,
+      detail: { method: "agent", newChat, textLen: text.length, verified: true },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -269,7 +363,7 @@ export async function orgoSendChat(
       computerId,
       summary: `Orgo send failed (unverified): ${msg.slice(0, 120)}`,
       detail: {
-        method: "both_failed",
+        method: "all_failed",
         error: msg.slice(0, 240),
         newChat,
       },

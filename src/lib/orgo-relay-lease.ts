@@ -34,7 +34,7 @@ function maxConcurrentRelaysPerComputer(): number {
 }
 
 function leaseTtlMs(): number {
-  const orgoMs = Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000;
+  const orgoMs = Number(process.env.ORGO_TIMEOUT_MS || 180_000) || 180_000;
   return Math.max(60_000, orgoMs + 30_000);
 }
 

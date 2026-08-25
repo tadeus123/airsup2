@@ -75,7 +75,7 @@ export function formatProgressTiming(t: ProgressTiming): string {
 }
 
 function orgoTypicalMaxSec(): number {
-  const ms = Number(process.env.ORGO_TIMEOUT_MS || 120_000) || 120_000;
+  const ms = Number(process.env.ORGO_TIMEOUT_MS || 180_000) || 180_000;
   return Math.max(30, Math.round(ms / 1000));
 }
 
