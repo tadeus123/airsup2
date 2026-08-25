@@ -294,14 +294,10 @@ ${research}`;
   });
   const pack = normalizePack(extractJsonObject(raw));
 
+  // Only replace prior AI-built packs. Never delete manual uploads or gap fills.
   const existing = await listCompanyContextAssets(input.dashboardToken);
   for (const asset of existing) {
-    const base = asset.filename.replace(/^ai-build\//, "");
-    if (
-      asset.sourceKind === "ai_build" ||
-      CONTEXT_PACK_FILES.includes(base as PackFileName) ||
-      CONTEXT_PACK_FILES.includes(asset.filename as PackFileName)
-    ) {
+    if (asset.sourceKind === "ai_build" || asset.filename.startsWith("ai-build/")) {
       await deleteCompanyContextAsset(input.dashboardToken, asset.id).catch(() => false);
     }
   }
