@@ -691,9 +691,6 @@ export default function CompanyDashboard() {
                   rows={3}
                   placeholder={DEFAULT_MAIN_GOAL}
                 />
-                <span className="co-field-hint">
-                  Always optimize for this: more revenue, lower costs, less wasted time.
-                </span>
               </label>
 
               <div className="co-field">

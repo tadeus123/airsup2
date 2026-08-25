@@ -113,9 +113,6 @@ export default function CompanyGoLivePage() {
                   rows={3}
                   disabled={busy}
                 />
-                <span className="co-field-hint">
-                  Always optimize for this: more revenue, lower costs, less wasted time.
-                </span>
               </label>
             </fieldset>
 
