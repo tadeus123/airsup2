@@ -9,7 +9,7 @@ import { getCompanySecretByToken } from "@/lib/companies";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_FILE_BYTES = 2_500_000;
 const MAX_FILES = 20;
@@ -108,6 +108,8 @@ export async function POST(request: Request) {
           bytes: buf,
           apiKey,
           provider,
+          // Bulk uploads must stay fast — chunk text, don't LLM each file.
+          skipAiStructure: true,
         });
         results.push({ filename: file.name, ok: true, asset });
       } catch (e) {

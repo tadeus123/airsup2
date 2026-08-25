@@ -290,6 +290,8 @@ export async function ingestCompanyContextFile(input: {
   apiKey?: string | null;
   provider?: "openai" | "anthropic" | null;
   sourceKind?: string;
+  /** Skip per-file LLM structuring — use fast text chunking (preferred for bulk upload). */
+  skipAiStructure?: boolean;
 }): Promise<CompanyContextAsset> {
   const cfg = supabaseConfig();
   if (!cfg) throw new Error("Supabase not configured");
@@ -323,7 +325,8 @@ export async function ingestCompanyContextFile(input: {
 
     if (isProbablyText(mime, filename)) {
       const text = input.bytes.toString("utf8");
-      const skipStructure = kind === "ai_build";
+      const skipStructure =
+        input.skipAiStructure === true || kind === "ai_build" || kind === "gap";
       if (!skipStructure && input.apiKey && input.provider) {
         const structured = await structureWithCompanyAi({
           apiKey: input.apiKey,
@@ -336,7 +339,7 @@ export async function ingestCompanyContextFile(input: {
       if (!cards.length) {
         const pieces = chunkText(text, kind === "ai_build" ? 3500 : 2800);
         cards = pieces.map((body, i) => ({
-          title: `${filename.replace(/^ai-build\//, "")}${pieces.length > 1 ? ` (${i + 1})` : ""}`,
+          title: `${filename.replace(/^(ai-build|gap)\//, "")}${pieces.length > 1 ? ` (${i + 1})` : ""}`,
           summary: body.slice(0, 220).replace(/\s+/g, " "),
           body,
           keywords: extractKeywords(body, filename),

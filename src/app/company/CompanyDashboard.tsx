@@ -114,6 +114,26 @@ async function expandFiles(fileList: FileList | File[]): Promise<File[]> {
   return out;
 }
 
+async function readApiJson<T extends { error?: string }>(
+  res: Response
+): Promise<T> {
+  const raw = await res.text();
+  if (!raw.trim()) {
+    throw new Error(res.ok ? "empty response" : `request failed (${res.status})`);
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 120);
+    if (/an error occurred/i.test(snippet) || res.status >= 500) {
+      throw new Error(
+        "Server timed out or rejected the upload (often too many/large files at once). Try fewer files, or retry one by one."
+      );
+    }
+    throw new Error(snippet || `request failed (${res.status})`);
+  }
+}
+
 export default function CompanyDashboard() {
   const params = useParams();
   const token = String(params.token || "");
@@ -136,7 +156,9 @@ export default function CompanyDashboard() {
   const [saving, setSaving] = useState(false);
   const [building, setBuilding] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [buildNote, setBuildNote] = useState("");
+  const [buildProgress, setBuildProgress] = useState("");
   const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
   const autoSelected = useRef(false);
@@ -272,13 +294,21 @@ export default function CompanyDashboard() {
     setBuilding(true);
     setContextError("");
     setBuildNote("");
+    setBuildProgress("Starting… researching your domain");
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const s = Math.round((Date.now() - started) / 1000);
+      if (s < 25) setBuildProgress(`Researching public pages… ${s}s`);
+      else if (s < 90) setBuildProgress(`Building endpoint package… ${s}s`);
+      else setBuildProgress(`Finding high-value gaps… ${s}s (still working)`);
+    }, 1000);
     try {
       const res = await fetch("/api/company/context/build", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, target: "demo" }),
       });
-      const json = (await res.json()) as {
+      const json = await readApiJson<{
         ok?: boolean;
         assets?: ContextAsset[];
         gaps?: ContextGap[];
@@ -287,7 +317,7 @@ export default function CompanyDashboard() {
         notes?: string | null;
         company?: Company;
         error?: string;
-      };
+      }>(res);
       if (!res.ok || !json.ok) throw new Error(json.error || "context build failed");
       setAssets(json.assets || []);
       setGaps(json.gaps || []);
@@ -304,6 +334,8 @@ export default function CompanyDashboard() {
     } catch (err) {
       setContextError(err instanceof Error ? err.message : String(err));
     } finally {
+      window.clearInterval(tick);
+      setBuildProgress("");
       setBuilding(false);
     }
   }
@@ -330,12 +362,12 @@ export default function CompanyDashboard() {
       form.set("gapId", gap.id);
       form.append("file", file, file.name);
       const res = await fetch("/api/company/context/gaps", { method: "POST", body: form });
-      const json = (await res.json()) as {
+      const json = await readApiJson<{
         ok?: boolean;
         gaps?: ContextGap[];
         assets?: ContextAsset[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok || !json.ok) throw new Error(json.error || "upload failed");
       setGaps(json.gaps || []);
       if (json.assets) setAssets(json.assets);
@@ -360,12 +392,12 @@ export default function CompanyDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, gapId: gap.id, text }),
       });
-      const json = (await res.json()) as {
+      const json = await readApiJson<{
         ok?: boolean;
         gaps?: ContextGap[];
         assets?: ContextAsset[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok || !json.ok) throw new Error(json.error || "save failed");
       setGaps(json.gaps || []);
       if (json.assets) setAssets(json.assets);
@@ -401,36 +433,64 @@ export default function CompanyDashboard() {
     if (!list?.length) return;
     setUploading(true);
     setContextError("");
+    setBuildNote("");
     try {
       const files = await expandFiles(list);
       if (!files.length) throw new Error("nothing to upload");
-      const form = new FormData();
-      form.set("token", token);
-      for (const f of files.slice(0, 20)) form.append("files", f, f.name);
-      const res = await fetch("/api/company/context", { method: "POST", body: form });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        assets?: ContextAsset[];
-        results?: Array<{ filename: string; ok: boolean; error?: string }>;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error || "upload failed");
-      setAssets(json.assets || []);
-      const failed = (json.results || []).filter((r) => !r.ok);
-      if (failed.length) {
-        setContextError(
-          failed.map((f) => `${f.filename}: ${f.error || "failed"}`).join(" · ")
-        );
-      } else {
-        const n = (json.results || []).filter((r) => r.ok).length;
+      const batch = files.slice(0, 20);
+      let okCount = 0;
+      const failures: string[] = [];
+      let latestAssets: ContextAsset[] | null = null;
+
+      for (let i = 0; i < batch.length; i++) {
+        const file = batch[i];
+        const short = file.name.split(/[/\\]/).pop() || file.name;
+        setUploadProgress(`Uploading ${i + 1}/${batch.length} · ${short}`);
+        if (file.size > 2_500_000) {
+          failures.push(`${short}: too large (max ~2.5MB)`);
+          continue;
+        }
+        const form = new FormData();
+        form.set("token", token);
+        form.append("files", file, file.name);
+        const res = await fetch("/api/company/context", { method: "POST", body: form });
+        const json = await readApiJson<{
+          ok?: boolean;
+          assets?: ContextAsset[];
+          results?: Array<{ filename: string; ok: boolean; error?: string }>;
+          error?: string;
+        }>(res);
+        if (!res.ok && !json.results?.length) {
+          failures.push(`${short}: ${json.error || `failed (${res.status})`}`);
+          continue;
+        }
+        if (json.assets) latestAssets = json.assets;
+        for (const r of json.results || []) {
+          if (r.ok) okCount += 1;
+          else failures.push(`${r.filename}: ${r.error || "failed"}`);
+        }
+      }
+
+      if (latestAssets) setAssets(latestAssets);
+      else await loadContext().catch(() => undefined);
+
+      if (failures.length) {
+        setContextError(failures.join(" · "));
+      }
+      if (okCount) {
         setBuildNote(
-          `Added ${n} file${n === 1 ? "" : "s"} to company knowledge. AI build and gap cards stay in sync with this.`
+          `Added ${okCount} file${okCount === 1 ? "" : "s"} to company knowledge.${
+            failures.length ? ` ${failures.length} failed — see error above.` : ""
+          }`
         );
+      } else if (!failures.length) {
+        throw new Error("upload failed");
       }
     } catch (err) {
       setContextError(err instanceof Error ? err.message : String(err));
     } finally {
       setUploading(false);
+      setUploadProgress("");
       if (fileInput.current) fileInput.current.value = "";
       if (folderInput.current) folderInput.current.value = "";
     }
@@ -688,10 +748,12 @@ export default function CompanyDashboard() {
                   hidden
                   onChange={(e) => void uploadSelected(e.target.files)}
                 />
-                {building ? (
-                  <p className="co-field-hint">
-                    Researching public pages, writing the package, then finding gaps — usually
-                    1–4 minutes. Keep this tab open.
+                {building || uploading ? (
+                  <p className="co-progress" role="status" aria-live="polite">
+                    <span className="co-progress-spin" aria-hidden="true" />
+                    {building
+                      ? buildProgress || "Building context…"
+                      : uploadProgress || "Uploading…"}
                   </p>
                 ) : null}
                 {buildNote ? <p className="co-field-hint co-build-ok">{buildNote}</p> : null}
