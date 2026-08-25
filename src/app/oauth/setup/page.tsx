@@ -150,13 +150,14 @@ export default function OauthSetupPage() {
   }, [markDesktopReady]);
 
   useEffect(() => {
-    if (!aspToken || (phase !== "login" && phase !== "ready")) return;
+    // Don't poll login until Orgo is linked — early polls poison auth cache with empty computerId.
+    if (!aspToken || !desktopReady || (phase !== "login" && phase !== "ready")) return;
     void refreshLogin(aspToken);
     const id = window.setInterval(() => {
       void refreshLogin(aspToken);
     }, 4000);
     return () => window.clearInterval(id);
-  }, [aspToken, phase, refreshLogin]);
+  }, [aspToken, desktopReady, phase, refreshLogin]);
 
   // Once ChatGPT is signed in, automatically return to ChatGPT's OAuth modal.
   useEffect(() => {

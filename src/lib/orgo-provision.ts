@@ -433,8 +433,9 @@ export async function fillChatGptLoginOnDesktop(
   const already = await getChatGptAuthState(computerId);
   if (already.loggedIn) return { status: "signed_in", message: "SIGNED_IN" };
 
+  await waitForComputerReady(computerId, 45_000).catch(() => null);
   await openChromeToChatGpt(computerId, { force: false });
-  await localSleep(800);
+  await localSleep(1200);
 
   const agent = await signInChatGptViaOrgoAgent(computerId, email, password);
   if (agent.status === "signed_in") {
@@ -464,9 +465,10 @@ export async function continueChatGptLoginOnDesktop(
 
 export { getChatGptAuthState };
 
-/** Launch ChatGPT login — await this before returning from serverless handlers. */
+/** Launch ChatGPT login after the desktop is actually usable. */
 export async function launchChatGptLoginWithRetries(computerId: string): Promise<void> {
   try {
+    await waitForComputerReady(computerId, 45_000).catch(() => null);
     await prepareChatGptLoginOnDesktop(computerId);
   } catch {
     await openChromeToChatGpt(computerId).catch(() => {});

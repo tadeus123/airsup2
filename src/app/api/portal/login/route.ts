@@ -6,7 +6,8 @@ import {
   orgoProvisionConfigured,
 } from "@/lib/orgo-provision";
 import { chatgptReadyCookieHeader } from "@/lib/oauth-setup";
-import { authPortalUser, bearerFromRequest } from "@/lib/portal-auth";
+import { authPortalUser, bearerFromRequest, portalAuthRequest } from "@/lib/portal-auth";
+import { authUserFromRequestFresh } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,17 @@ function signedInResponse(username: string) {
   );
   res.headers.append("set-cookie", chatgptReadyCookieHeader(username));
   return res;
+}
+
+async function resolveComputerId(token: string): Promise<string> {
+  // Orgo may still be linking when the form is already visible — retry briefly.
+  for (let i = 0; i < 12; i++) {
+    const user = await authUserFromRequestFresh(portalAuthRequest(token));
+    const id = (user.orgoComputerId || "").trim();
+    if (id) return id;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return "";
 }
 
 export async function GET(request: Request) {
@@ -50,11 +62,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const user = await authPortalUser(token);
-    const computerId = (user.orgoComputerId || "").trim();
+    const computerId = (user.orgoComputerId || "").trim() || (await resolveComputerId(token));
     if (!computerId) {
       return NextResponse.json(
-        { error: "not_ready", message: "Computer is still starting." },
-        { status: 404 }
+        {
+          error: "not_ready",
+          message: "Desktop is still starting — wait a few seconds and press Connect again.",
+        },
+        { status: 503 }
       );
     }
     if (!orgoProvisionConfigured()) {

@@ -59,12 +59,19 @@ export async function GET(request: Request) {
       waitMs,
     });
 
-    // Don't block the user on Chrome — open it after we return VNC.
+    // Open ChatGPT login before returning when possible so the VNC already shows the form.
     if (shouldLaunch) {
       const computerId = user.orgoComputerId;
-      after(() => {
-        void launchChatGptLoginWithRetries(computerId).catch(() => {});
-      });
+      try {
+        await Promise.race([
+          launchChatGptLoginWithRetries(computerId),
+          new Promise((resolve) => setTimeout(resolve, 8_000)),
+        ]);
+      } catch {
+        after(() => {
+          void launchChatGptLoginWithRetries(computerId).catch(() => {});
+        });
+      }
     }
 
     return NextResponse.json(

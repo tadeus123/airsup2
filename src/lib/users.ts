@@ -540,7 +540,12 @@ export async function authUserFromRequest(request: Request): Promise<User> {
     });
     if (!row?.username) throw new Error("Unauthorized");
     const user = mapUser(row);
-    authCache.set(hash, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+    // Don't cache "no Orgo yet" — setup races poison login with a stale empty computerId.
+    if (user.orgoComputerId) {
+      authCache.set(hash, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+    } else {
+      authCache.delete(hash);
+    }
     return user;
   }
   const username = memory.byHash.get(hash);
@@ -556,8 +561,20 @@ export async function authUserFromRequest(request: Request): Promise<User> {
     createdAt: mem.createdAt,
     updatedAt: mem.updatedAt,
   };
-  authCache.set(hash, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  if (user.orgoComputerId) {
+    authCache.set(hash, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  } else {
+    authCache.delete(hash);
+  }
   return user;
+}
+
+/** Bypass auth cache — use when Orgo may have just been linked. */
+export async function authUserFromRequestFresh(request: Request): Promise<User> {
+  const token = extractBearer(request);
+  if (!token) throw new Error("Unauthorized");
+  authCache.delete(hashUserToken(token));
+  return authUserFromRequest(request);
 }
 
 export async function sendMessage(input: {
