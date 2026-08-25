@@ -27,6 +27,19 @@ type ContextAsset = {
   chunkCount?: number;
 };
 
+type ContextGap = {
+  id: string;
+  key: string;
+  title: string;
+  reason: string;
+  fieldType: "file" | "text" | "textarea";
+  placeholder: string;
+  accept: string;
+  priority: number;
+  status: "open" | "filled" | "dismissed";
+  filledPreview?: string | null;
+};
+
 type Conversation = {
   conversationId: string;
   visitorUsername: string;
@@ -66,41 +79,6 @@ function previewBody(body: string): string {
   return body.replace(/\s+/g, " ").replace(/\*\*/g, "").trim().slice(0, 90);
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-async function expandFiles(fileList: FileList | File[]): Promise<File[]> {
-  const incoming = Array.from(fileList);
-  const out: File[] = [];
-  for (const file of incoming) {
-    const isZip =
-      file.name.toLowerCase().endsWith(".zip") ||
-      file.type === "application/zip" ||
-      file.type === "application/x-zip-compressed";
-    if (!isZip) {
-      out.push(file);
-      continue;
-    }
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = await JSZip.loadAsync(await file.arrayBuffer());
-      const entries = Object.values(zip.files);
-      for (const entry of entries) {
-        if (entry.dir) continue;
-        if (entry.name.startsWith("__MACOSX/") || entry.name.endsWith(".DS_Store")) continue;
-        const blob = await entry.async("blob");
-        out.push(new File([blob], entry.name, { type: blob.type || "application/octet-stream" }));
-      }
-    } catch {
-      out.push(file);
-    }
-  }
-  return out;
-}
-
 export default function CompanyDashboard() {
   const params = useParams();
   const token = String(params.token || "");
@@ -108,37 +86,35 @@ export default function CompanyDashboard() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [stance, setStance] = useState("");
   const [mainGoal, setMainGoal] = useState(DEFAULT_MAIN_GOAL);
   const [apiKey, setApiKey] = useState("");
   const [assets, setAssets] = useState<ContextAsset[]>([]);
+  const [gaps, setGaps] = useState<ContextGap[]>([]);
+  const [gapDrafts, setGapDrafts] = useState<Record<string, string>>({});
+  const [fillingGapId, setFillingGapId] = useState<string | null>(null);
+  const [justFilled, setJustFilled] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
-  const [uploadError, setUploadError] = useState("");
+  const [contextError, setContextError] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [buildNote, setBuildNote] = useState("");
   const [tab, setTab] = useState<Tab>("conversations");
   const scroller = useRef<HTMLDivElement>(null);
   const autoSelected = useRef(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const folderInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const el = folderInput.current;
-    if (!el) return;
-    el.setAttribute("webkitdirectory", "");
-    el.setAttribute("directory", "");
-  }, []);
+  const gapFileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadContext = useCallback(async () => {
-    const res = await fetch(`/api/company/context?token=${encodeURIComponent(token)}`);
-    const json = (await res.json()) as { assets?: ContextAsset[]; error?: string };
-    if (!res.ok) throw new Error(json.error || "could not load context");
-    setAssets(json.assets || []);
+    const [assetsRes, gapsRes] = await Promise.all([
+      fetch(`/api/company/context?token=${encodeURIComponent(token)}`),
+      fetch(`/api/company/context/gaps?token=${encodeURIComponent(token)}`),
+    ]);
+    const assetsJson = (await assetsRes.json()) as { assets?: ContextAsset[] };
+    const gapsJson = (await gapsRes.json()) as { gaps?: ContextGap[] };
+    if (assetsRes.ok) setAssets(assetsJson.assets || []);
+    if (gapsRes.ok) setGaps(gapsJson.gaps || []);
   }, [token]);
 
   const load = useCallback(
@@ -154,7 +130,6 @@ export default function CompanyDashboard() {
       };
       if (!res.ok || !json.company) throw new Error(json.error || "could not load");
       setCompany(json.company);
-      setStance(json.company.stance);
       setMainGoal(json.company.mainGoal || DEFAULT_MAIN_GOAL);
       setConversations(json.conversations || []);
       setMessages(json.messages || []);
@@ -169,7 +144,7 @@ export default function CompanyDashboard() {
       try {
         await load();
         await loadContext().catch(() => {
-          /* context optional on first paint */
+          /* optional */
         });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -188,7 +163,7 @@ export default function CompanyDashboard() {
     if (!token || !live) return;
     const id = window.setInterval(() => {
       void load(activeId || undefined).catch(() => {
-        /* keep last good state while polling */
+        /* keep last good state */
       });
     }, 4000);
     return () => window.clearInterval(id);
@@ -230,7 +205,6 @@ export default function CompanyDashboard() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           token,
-          stance,
           mainGoal,
           apiKey: apiKey.trim() || undefined,
         }),
@@ -251,7 +225,7 @@ export default function CompanyDashboard() {
 
   async function buildContextWithAi() {
     setBuilding(true);
-    setUploadError("");
+    setContextError("");
     setBuildNote("");
     try {
       const res = await fetch("/api/company/context/build", {
@@ -262,72 +236,119 @@ export default function CompanyDashboard() {
       const json = (await res.json()) as {
         ok?: boolean;
         assets?: ContextAsset[];
+        gaps?: ContextGap[];
         files?: string[];
         primaryWorkflow?: string | null;
         notes?: string | null;
+        company?: Company;
         error?: string;
       };
       if (!res.ok || !json.ok) throw new Error(json.error || "context build failed");
       setAssets(json.assets || []);
+      setGaps(json.gaps || []);
+      if (json.company) setCompany(json.company);
+      const openCount = (json.gaps || []).filter((g) => g.status === "open").length;
       const wf = json.primaryWorkflow ? ` Primary workflow: ${json.primaryWorkflow}.` : "";
       setBuildNote(
-        `Built ${(json.files || []).length} context files.${wf}${
-          json.notes ? ` ${json.notes}` : ""
-        }`.trim()
+        `Context package ready (${(json.files || []).length} files).${wf}${
+          openCount
+            ? ` ${openCount} optional improvement${openCount === 1 ? "" : "s"} below.`
+            : ""
+        }${json.notes ? ` ${json.notes}` : ""}`.trim()
       );
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err));
+      setContextError(err instanceof Error ? err.message : String(err));
     } finally {
       setBuilding(false);
     }
   }
 
-  async function uploadSelected(list: FileList | null) {
-    if (!list?.length) return;
-    setUploading(true);
-    setUploadError("");
+  function markGapJustFilled(id: string) {
+    setJustFilled((prev) => ({ ...prev, [id]: true }));
+    window.setTimeout(() => {
+      setJustFilled((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }, 1400);
+  }
+
+  async function submitGapFile(gap: ContextGap, list: FileList | null) {
+    const file = list?.[0];
+    if (!file) return;
+    setFillingGapId(gap.id);
+    setContextError("");
     try {
-      const files = await expandFiles(list);
-      if (!files.length) throw new Error("nothing to upload");
       const form = new FormData();
       form.set("token", token);
-      for (const f of files.slice(0, 20)) form.append("files", f, f.name);
-      const res = await fetch("/api/company/context", { method: "POST", body: form });
+      form.set("gapId", gap.id);
+      form.append("file", file, file.name);
+      const res = await fetch("/api/company/context/gaps", { method: "POST", body: form });
       const json = (await res.json()) as {
         ok?: boolean;
+        gaps?: ContextGap[];
         assets?: ContextAsset[];
-        results?: Array<{ filename: string; ok: boolean; error?: string }>;
         error?: string;
       };
-      if (!res.ok) throw new Error(json.error || "upload failed");
-      setAssets(json.assets || []);
-      const failed = (json.results || []).filter((r) => !r.ok);
-      if (failed.length) {
-        setUploadError(
-          failed.map((f) => `${f.filename}: ${f.error || "failed"}`).join(" · ")
-        );
-      }
+      if (!res.ok || !json.ok) throw new Error(json.error || "upload failed");
+      setGaps(json.gaps || []);
+      if (json.assets) setAssets(json.assets);
+      markGapJustFilled(gap.id);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err));
+      setContextError(err instanceof Error ? err.message : String(err));
     } finally {
-      setUploading(false);
-      if (fileInput.current) fileInput.current.value = "";
-      if (folderInput.current) folderInput.current.value = "";
+      setFillingGapId(null);
+      const el = gapFileInputs.current[gap.id];
+      if (el) el.value = "";
     }
   }
 
-  async function removeAsset(id: string) {
-    setUploadError("");
+  async function submitGapText(gap: ContextGap) {
+    const text = (gapDrafts[gap.id] || "").trim();
+    if (!text) return;
+    setFillingGapId(gap.id);
+    setContextError("");
+    try {
+      const res = await fetch("/api/company/context/gaps", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, gapId: gap.id, text }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        gaps?: ContextGap[];
+        assets?: ContextAsset[];
+        error?: string;
+      };
+      if (!res.ok || !json.ok) throw new Error(json.error || "save failed");
+      setGaps(json.gaps || []);
+      if (json.assets) setAssets(json.assets);
+      setGapDrafts((prev) => {
+        const next = { ...prev };
+        delete next[gap.id];
+        return next;
+      });
+      markGapJustFilled(gap.id);
+    } catch (err) {
+      setContextError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFillingGapId(null);
+    }
+  }
+
+  async function skipGap(gap: ContextGap) {
+    setContextError("");
     try {
       const res = await fetch(
-        `/api/company/context?token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`,
+        `/api/company/context/gaps?token=${encodeURIComponent(token)}&id=${encodeURIComponent(gap.id)}`,
         { method: "DELETE" }
       );
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error || "delete failed");
-      setAssets((prev) => prev.filter((a) => a.id !== id));
+      const json = (await res.json()) as { gaps?: ContextGap[]; error?: string };
+      if (!res.ok) throw new Error(json.error || "could not skip");
+      setGaps(json.gaps || []);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err));
+      setContextError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -354,6 +375,11 @@ export default function CompanyDashboard() {
   const visitorLabel = active
     ? `${active.visitorUsername || "visitor"} AI`
     : "Visitor AI";
+  const packReady = assets.some(
+    (a) => a.sourceKind === "ai_build" || a.filename.startsWith("ai-build/")
+  );
+  const openGaps = gaps.filter((g) => g.status === "open" || justFilled[g.id]);
+  const filledGaps = gaps.filter((g) => g.status === "filled" && !justFilled[g.id]);
 
   return (
     <CompanyPage showLogin={false}>
@@ -500,95 +526,147 @@ export default function CompanyDashboard() {
                   placeholder={DEFAULT_MAIN_GOAL}
                 />
                 <span className="co-field-hint">
-                  Default mindset for your company AI: grow revenue, cut costs, save time.
+                  Always optimize for this: more revenue, lower costs, less wasted time.
                 </span>
-              </label>
-              <label className="co-field">
-                <span>How to negotiate</span>
-                <textarea
-                  value={stance}
-                  onChange={(e) => setStance(e.target.value)}
-                  rows={6}
-                />
               </label>
 
               <div className="co-field">
-                <span>Company context</span>
+                <span>Endpoint context</span>
                 <p className="co-field-hint">
-                  Upload files, folders, or zip archives — or let AI research your domain and
-                  build the endpoint package (00–08) from the onboarding playbook. Knowledge
-                  cards are retrieved during talks.
+                  One click researches your domain, builds the endpoint package, then a second
+                  pass asks only for the few things that would make it sharper. Optional — skip
+                  any card.
                 </p>
                 <div className="co-upload-actions">
                   <button
                     type="button"
                     className="co-upload-btn"
-                    disabled={uploading || building}
+                    disabled={building}
                     onClick={() => void buildContextWithAi()}
                   >
-                    {building ? "Building context…" : "Let AI build my context"}
-                  </button>
-                  <button
-                    type="button"
-                    className="co-upload-btn co-upload-btn--ghost"
-                    disabled={uploading || building}
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    {uploading ? "Uploading…" : "Upload files"}
-                  </button>
-                  <button
-                    type="button"
-                    className="co-upload-btn co-upload-btn--ghost"
-                    disabled={uploading || building}
-                    onClick={() => folderInput.current?.click()}
-                  >
-                    Upload folder
+                    {building
+                      ? "Building context…"
+                      : packReady
+                        ? "Rebuild context"
+                        : "Let AI build my context"}
                   </button>
                 </div>
                 {building ? (
                   <p className="co-field-hint">
-                    Fetching public pages and running a smart model — usually 1–3 minutes.
-                    Keep this tab open.
+                    Researching public pages, writing the package, then finding gaps — usually
+                    1–4 minutes. Keep this tab open.
                   </p>
                 ) : null}
                 {buildNote ? <p className="co-field-hint co-build-ok">{buildNote}</p> : null}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  accept="*/*,.zip"
-                  hidden
-                  onChange={(e) => void uploadSelected(e.target.files)}
-                />
-                <input
-                  ref={folderInput}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => void uploadSelected(e.target.files)}
-                />
-                {uploadError ? <p className="ainet-note err">{uploadError}</p> : null}
-                {assets.length ? (
-                  <ul className="co-asset-list">
-                    {assets.map((a) => (
-                      <li key={a.id}>
-                        <div>
-                          <strong>{a.filename}</strong>
-                          <span>
-                            {a.status}
-                            {typeof a.chunkCount === "number" ? ` · ${a.chunkCount} cards` : ""}
-                            {a.byteSize ? ` · ${formatBytes(a.byteSize)}` : ""}
-                          </span>
-                          {a.error ? <em>{a.error}</em> : null}
-                        </div>
-                        <button type="button" onClick={() => void removeAsset(a.id)}>
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                {packReady && !building ? (
+                  <p className="co-context-ready">
+                    Context package ready
+                    {filledGaps.length ? ` · ${filledGaps.length} improvement${filledGaps.length === 1 ? "" : "s"} added` : ""}
+                  </p>
+                ) : null}
+                {contextError ? <p className="ainet-note err">{contextError}</p> : null}
+
+                {openGaps.length ? (
+                  <div className="co-gap-list" aria-label="Suggested improvements">
+                    {openGaps.map((gap) => {
+                      const done = gap.status === "filled" || justFilled[gap.id];
+                      const busy = fillingGapId === gap.id;
+                      return (
+                        <article
+                          key={gap.id}
+                          className={`co-gap-card${done ? " co-gap-card--done" : ""}`}
+                        >
+                          <header className="co-gap-head">
+                            <div>
+                              <h3>{gap.title}</h3>
+                              {gap.reason ? <p>{gap.reason}</p> : null}
+                            </div>
+                            {!done ? (
+                              <button
+                                type="button"
+                                className="co-gap-skip"
+                                onClick={() => void skipGap(gap)}
+                              >
+                                Skip
+                              </button>
+                            ) : (
+                              <span className="co-gap-done-label">Added</span>
+                            )}
+                          </header>
+
+                          {done ? (
+                            <p className="co-gap-filled-preview">
+                              {gap.filledPreview || "Saved to company knowledge"}
+                            </p>
+                          ) : gap.fieldType === "file" ? (
+                            <div className="co-gap-drop">
+                              <input
+                                ref={(el) => {
+                                  gapFileInputs.current[gap.id] = el;
+                                }}
+                                type="file"
+                                accept={gap.accept || undefined}
+                                hidden
+                                onChange={(e) => void submitGapFile(gap, e.target.files)}
+                              />
+                              <button
+                                type="button"
+                                className="co-gap-file-btn"
+                                disabled={busy}
+                                onClick={() => gapFileInputs.current[gap.id]?.click()}
+                              >
+                                {busy ? "Uploading…" : gap.placeholder || "Choose file"}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="co-gap-text">
+                              {gap.fieldType === "textarea" ? (
+                                <textarea
+                                  rows={4}
+                                  value={gapDrafts[gap.id] || ""}
+                                  placeholder={gap.placeholder || "Add the missing detail"}
+                                  onChange={(e) =>
+                                    setGapDrafts((prev) => ({
+                                      ...prev,
+                                      [gap.id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={gapDrafts[gap.id] || ""}
+                                  placeholder={gap.placeholder || "Add the missing detail"}
+                                  onChange={(e) =>
+                                    setGapDrafts((prev) => ({
+                                      ...prev,
+                                      [gap.id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              )}
+                              <button
+                                type="button"
+                                className="co-upload-btn"
+                                disabled={busy || !(gapDrafts[gap.id] || "").trim()}
+                                onClick={() => void submitGapText(gap)}
+                              >
+                                {busy ? "Saving…" : "Add"}
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : packReady ? (
+                  <p className="co-field-hint">
+                    No open gaps right now. Rebuild if your business changed.
+                  </p>
                 ) : (
-                  <p className="co-field-hint">No context uploaded yet.</p>
+                  <p className="co-field-hint">
+                    Start with the button above. Adaptive fields appear after the first build.
+                  </p>
                 )}
               </div>
 

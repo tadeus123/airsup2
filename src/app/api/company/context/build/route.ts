@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { companyApiProvider, decryptCompanyApiKey } from "@/lib/company-crypto";
 import { buildCompanyContextPack } from "@/lib/company-context-build";
-import { getCompanySecretByToken } from "@/lib/companies";
+import { scoutCompanyContextGaps, type ContextGap } from "@/lib/company-context-gaps";
+import { getCompanySecretByToken, updateCompany } from "@/lib/companies";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,12 +52,47 @@ export async function POST(request: Request) {
       target: body.target === "production" ? "production" : "demo",
     });
 
+    if (result.negotiationStance) {
+      await updateCompany({
+        token,
+        stance: result.negotiationStance,
+      }).catch(() => null);
+    }
+
+    let gaps: ContextGap[] = [];
+    try {
+      gaps = await scoutCompanyContextGaps({
+        company: secret,
+        dashboardToken: token,
+        apiKey,
+        provider,
+        packFiles: result.packFiles,
+        primaryWorkflow: result.primaryWorkflow,
+      });
+    } catch {
+      gaps = [];
+    }
+
+    const refreshed = await getCompanySecretByToken(token);
+
     return NextResponse.json({
       ok: true,
       files: result.files,
       assets: result.assets,
+      gaps,
       primaryWorkflow: result.primaryWorkflow || null,
       notes: result.notes || null,
+      company: refreshed
+        ? {
+            id: refreshed.id,
+            name: refreshed.name,
+            domain: refreshed.domain,
+            keyLast4: refreshed.keyLast4,
+            stance: refreshed.stance,
+            contextNotes: refreshed.contextNotes,
+            mainGoal: refreshed.mainGoal,
+          }
+        : null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "context_build_failed";

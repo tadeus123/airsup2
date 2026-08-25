@@ -27,6 +27,8 @@ export type ContextBuildResult = {
   files: string[];
   primaryWorkflow?: string;
   notes?: string;
+  negotiationStance?: string;
+  packFiles: Record<string, string>;
 };
 
 function loadOnboardingInstructions(): string {
@@ -199,6 +201,7 @@ function normalizePack(parsed: unknown): {
   files: Record<PackFileName, string>;
   primaryWorkflow?: string;
   notes?: string;
+  negotiationStance?: string;
 } {
   const obj = parsed as {
     files?: Record<string, string>;
@@ -206,6 +209,8 @@ function normalizePack(parsed: unknown): {
     primaryWorkflow?: string;
     notes?: string;
     summary?: string;
+    negotiation_stance?: string;
+    negotiationStance?: string;
   };
   const filesIn = obj.files || {};
   const files = {} as Record<PackFileName, string>;
@@ -222,6 +227,8 @@ function normalizePack(parsed: unknown): {
     files,
     primaryWorkflow: String(obj.primary_workflow || obj.primaryWorkflow || "").trim() || undefined,
     notes: String(obj.notes || obj.summary || "").trim() || undefined,
+    negotiationStance:
+      String(obj.negotiation_stance || obj.negotiationStance || "").trim() || undefined,
   };
 }
 
@@ -245,6 +252,7 @@ OUTPUT CONTRACT (mandatory for this Airsup run):
 Return ONLY one JSON object (no markdown fences) with this shape:
 {
   "primary_workflow": "short name of chosen workflow",
+  "negotiation_stance": "2-5 sentences: how this endpoint should negotiate (tone, creativity, hard limits)",
   "notes": "2-6 sentences: verified highlights, main simulated assumptions, how to use the pack",
   "files": {
     "00_READ_ME_FIRST.md": "...",
@@ -320,5 +328,7 @@ ${research}`;
     files: created.map((a) => a.filename),
     primaryWorkflow: pack.primaryWorkflow,
     notes: pack.notes,
+    negotiationStance: pack.negotiationStance,
+    packFiles: pack.files,
   };
 }

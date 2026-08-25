@@ -413,6 +413,125 @@ button {
   opacity: 0.85;
 }
 
+.co-context-ready {
+  margin: 0.35rem 0 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.co-gap-list {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.co-gap-card {
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) + 2px);
+  padding: 0.95rem 1rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-color) 92%, #9aa3ad 8%), var(--bg-color));
+  transition:
+    border-color 0.35s ease,
+    background 0.45s ease,
+    opacity 0.45s ease,
+    transform 0.35s ease;
+}
+
+.co-gap-card--done {
+  border-color: color-mix(in srgb, #1f7a4c 55%, var(--border-color));
+  background: color-mix(in srgb, #1f7a4c 10%, var(--bg-color));
+  opacity: 0.88;
+}
+
+.co-gap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.co-gap-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.co-gap-head p {
+  margin: 0.28rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.co-gap-skip {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.15rem 0.2rem;
+  flex-shrink: 0;
+}
+
+.co-gap-skip:hover {
+  color: var(--text-color);
+}
+
+.co-gap-done-label {
+  color: #1f7a4c;
+  font-size: 0.8rem;
+  font-weight: 650;
+  flex-shrink: 0;
+}
+
+.co-gap-drop {
+  border: 1px dashed color-mix(in srgb, var(--border-color) 70%, #8b939c);
+  border-radius: var(--radius);
+  padding: 1.1rem 1rem;
+  display: flex;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-color) 88%, #b8c0c8 12%);
+}
+
+.co-gap-file-btn {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-color);
+  padding: 0.55rem 0.95rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.co-gap-file-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.co-gap-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.co-gap-text textarea,
+.co-gap-text input {
+  width: 100%;
+}
+
+.co-gap-filled-preview {
+  margin: 0;
+  font-size: 0.82rem;
+  color: color-mix(in srgb, #1f7a4c 70%, var(--text-color));
+}
+
 .co-upload-actions {
   display: flex;
   flex-wrap: wrap;
