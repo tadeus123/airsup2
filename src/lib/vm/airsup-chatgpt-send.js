@@ -418,20 +418,53 @@ async function evaluateValue(send, expression) {
 
 function pageFocusComposerExpression() {
   return `(() => {
-    if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.href)) {
-      return { ok: false, error: "not_logged_in", href: location.href };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function findComposer() {
+      const selectors = [
+        "#prompt-textarea",
+        '[data-testid="prompt-textarea"]',
+        '[contenteditable="true"][data-lexical-editor="true"]',
+        'div[role="textbox"][contenteditable="true"]',
+        'div.ProseMirror[contenteditable="true"]',
+        'main [contenteditable="true"]',
+        'form [contenteditable="true"]',
+        'textarea[placeholder*="Message"]',
+        'textarea[placeholder*="Ask"]',
+        '[contenteditable="true"]',
+      ];
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 20 && r.height > 10) return el;
+      }
+      return null;
     }
-    const el =
-      document.querySelector("#prompt-textarea") ||
-      document.querySelector('[data-testid="prompt-textarea"]') ||
-      document.querySelector('div.ProseMirror[contenteditable="true"]') ||
-      document.querySelector('[contenteditable="true"]');
-    if (!el) return { ok: false, error: "composer_not_found", href: location.href };
-    el.focus();
-    try {
-      document.execCommand("selectAll", false, null);
-    } catch {}
-    return { ok: true, href: location.href, tag: el.tagName };
+    return (async () => {
+      if (/\\/auth\\/|\\/log-in|\\/login/i.test(location.href)) {
+        return { ok: false, error: "not_logged_in", href: location.href };
+      }
+      let el = null;
+      for (let i = 0; i < 18; i++) {
+        el = findComposer();
+        if (el) break;
+        await sleep(250);
+      }
+      if (!el) {
+        return {
+          ok: false,
+          error: "composer_not_found",
+          href: location.href,
+          title: document.title || "",
+          bodySample: (document.body && document.body.innerText || "").slice(0, 120),
+        };
+      }
+      el.focus();
+      try {
+        document.execCommand("selectAll", false, null);
+      } catch {}
+      return { ok: true, href: location.href, tag: el.tagName, id: el.id || "" };
+    })();
   })()`;
 }
 
@@ -440,6 +473,7 @@ function pageClickSendExpression() {
     const btn =
       document.querySelector('[data-testid="send-button"]') ||
       document.querySelector('button[aria-label="Send message"]') ||
+      document.querySelector('button[aria-label="Send prompt"]') ||
       document.querySelector('button[aria-label*="Send"]');
     if (btn && !btn.disabled) {
       btn.click();
@@ -461,6 +495,8 @@ function pageVerifyExpression(marker) {
     const composer =
       document.querySelector("#prompt-textarea") ||
       document.querySelector('[data-testid="prompt-textarea"]') ||
+      document.querySelector('[contenteditable="true"][data-lexical-editor="true"]') ||
+      document.querySelector('div[role="textbox"][contenteditable="true"]') ||
       document.querySelector('div.ProseMirror[contenteditable="true"]');
     const composerText = composer
       ? (composer.innerText || composer.textContent || "").trim()
@@ -522,7 +558,7 @@ async function sendViaCdp(text, newChat) {
       } catch (e) {
         if (!isNavLossError(e.message)) throw e;
       }
-      await reconnect(1400);
+      await reconnect(2000);
     } else {
       await waitForExecutionContext(send);
     }
@@ -530,26 +566,34 @@ async function sendViaCdp(text, newChat) {
     let last = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
+        await sleep(attempt === 0 ? 600 : 400);
         const focus = await evaluateValue(send, pageFocusComposerExpression());
         if (!focus?.ok) {
           last = focus || { ok: false, error: "composer_not_found" };
           if (focus?.error === "not_logged_in") return focus;
           if (attempt < 1) {
-            await reconnect(900);
+            try {
+              await send("Page.navigate", { url: "https://chatgpt.com/" });
+            } catch {}
+            await reconnect(2200);
             continue;
           }
           break;
         }
 
-        // Real CDP text entry (React/ProseMirror listens to this; DOM hacks often don't).
+        // Real CDP text entry (React/Lexical listens to this; DOM hacks often don't).
         try {
           await send("Input.insertText", { text });
         } catch {
-          // Fallback: execCommand path
           await evaluateValue(
             send,
             `(() => {
-              const el = document.querySelector("#prompt-textarea") || document.querySelector('[data-testid="prompt-textarea"]') || document.querySelector('div.ProseMirror[contenteditable="true"]');
+              const el =
+                document.querySelector("#prompt-textarea") ||
+                document.querySelector('[data-testid="prompt-textarea"]') ||
+                document.querySelector('[contenteditable="true"][data-lexical-editor="true"]') ||
+                document.querySelector('div[role="textbox"][contenteditable="true"]') ||
+                document.querySelector('div.ProseMirror[contenteditable="true"]');
               if (!el) return false;
               el.focus();
               document.execCommand("selectAll", false, null);
