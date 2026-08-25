@@ -6,6 +6,7 @@ import {
   readChatgptReadyCookie,
   readOauthSetupCookie,
 } from "@/lib/oauth-setup";
+import { oauthOrgoConnectEnabled } from "@/lib/oauth-orgo-gate";
 import { getChatGptAuthState, orgoProvisionConfigured } from "@/lib/orgo-provision";
 import { authPortalUser } from "@/lib/portal-auth";
 import { getUserByUsername } from "@/lib/users";
@@ -17,15 +18,20 @@ async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+function orgoConnectActive(): boolean {
+  return oauthOrgoConnectEnabled() && orgoProvisionConfigured();
+}
+
 export async function GET(request: Request) {
   const setup = readOauthSetupCookie(request);
   if (!setup) {
     return NextResponse.json({ error: "setup session expired — reconnect the plugin" }, { status: 401 });
   }
   const user = await getUserByUsername(setup.username);
+  const orgoConnect = orgoConnectActive();
   const ready = readChatgptReadyCookie(request);
   let loggedIn = Boolean(ready && ready.username === setup.username.toLowerCase());
-  if (!loggedIn && orgoProvisionConfigured() && user?.orgoComputerId) {
+  if (!loggedIn && orgoConnect && user?.orgoComputerId) {
     try {
       const state = await getChatGptAuthState(user.orgoComputerId);
       loggedIn = state.loggedIn;
@@ -38,6 +44,7 @@ export async function GET(request: Request) {
     username: setup.username,
     displayName: user?.displayName || setup.username,
     hasOrgo: Boolean(user?.orgoComputerId),
+    orgoConnect,
     loggedIn,
     aspToken: setup.aspToken,
   });
@@ -50,7 +57,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "setup session expired — reconnect the plugin" }, { status: 401 });
   }
 
-  if (orgoProvisionConfigured()) {
+  // When Orgo connect is iced, Connect just finishes OAuth — no ChatGPT-in-Orgo check.
+  if (orgoConnectActive()) {
     try {
       const user = await authPortalUser(setup.aspToken);
       const computerId = (user.orgoComputerId || "").trim();

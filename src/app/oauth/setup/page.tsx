@@ -21,7 +21,7 @@ const ChatGptLoginFrame = dynamic(() => import("@/components/oauth/ChatGptLoginF
   ),
 });
 
-type Phase = "loading" | "login" | "ready" | "error";
+type Phase = "loading" | "simple" | "login" | "ready" | "error";
 
 export default function OauthSetupPage() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -100,6 +100,7 @@ export default function OauthSetupPage() {
           username?: string;
           displayName?: string;
           hasOrgo?: boolean;
+          orgoConnect?: boolean;
           loggedIn?: boolean;
           aspToken?: string;
           error?: string;
@@ -110,6 +111,12 @@ export default function OauthSetupPage() {
         setAspToken(mj.aspToken);
         savePortalToken(mj.aspToken);
         setDisplayName(mj.displayName || mj.username || "");
+
+        // Orgo person↔person connect on ice: Name → Connect → back to ChatGPT.
+        if (!mj.orgoConnect) {
+          setPhase("simple");
+          return;
+        }
 
         if (mj.loggedIn) {
           setLoggedIn(true);
@@ -159,8 +166,9 @@ export default function OauthSetupPage() {
     return () => window.clearInterval(id);
   }, [aspToken, desktopReady, phase, refreshLogin]);
 
-  // Once ChatGPT is signed in, automatically return to ChatGPT's OAuth modal.
+  // Once ChatGPT is signed in (Orgo path), automatically return to ChatGPT's OAuth modal.
   useEffect(() => {
+    if (phase === "simple") return;
     if (!loggedIn || finishing || phase === "loading" || phase === "error") return;
     void finish();
   }, [loggedIn, finishing, phase, finish]);
@@ -183,6 +191,29 @@ export default function OauthSetupPage() {
             <h1>Setup failed</h1>
             <p className="ainet-note err">{error}</p>
             <p className="ainet-muted oauth-hint">Reconnect the plugin in ChatGPT to try again.</p>
+          </section>
+        ) : null}
+
+        {phase === "simple" ? (
+          <section className="oauth-stage co-form-card co-form-card--enter">
+            <h1>{finishing ? "Returning to ChatGPT…" : "Connect Airsup"}</h1>
+            {displayName ? <p className="oauth-name">{displayName}</p> : null}
+            <p className="ainet-muted oauth-hint">
+              Finish connecting so ChatGPT can use Airsup.
+            </p>
+            {error ? <p className="ainet-note err">{error}</p> : null}
+            {finishing ? (
+              <span className="co-pulse" aria-hidden="true" />
+            ) : (
+              <button
+                type="button"
+                className="co-go co-go--wide"
+                disabled={finishing}
+                onClick={() => void finish()}
+              >
+                Connect
+              </button>
+            )}
           </section>
         ) : null}
 

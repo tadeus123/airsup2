@@ -14,6 +14,7 @@ import {
   readOauthPrewarmCookie,
 } from "@/lib/oauth-setup";
 import { orgoProvisionConfigured } from "@/lib/orgo-provision";
+import { oauthOrgoConnectEnabled } from "@/lib/oauth-orgo-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,8 +33,8 @@ type PrewarmBody = {
 
 export async function POST(request: Request) {
   try {
-    if (!orgoProvisionConfigured()) {
-      return NextResponse.json({ ok: true, skipped: "orgo_not_configured" });
+    if (!oauthOrgoConnectEnabled() || !orgoProvisionConfigured()) {
+      return NextResponse.json({ ok: true, skipped: "orgo_connect_disabled" });
     }
 
     const origin = publicOrigin(request);

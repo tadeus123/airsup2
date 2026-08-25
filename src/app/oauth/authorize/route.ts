@@ -17,6 +17,7 @@ import {
   readOauthPrewarmCookie,
 } from "@/lib/oauth-setup";
 import { orgoProvisionConfigured } from "@/lib/orgo-provision";
+import { oauthOrgoConnectEnabled } from "@/lib/oauth-orgo-gate";
 import { setDisplayNameForToken } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -212,18 +213,21 @@ export async function GET(request: Request) {
   if (err) return htmlPage(`<h1>Airsup</h1><p class="err">${escapeHtml(err)}</p>`, 400);
 
   const hidden = qsHidden(p);
-  const prewarmPayload = JSON.stringify({
-    response_type: p.responseType,
-    client_id: p.clientId,
-    redirect_uri: p.redirectUri,
-    state: p.state,
-    code_challenge: p.codeChallenge,
-    code_challenge_method: p.codeChallengeMethod || "S256",
-    scope: p.scope || OAUTH_SCOPE,
-    resource: p.resource,
-  });
-  // Fire-and-forget: provision Orgo + open ChatGPT login while the user types their name.
-  const prewarmScript = `<script>
+  const orgoConnect = oauthOrgoConnectEnabled() && orgoProvisionConfigured();
+  // Only warm Orgo on the Name page when person↔person Orgo connect is enabled.
+  let prewarmScript = "";
+  if (orgoConnect) {
+    const prewarmPayload = JSON.stringify({
+      response_type: p.responseType,
+      client_id: p.clientId,
+      redirect_uri: p.redirectUri,
+      state: p.state,
+      code_challenge: p.codeChallenge,
+      code_challenge_method: p.codeChallengeMethod || "S256",
+      scope: p.scope || OAUTH_SCOPE,
+      resource: p.resource,
+    });
+    prewarmScript = `<script>
 (function(){
   try {
     fetch("/api/oauth/prewarm", {
@@ -235,6 +239,7 @@ export async function GET(request: Request) {
   } catch (e) {}
 })();
 </script>`;
+  }
 
   return htmlPage(
     `
@@ -305,8 +310,8 @@ export async function POST(request: Request) {
       scopes: p.scope.includes(OAUTH_SCOPE) ? OAUTH_SCOPE : p.scope || OAUTH_SCOPE,
     });
 
-    // If Orgo isn't configured, finish OAuth immediately (company tools still work).
-    if (!orgoProvisionConfigured()) {
+    // Orgo connect enabled in code but server missing Orgo keys — finish OAuth now.
+    if (oauthOrgoConnectEnabled() && !orgoProvisionConfigured()) {
       const res = redirectWithCode({
         redirectUri: p.redirectUri,
         code,
@@ -317,6 +322,7 @@ export async function POST(request: Request) {
       return res;
     }
 
+    // Always land on /oauth/setup: simple Connect when Orgo is iced, full desktop when enabled.
     const packed = packOauthSetup({
       username,
       aspToken,
